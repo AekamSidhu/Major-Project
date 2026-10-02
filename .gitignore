@@ -1,0 +1,30 @@
+# Rust
+/target/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Node / frontend
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local AI sidecar (Python virtual environment + downloaded models)
+local-ai/.venv/
+local-ai/.models/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/

@@ -1,0 +1,20 @@
+[package]
+name = "openmeet-core"
+description = "OpenMeet domain model, event contract, provider traits and IPC types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true }
+tokio-util.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+uuid.workspace = true
+ts-rs.workspace = true
+parking_lot.workspace = true
