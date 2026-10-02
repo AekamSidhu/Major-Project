@@ -1,0 +1,7 @@
+# OpenMeet local AI sidecar (Python 3.10 – 3.12 recommended)
+fastapi>=0.115
+uvicorn>=0.32
+python-multipart>=0.0.18
+numpy>=1.26
+faster-whisper>=1.1
+fastembed>=0.5

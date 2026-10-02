@@ -217,14 +217,29 @@ pub enum TranscriptionEvent {
     /// Voice activity started (lets the UI show "listening" / the engine track
     /// turns before text is available).
     SpeechStarted { source: AudioSourceKind, at_ms: i64 },
-    /// Voice activity ended for an utterance that is now being transcribed.
-    SpeechEnded { source: AudioSourceKind, at_ms: i64 },
+    /// Voice activity ended. When `discarded` is false the utterance is now
+    /// being transcribed and exactly one final `Draft` or `Error` with the same
+    /// `utterance_id` follows; `discarded` utterances (too short / noise)
+    /// produce nothing further.
+    SpeechEnded {
+        source: AudioSourceKind,
+        at_ms: i64,
+        utterance_id: String,
+        discarded: bool,
+    },
     /// Partial or final transcript.
     Draft(TranscriptDraft),
     /// Recoverable error for one utterance; the session keeps running.
     Error {
         source: AudioSourceKind,
+        utterance_id: Option<String>,
         error: ProviderError,
+    },
+    /// A final transcription produced no usable text (silence, noise or a
+    /// filtered recognizer hallucination). Closes `utterance_id`.
+    Empty {
+        source: AudioSourceKind,
+        utterance_id: String,
     },
     /// Normalized input level 0..1.
     Level { source: AudioSourceKind, level: f32 },

@@ -1,0 +1,47 @@
+[package]
+name = "openmeet"
+description = "OpenMeet — open-source real-time AI meeting overlay"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+default-run = "openmeet"
+
+[lib]
+name = "openmeet_lib"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "openmeet"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.7.1", features = [] }
+
+[dependencies]
+openmeet-core.workspace = true
+openmeet-intel.workspace = true
+openmeet-engine.workspace = true
+openmeet-providers.workspace = true
+openmeet-platform.workspace = true
+openmeet-store.workspace = true
+
+tauri = { version = "2.12.1", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-global-shortcut = "2.4.0"
+tauri-plugin-dialog = "2.8.1"
+tauri-plugin-clipboard-manager = "2.4.1"
+tauri-plugin-autostart = "2.7.0"
+tauri-plugin-single-instance = "2.5.2"
+tauri-plugin-opener = "2.7.0"
+
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time", "macros", "process"] }
+tokio-util.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+raw-window-handle = "0.6"

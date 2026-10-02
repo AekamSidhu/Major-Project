@@ -1,5 +1,6 @@
 [package]
 name = "openmeet-providers"
+description = "OpenMeet HTTP provider adapters: OpenAI, OpenAI-compatible, Anthropic, Ollama and the local AI sidecar"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,23 @@ authors.workspace = true
 
 [dependencies]
 openmeet-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# `net` for the loopback-only DNS resolver used with local endpoints.
+tokio = { workspace = true, features = ["net"] }
+tokio-util.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+base64.workspace = true
+# rustls only (no OpenSSL / native-tls). `rustls` verifies certificates with the
+# OS trust store through rustls-platform-verifier.
+reqwest = { version = "0.13.5", default-features = false, features = [
+    "rustls",
+    "http2",
+    "multipart",
+    "system-proxy",
+] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread", "macros", "time", "sync"] }

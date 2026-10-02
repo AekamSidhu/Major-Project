@@ -1,5 +1,6 @@
 [package]
 name = "openmeet-store"
+description = "OpenMeet SQLite persistence: schema, migrations, meeting history, settings, privacy rules and retention"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,12 @@ authors.workspace = true
 
 [dependencies]
 openmeet-core.workspace = true
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tracing-subscriber.workspace = true

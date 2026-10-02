@@ -1,5 +1,6 @@
 [package]
 name = "openmeet-platform"
+description = "OpenMeet OS integration: audio capture, screen capture, OCR, capture privacy, focus and meeting-app detection"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,45 @@ authors.workspace = true
 
 [dependencies]
 openmeet-core.workspace = true
+cpal = "0.18"
+image = { version = "0.25", default-features = false, features = ["png"] }
+parking_lot.workspace = true
+raw-window-handle = "0.6"
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+thiserror.workspace = true
+tracing.workspace = true
+xcap = "0.9"
+
+# PulseAudio host (pure-Rust protocol client, also works with pipewire-pulse):
+# exposes the "Monitor of …" sources used for system-audio capture on Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { version = "0.18", features = ["pulseaudio"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage_Streams",
+    "Wdk_System_SystemServices",
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+dispatch2 = "0.3"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSResponder",
+    "NSRunningApplication",
+    "NSView",
+    "NSWindow",
+    "NSWorkspace",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGWindow"] }

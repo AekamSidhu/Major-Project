@@ -1,5 +1,6 @@
 [package]
 name = "openmeet-intel"
+description = "OpenMeet pure algorithms: VAD, question detection, text similarity, topics, claims, prompts, export, vision adapters, mocks and demo scripts"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,16 @@ authors.workspace = true
 
 [dependencies]
 openmeet-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "macros"] }
+tokio-util.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+base64.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time"] }

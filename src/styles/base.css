@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/*
+ * OpenMeet design tokens. Both windows (main + overlay) share these.
+ * Themes are selected with [data-theme="dark" | "light"] on <html>.
+ * Density / font size are driven by CSS variables set from settings.
+ */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-bg: var(--om-bg);
+  --color-surface: var(--om-surface);
+  --color-surface-2: var(--om-surface-2);
+  --color-raised: var(--om-raised);
+  --color-border: var(--om-border);
+  --color-border-strong: var(--om-border-strong);
+  --color-fg: var(--om-fg);
+  --color-fg-soft: var(--om-fg-soft);
+  --color-muted: var(--om-muted);
+  --color-accent: var(--om-accent);
+  --color-accent-soft: var(--om-accent-soft);
+  --color-accent-fg: var(--om-accent-fg);
+  --color-ok: var(--om-ok);
+  --color-warn: var(--om-warn);
+  --color-danger: var(--om-danger);
+  --color-danger-soft: var(--om-danger-soft);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --om-bg: #f6f7f9;
+  --om-surface: #ffffff;
+  --om-surface-2: #f1f3f6;
+  --om-raised: #ffffff;
+  --om-border: rgb(15 23 42 / 0.09);
+  --om-border-strong: rgb(15 23 42 / 0.16);
+  --om-fg: #11151c;
+  --om-fg-soft: #2b313c;
+  --om-muted: #667085;
+  --om-accent: #4f5bd5;
+  --om-accent-soft: rgb(79 91 213 / 0.1);
+  --om-accent-fg: #ffffff;
+  --om-ok: #138a5b;
+  --om-warn: #b25e09;
+  --om-danger: #c2303b;
+  --om-danger-soft: rgb(194 48 59 / 0.1);
+  /* overlay glass (rgb triplet, alpha applied from the opacity setting) */
+  --om-glass: 255 255 255;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --om-bg: #0b0d12;
+  --om-surface: #12151c;
+  --om-surface-2: #181c25;
+  --om-raised: #1d2230;
+  --om-border: rgb(255 255 255 / 0.07);
+  --om-border-strong: rgb(255 255 255 / 0.14);
+  --om-fg: #e9ecf2;
+  --om-fg-soft: #c9cfdb;
+  --om-muted: #8a93a6;
+  --om-accent: #8f9bff;
+  --om-accent-soft: rgb(143 155 255 / 0.14);
+  --om-accent-fg: #0b0d12;
+  --om-ok: #3ccf91;
+  --om-warn: #f0a44b;
+  --om-danger: #ff6b76;
+  --om-danger-soft: rgb(255 107 118 / 0.14);
+  --om-glass: 14 17 24;
+}
+
+:root {
+  --om-font-size: 14px;
+  --om-space: 1;
+  font-size: var(--om-font-size);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+[data-density="compact"] {
+  --om-space: 0.75;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--om-bg);
+  color: var(--om-fg);
+}
+
+/* The overlay window is transparent; only its card paints a background. */
+html.overlay,
+html.overlay body,
+html.overlay #root {
+  background: transparent;
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--om-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--om-accent-soft);
+}
+
+/* Thin, quiet scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--om-border-strong) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+[data-reduced-motion="true"] *,
+[data-reduced-motion="true"] *::before,
+[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+@keyframes om-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes om-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.om-pulse {
+  animation: om-pulse 1.6s ease-in-out infinite;
+}
+
+.om-fade-in {
+  animation: om-fade-in 160ms ease-out;
+}
+
+.om-caret::after {
+  content: "▍";
+  margin-left: 1px;
+  color: var(--om-accent);
+  animation: om-pulse 1s steps(2) infinite;
+}
