@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-demo-scenarios"
+description = "Enables the list_demo_scenarios command without any pre-configured scope."
+commands.allow = ["list_demo_scenarios"]
+
+[[permission]]
+identifier = "deny-list-demo-scenarios"
+description = "Denies the list_demo_scenarios command without any pre-configured scope."
+commands.deny = ["list_demo_scenarios"]

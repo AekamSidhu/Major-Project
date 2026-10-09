@@ -26,7 +26,12 @@ pub type AppStateRef<'a> = State<'a, Arc<AppState>>;
 
 /// Validates a free-text identifier coming from the UI.
 pub fn check_id(id: &str, what: &str) -> CmdResult<()> {
-    if id.is_empty() || id.len() > 128 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if id.is_empty()
+        || id.len() > 128
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err(CoreError::InvalidInput(format!("Invalid {what}.")));
     }
     Ok(())

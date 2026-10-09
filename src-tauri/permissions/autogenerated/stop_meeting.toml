@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stop-meeting"
+description = "Enables the stop_meeting command without any pre-configured scope."
+commands.allow = ["stop_meeting"]
+
+[[permission]]
+identifier = "deny-stop-meeting"
+description = "Denies the stop_meeting command without any pre-configured scope."
+commands.deny = ["stop_meeting"]

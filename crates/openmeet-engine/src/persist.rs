@@ -22,8 +22,14 @@ pub enum PersistOp {
     Question(DetectedQuestion),
     Answer(AnswerRecord),
     Suggestion(Suggestion),
-    Pinned { id: String, pinned: bool },
-    Topics { meeting_id: String, topics: Vec<Topic> },
+    Pinned {
+        id: String,
+        pinned: bool,
+    },
+    Topics {
+        meeting_id: String,
+        topics: Vec<Topic>,
+    },
     Claims(Vec<Claim>),
     Observation(ScreenObservation),
     ActionItems(Vec<ActionItem>),
@@ -73,10 +79,12 @@ impl Persister {
                 let mut healthy = true;
                 while let Some(cmd) = rx.blocking_recv() {
                     let name = cmd.op.name();
+                    let is_barrier = matches!(cmd.op, PersistOp::Barrier(_));
                     let result = apply(&*cmd.store, cmd.op);
                     match result {
                         Ok(()) => {
-                            if !healthy {
+                            // A barrier is not a write: it must not clear an error.
+                            if !healthy && !is_barrier {
                                 healthy = true;
                                 health.set(Component::Database, ComponentStatus::Active, None);
                             }
@@ -193,7 +201,10 @@ mod tests {
             },
         );
         p.flush(&store).await;
-        assert_eq!(health.status(Component::Database), Some(ComponentStatus::Error));
+        assert_eq!(
+            health.status(Component::Database),
+            Some(ComponentStatus::Error)
+        );
         assert_eq!(sink.count("NOTICE"), 1);
     }
 }

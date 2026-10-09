@@ -7,11 +7,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use openmeet_core::CoreError;
 use openmeet_core::events::{EventSink, MeetingEvent, NoticeLevel};
 use openmeet_core::ipc::ScreenSourceSpec;
 use openmeet_core::settings::Settings;
 use openmeet_core::types::{AudioSourceKind, Component, ComponentStatus, PrivacyRule};
-use openmeet_core::CoreError;
 use openmeet_engine::Engine;
 use openmeet_platform::audio::{AudioCapture, AudioCaptureConfig};
 use openmeet_platform::screen::{SamplerConfig, ScreenSampler, ScreenStatus};
@@ -81,10 +81,6 @@ impl CaptureManager {
         inner.microphone.is_some() || inner.system.is_some()
     }
 
-    pub fn screen_running(&self) -> bool {
-        self.inner.lock().screen.is_some()
-    }
-
     fn notice(&self, level: NoticeLevel, message: String, component: Component) {
         self.sink.emit(MeetingEvent::Notice {
             level,
@@ -94,7 +90,12 @@ impl CaptureManager {
     }
 
     /// Starts audio capture for one source, feeding the engine.
-    pub fn start_audio(&self, engine: &Engine, source: AudioSourceKind, device: Option<String>) -> Result<(), CoreError> {
+    pub fn start_audio(
+        &self,
+        engine: &Engine,
+        source: AudioSourceKind,
+        device: Option<String>,
+    ) -> Result<(), CoreError> {
         self.stop_test();
         let component = component_for(source);
         let feed = engine.clone();
@@ -106,8 +107,15 @@ impl CaptureManager {
             config,
             Box::new(move |frame| feed.push_audio(frame)),
             Box::new(move |error| {
-                let message = format!("{} unavailable: {error}. Select another audio source.", source_label(source));
-                err_engine.set_component_status(component, ComponentStatus::Error, Some(message.clone()));
+                let message = format!(
+                    "{} unavailable: {error}. Select another audio source.",
+                    source_label(source)
+                );
+                err_engine.set_component_status(
+                    component,
+                    ComponentStatus::Error,
+                    Some(message.clone()),
+                );
                 let mut last = last_error.lock();
                 if last.is_none_or(|t| t.elapsed() > Duration::from_secs(30)) {
                     *last = Some(Instant::now());
@@ -121,7 +129,11 @@ impl CaptureManager {
         );
         match capture {
             Ok(c) => {
-                engine.set_component_status(component, ComponentStatus::Active, Some(c.device_name().to_string()));
+                engine.set_component_status(
+                    component,
+                    ComponentStatus::Active,
+                    Some(c.device_name().to_string()),
+                );
                 let mut inner = self.inner.lock();
                 match source {
                     AudioSourceKind::Microphone => inner.microphone = Some(c),
@@ -130,8 +142,15 @@ impl CaptureManager {
                 Ok(())
             }
             Err(e) => {
-                let message = format!("{} unavailable: {e}. Select another audio source.", source_label(source));
-                engine.set_component_status(component, ComponentStatus::Error, Some(message.clone()));
+                let message = format!(
+                    "{} unavailable: {e}. Select another audio source.",
+                    source_label(source)
+                );
+                engine.set_component_status(
+                    component,
+                    ComponentStatus::Error,
+                    Some(message.clone()),
+                );
                 self.notice(NoticeLevel::Error, message.clone(), component);
                 Err(CoreError::from(e))
             }
@@ -191,30 +210,39 @@ impl CaptureManager {
                 }
                 *last = Some(status.clone());
                 match &status {
-                    ScreenStatus::Capturing | ScreenStatus::Unchanged => {
-                        status_engine.set_component_status(Component::Screen, ComponentStatus::Active, None)
-                    }
+                    ScreenStatus::Capturing | ScreenStatus::Unchanged => status_engine
+                        .set_component_status(Component::Screen, ComponentStatus::Active, None),
                     ScreenStatus::SkippedPrivacy(reason) => status_engine.set_component_status(
                         Component::Screen,
                         ComponentStatus::Paused,
                         Some(format!("Skipped by a privacy rule: {reason}")),
                     ),
                     ScreenStatus::PermissionDenied(msg) => {
-                        status_engine.set_component_status(Component::Screen, ComponentStatus::Error, Some(msg.clone()));
+                        status_engine.set_component_status(
+                            Component::Screen,
+                            ComponentStatus::Error,
+                            Some(msg.clone()),
+                        );
                         status_sink.emit(MeetingEvent::Notice {
                             level: NoticeLevel::Error,
                             message: msg.clone(),
                             component: Some(Component::Screen),
                         });
                     }
-                    ScreenStatus::Error(msg) => {
-                        status_engine.set_component_status(Component::Screen, ComponentStatus::Error, Some(msg.clone()))
-                    }
+                    ScreenStatus::Error(msg) => status_engine.set_component_status(
+                        Component::Screen,
+                        ComponentStatus::Error,
+                        Some(msg.clone()),
+                    ),
                 }
             }),
         )
         .map_err(|e| {
-            engine.set_component_status(Component::Screen, ComponentStatus::Error, Some(e.to_string()));
+            engine.set_component_status(
+                Component::Screen,
+                ComponentStatus::Error,
+                Some(e.to_string()),
+            );
             CoreError::from(e)
         })?;
         engine.set_component_status(Component::Screen, ComponentStatus::Active, Some(label));
@@ -259,13 +287,18 @@ impl CaptureManager {
     // Device test (level meter during setup)
     // ------------------------------------------------------------------
 
-    pub fn start_test(&self, source: AudioSourceKind, device: Option<String>) -> Result<(), CoreError> {
+    pub fn start_test(
+        &self,
+        source: AudioSourceKind,
+        device: Option<String>,
+    ) -> Result<(), CoreError> {
         self.stop_test();
         {
             let inner = self.inner.lock();
             if inner.microphone.is_some() || inner.system.is_some() {
                 return Err(CoreError::InvalidState(
-                    "Audio is in use by the running meeting; the level meter is shown there.".into(),
+                    "Audio is in use by the running meeting; the level meter is shown there."
+                        .into(),
                 ));
             }
         }
@@ -278,14 +311,19 @@ impl CaptureManager {
                 if frame.samples.is_empty() {
                     return;
                 }
-                let rms = (frame.samples.iter().map(|s| s * s).sum::<f32>() / frame.samples.len() as f32).sqrt();
+                let rms = (frame.samples.iter().map(|s| s * s).sum::<f32>()
+                    / frame.samples.len() as f32)
+                    .sqrt();
                 // Map -60..0 dBFS to 0..1.
                 let db = 20.0 * rms.max(1e-6).log10();
                 let level = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
                 smoothed = smoothed.max(level) * 0.85 + level * 0.15;
                 if last_emit.elapsed() >= Duration::from_millis(100) {
                     last_emit = Instant::now();
-                    sink.emit(MeetingEvent::AudioLevel { source, level: smoothed });
+                    sink.emit(MeetingEvent::AudioLevel {
+                        source,
+                        level: smoothed,
+                    });
                     smoothed *= 0.6;
                 }
             }),
@@ -317,11 +355,17 @@ impl CaptureManager {
 
 /// Saves an analyzed frame when the user opted into keeping screenshots and
 /// the current meeting is persisted (never for "do not retain" meetings).
-pub fn keep_screenshot(engine: &Engine, store: &ScreenshotStore, frame: &openmeet_core::types::ScreenFrame) {
+pub fn keep_screenshot(
+    engine: &Engine,
+    store: &ScreenshotStore,
+    frame: &openmeet_core::types::ScreenFrame,
+) {
     if engine.unpersisted_meeting().is_some() {
         return;
     }
-    let Some(meeting_id) = engine.current_meeting_id() else { return };
+    let Some(meeting_id) = engine.current_meeting_id() else {
+        return;
+    };
     if let Err(e) = store.save(&meeting_id, frame) {
         tracing::warn!(error = %e, "could not keep screenshot");
     }

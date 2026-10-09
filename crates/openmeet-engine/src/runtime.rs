@@ -142,10 +142,6 @@ impl MeetingRuntime {
         }
     }
 
-    pub fn id(&self) -> &str {
-        &self.meeting.id
-    }
-
     pub fn state(&self) -> MeetingState {
         self.machine.state()
     }
@@ -204,8 +200,16 @@ impl MeetingRuntime {
     pub fn participants_for(mode: Mode, system_audio: bool) -> Vec<Participant> {
         let mut p = vec![Participant {
             id: "user".into(),
-            role: if system_audio { SpeakerRole::User } else { SpeakerRole::Unknown },
-            label: if system_audio { "You".into() } else { "Microphone".into() },
+            role: if system_audio {
+                SpeakerRole::User
+            } else {
+                SpeakerRole::Unknown
+            },
+            label: if system_audio {
+                "You".into()
+            } else {
+                "Microphone".into()
+            },
         }];
         if system_audio {
             p.push(Participant {
@@ -243,10 +247,6 @@ impl MeetingRuntime {
             .filter(|s| s.start_time >= since_ms)
             .map(|s| self.line_for(s))
             .collect()
-    }
-
-    pub fn all_lines(&self) -> Vec<TranscriptLine> {
-        self.segments.iter().map(|s| self.line_for(s)).collect()
     }
 
     /// Latest question the user is expected to answer, if recent enough.
@@ -323,7 +323,9 @@ impl MeetingRuntime {
     /// Appends a segment to the open answer when spoken by the answerer.
     pub fn extend_answer(&mut self, segment: &TranscriptSegment) {
         if let Some(open) = self.open_answer.as_mut() {
-            if open.speaker_role == segment.speaker_role || open.speaker_role == SpeakerRole::Unknown {
+            if open.speaker_role == segment.speaker_role
+                || open.speaker_role == SpeakerRole::Unknown
+            {
                 if !open.text.is_empty() {
                     open.text.push(' ');
                 }
@@ -383,7 +385,16 @@ mod tests {
             participants: MeetingRuntime::participants_for(mode, system_audio),
             persisted: false,
         };
-        MeetingRuntime::new(meeting, Arc::new(NullStore), &[], system_audio, true, false, conv_tx, trans_tx)
+        MeetingRuntime::new(
+            meeting,
+            Arc::new(NullStore),
+            &[],
+            system_audio,
+            true,
+            false,
+            conv_tx,
+            trans_tx,
+        )
     }
 
     fn seg(id: &str, role: SpeakerRole, start: i64, text: &str) -> TranscriptSegment {
@@ -408,7 +419,10 @@ mod tests {
         assert_eq!(r.role_for(AudioSourceKind::Microphone), SpeakerRole::User);
         assert_eq!(r.role_for(AudioSourceKind::System), SpeakerRole::Remote);
         let r = runtime(Mode::Candidate, false);
-        assert_eq!(r.role_for(AudioSourceKind::Microphone), SpeakerRole::Unknown);
+        assert_eq!(
+            r.role_for(AudioSourceKind::Microphone),
+            SpeakerRole::Unknown
+        );
     }
 
     #[test]
@@ -480,7 +494,10 @@ mod tests {
             });
         }
         assert_eq!(r.suggestions.len(), MAX_SUGGESTIONS);
-        assert!(r.suggestion("s0").is_some(), "pinned suggestion must survive");
+        assert!(
+            r.suggestion("s0").is_some(),
+            "pinned suggestion must survive"
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use openmeet_core::events::NoticeLevel;
 use openmeet_core::ipc::{GenerateAnswerRequest, ShortcutStatus, UiCommand};
-use openmeet_core::settings::{normalize_accelerator, ShortcutAction, ShortcutSettings};
+use openmeet_core::settings::{ShortcutAction, ShortcutSettings, normalize_accelerator};
 use openmeet_core::types::MeetingState;
 use parking_lot::Mutex;
 use tauri::{AppHandle, Manager};
@@ -38,7 +38,10 @@ const KNOWN_CONFLICTS: &[(&str, &str)] = &[
 ];
 
 #[cfg(windows)]
-const RESERVED: &[(&str, &str)] = &[("cmdorctrl+shift+escape", "Reserved by Windows (Task Manager)")];
+const RESERVED: &[(&str, &str)] = &[(
+    "cmdorctrl+shift+escape",
+    "Reserved by Windows (Task Manager)",
+)];
 #[cfg(not(windows))]
 const RESERVED: &[(&str, &str)] = &[];
 
@@ -103,7 +106,10 @@ impl ShortcutManager {
                 (false, Some("Not assigned".to_string()))
             } else if duplicates.iter().any(|(_, b)| *b == action) {
                 // The first action with these keys wins.
-                (false, Some("Already used by another OpenMeet shortcut".to_string()))
+                (
+                    false,
+                    Some("Already used by another OpenMeet shortcut".to_string()),
+                )
             } else {
                 let handle = app.clone();
                 match gs.on_shortcut(accelerator.as_str(), move |_app, _shortcut, event| {
@@ -132,7 +138,10 @@ impl ShortcutManager {
                 },
             );
         }
-        let failed = status.values().filter(|s| !s.registered && s.error.as_deref() != Some("Not assigned")).count();
+        let failed = status
+            .values()
+            .filter(|s| !s.registered && s.error.as_deref() != Some("Not assigned"))
+            .count();
         *self.status.lock() = status;
         if let Some(state) = app.try_state::<Arc<AppState>>() {
             state.engine.set_component_status(
@@ -162,7 +171,10 @@ pub fn dispatch(app: &AppHandle, action: ShortcutAction) {
             }
             ShortcutAction::GenerateAnswer => {
                 state.overlay.show(&settings.overlay);
-                state.engine.generate_answer(GenerateAnswerRequest::default()).map(|_| ())
+                state
+                    .engine
+                    .generate_answer(GenerateAnswerRequest::default())
+                    .map(|_| ())
             }
             ShortcutAction::GenerateFollowups => {
                 state.overlay.show(&settings.overlay);
@@ -181,7 +193,10 @@ pub fn dispatch(app: &AppHandle, action: ShortcutAction) {
             }
             ShortcutAction::ToggleClickThrough => {
                 let enabled = !settings.overlay.click_through;
-                state.modify_settings(|s| s.overlay.click_through = enabled).await.map(|_| ())
+                state
+                    .modify_settings(|s| s.overlay.click_through = enabled)
+                    .await
+                    .map(|_| ())
             }
             ShortcutAction::CaptureScreen => state.capture_screen_now().await,
             ShortcutAction::PauseResume => {

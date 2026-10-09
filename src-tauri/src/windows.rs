@@ -1,10 +1,12 @@
 //! Window creation and display geometry.
 
+use openmeet_core::events::UI_EVENT_CHANNEL;
+use openmeet_core::ipc::UiCommand;
 use openmeet_core::ipc::{DisplayInfo, DisplayOrientation, Point, Rect};
 use openmeet_core::settings::{DisplayLayout, OverlayPosition, OverlaySettings};
-use openmeet_core::ipc::UiCommand;
-use openmeet_core::events::UI_EVENT_CHANNEL;
-use tauri::{AppHandle, Emitter, Manager, Monitor, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, Monitor, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 pub const MAIN: &str = "main";
 pub const OVERLAY: &str = "overlay";
@@ -131,11 +133,13 @@ pub fn display_info(m: &Monitor, primary_key: Option<&str>) -> DisplayInfo {
 }
 
 pub fn list_displays(app: &AppHandle) -> Vec<DisplayInfo> {
-    let primary_key = app
-        .primary_monitor()
-        .ok()
-        .flatten()
-        .map(|m| display_key(m.name().map(String::as_str), m.size().width, m.size().height));
+    let primary_key = app.primary_monitor().ok().flatten().map(|m| {
+        display_key(
+            m.name().map(String::as_str),
+            m.size().width,
+            m.size().height,
+        )
+    });
     let mut out: Vec<DisplayInfo> = app
         .available_monitors()
         .unwrap_or_default()
@@ -151,13 +155,19 @@ pub fn list_displays(app: &AppHandle) -> Vec<DisplayInfo> {
 }
 
 /// Chooses the display the overlay should live on.
-pub fn pick_display<'a>(displays: &'a [DisplayInfo], s: &OverlaySettings) -> Option<&'a DisplayInfo> {
+pub fn pick_display<'a>(
+    displays: &'a [DisplayInfo],
+    s: &OverlaySettings,
+) -> Option<&'a DisplayInfo> {
     if let Some(key) = &s.target_display {
         if let Some(d) = displays.iter().find(|d| &d.key == key) {
             return Some(d);
         }
     }
-    let primary = displays.iter().find(|d| d.is_primary).or_else(|| displays.first());
+    let primary = displays
+        .iter()
+        .find(|d| d.is_primary)
+        .or_else(|| displays.first());
     match s.layout {
         DisplayLayout::SeparateDisplay => displays.iter().find(|d| !d.is_primary).or(primary),
         DisplayLayout::SameDisplay => primary,
@@ -264,31 +274,51 @@ mod tests {
     #[test]
     fn corners_respect_margin_scale_and_taskbar() {
         let d = display("A", 0, true, 1.5);
-        let mut s = OverlaySettings::default();
-        s.margin = 16;
-        s.position = OverlayPosition::TopRight;
-        assert_eq!(overlay_origin(&d, (570, 300), &s, None), (1920 - 570 - 24, 24));
+        let mut s = OverlaySettings {
+            margin: 16,
+            position: OverlayPosition::TopRight,
+            ..Default::default()
+        };
+        assert_eq!(
+            overlay_origin(&d, (570, 300), &s, None),
+            (1920 - 570 - 24, 24)
+        );
         s.position = OverlayPosition::BottomLeft;
-        assert_eq!(overlay_origin(&d, (570, 300), &s, None), (24, 1040 - 300 - 24));
+        assert_eq!(
+            overlay_origin(&d, (570, 300), &s, None),
+            (24, 1040 - 300 - 24)
+        );
     }
 
     #[test]
     fn custom_positions_per_display_and_app() {
         let d = display("B", 1920, false, 1.0);
-        let mut s = OverlaySettings::default();
-        s.position = OverlayPosition::Custom;
-        s.custom_positions.insert("B".into(), Point { x: 100, y: 50 });
-        s.custom_positions.insert("B|Zoom".into(), Point { x: 300, y: 70 });
+        let mut s = OverlaySettings {
+            position: OverlayPosition::Custom,
+            ..Default::default()
+        };
+        s.custom_positions
+            .insert("B".into(), Point { x: 100, y: 50 });
+        s.custom_positions
+            .insert("B|Zoom".into(), Point { x: 300, y: 70 });
         assert_eq!(overlay_origin(&d, (380, 200), &s, None), (2020, 50));
         assert_eq!(overlay_origin(&d, (380, 200), &s, Some("Zoom")), (2220, 70));
         // Unknown display falls back to the top-right corner.
         let other = display("C", 0, true, 1.0);
-        assert_eq!(overlay_origin(&other, (380, 200), &s, None), (1920 - 380 - 16, 16));
+        assert_eq!(
+            overlay_origin(&other, (380, 200), &s, None),
+            (1920 - 380 - 16, 16)
+        );
     }
 
     #[test]
     fn clamps_inside_work_area() {
-        let work = Rect { x: 0, y: 0, width: 1000, height: 800 };
+        let work = Rect {
+            x: 0,
+            y: 0,
+            width: 1000,
+            height: 800,
+        };
         assert_eq!(clamp_into(work, (300, 200), (900, -50)), (700, 0));
         assert_eq!(clamp_into(work, (1200, 200), (50, 50)), (0, 50));
     }
@@ -310,7 +340,10 @@ mod tests {
 
     #[test]
     fn keys() {
-        assert_eq!(display_key(Some(r"\\.\DISPLAY1"), 2560, 1440), r"\\.\DISPLAY1@2560x1440");
+        assert_eq!(
+            display_key(Some(r"\\.\DISPLAY1"), 2560, 1440),
+            r"\\.\DISPLAY1@2560x1440"
+        );
         assert_eq!(position_key("A", Some(" Zoom ")), "A|Zoom");
         assert_eq!(position_key("A", Some("")), "A");
     }

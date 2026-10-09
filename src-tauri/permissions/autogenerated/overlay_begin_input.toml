@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-overlay-begin-input"
+description = "Enables the overlay_begin_input command without any pre-configured scope."
+commands.allow = ["overlay_begin_input"]
+
+[[permission]]
+identifier = "deny-overlay-begin-input"
+description = "Denies the overlay_begin_input command without any pre-configured scope."
+commands.deny = ["overlay_begin_input"]

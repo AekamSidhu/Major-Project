@@ -221,7 +221,9 @@ impl VadSession {
     fn prompt(&self) -> Option<String> {
         let vocab = self.config.vocabulary.clone().unwrap_or_default();
         let tail = self.shared.last_text.lock().clone();
-        let p = format!("{} {}", vocab.trim(), tail.trim()).trim().to_string();
+        let p = format!("{} {}", vocab.trim(), tail.trim())
+            .trim()
+            .to_string();
         if p.is_empty() { None } else { Some(p) }
     }
 
@@ -415,8 +417,17 @@ pub fn clean_transcript(text: &str) -> String {
                 depth_round -= 1;
                 let lower = buf.trim().to_ascii_lowercase();
                 let annotation = [
-                    "music", "silence", "applause", "laughter", "laughs", "inaudible", "noise",
-                    "blank_audio", "background noise", "coughs", "sighs",
+                    "music",
+                    "silence",
+                    "applause",
+                    "laughter",
+                    "laughs",
+                    "inaudible",
+                    "noise",
+                    "blank_audio",
+                    "background noise",
+                    "coughs",
+                    "sighs",
                 ]
                 .iter()
                 .any(|a| lower == *a);
@@ -473,7 +484,16 @@ pub fn is_probable_hallucination(text: &str, clip: &AudioClip) -> bool {
     if ALWAYS.iter().any(|p| norm.starts_with(p)) && clip.duration_ms() < 4000 {
         return true;
     }
-    const QUIET_ONLY: [&str; 8] = ["thank you", "thanks", "you", "bye", "so", "okay", "uh", "um"];
+    const QUIET_ONLY: [&str; 8] = [
+        "thank you",
+        "thanks",
+        "you",
+        "bye",
+        "so",
+        "okay",
+        "uh",
+        "um",
+    ];
     let quiet = rms(&clip.samples) < 0.008;
     quiet && QUIET_ONLY.contains(&norm.as_str())
 }
@@ -520,7 +540,11 @@ mod tests {
             if self.fail_on == Some(n) {
                 return Err(ProviderError::Network("boom".into()));
             }
-            let final_marker = if request.clip.is_final { "" } else { " (interim)" };
+            let final_marker = if request.clip.is_final {
+                ""
+            } else {
+                " (interim)"
+            };
             Ok(TranscriptionOutput {
                 text: format!("utterance {n}{final_marker}"),
                 confidence: Some(0.9),
@@ -536,13 +560,18 @@ mod tests {
     fn tone(ms: u32, amp: f32) -> Vec<f32> {
         let n = (PIPELINE_SAMPLE_RATE * ms / 1000) as usize;
         (0..n)
-            .map(|i| (i as f32 * 2.0 * std::f32::consts::PI * 220.0 / PIPELINE_SAMPLE_RATE as f32).sin() * amp)
+            .map(|i| {
+                (i as f32 * 2.0 * std::f32::consts::PI * 220.0 / PIPELINE_SAMPLE_RATE as f32).sin()
+                    * amp
+            })
             .collect()
     }
 
     fn silence(ms: u32) -> Vec<f32> {
         let n = (PIPELINE_SAMPLE_RATE * ms / 1000) as usize;
-        (0..n).map(|i| if i % 2 == 0 { 0.0005 } else { -0.0005 }).collect()
+        (0..n)
+            .map(|i| if i % 2 == 0 { 0.0005 } else { -0.0005 })
+            .collect()
     }
 
     fn feed(session: &mut Box<dyn TranscriptionSession>, samples: &[f32], t0: &mut i64) {
@@ -577,7 +606,9 @@ mod tests {
             match tokio::time::timeout_at(deadline, rx.recv()).await {
                 Ok(Some(ev)) => match ev {
                     TranscriptionEvent::Draft(ref d) if d.is_final => out.push(ev),
-                    TranscriptionEvent::Error { .. } | TranscriptionEvent::Empty { .. } => out.push(ev),
+                    TranscriptionEvent::Error { .. } | TranscriptionEvent::Empty { .. } => {
+                        out.push(ev)
+                    }
                     _ => {}
                 },
                 _ => break,
@@ -665,7 +696,10 @@ mod tests {
     fn cleans_annotations() {
         assert_eq!(clean_transcript(" [BLANK_AUDIO] "), "");
         assert_eq!(clean_transcript("Hello (music) world ♪"), "Hello world");
-        assert_eq!(clean_transcript("We used (mostly) Postgres"), "We used (mostly) Postgres");
+        assert_eq!(
+            clean_transcript("We used (mostly) Postgres"),
+            "We used (mostly) Postgres"
+        );
         assert_eq!(clean_transcript("a  b\n c"), "a b c");
     }
 

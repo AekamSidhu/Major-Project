@@ -86,10 +86,7 @@ impl ContextMemory {
         Self::default()
     }
 
-    pub fn len(&self) -> usize {
-        self.items.len()
-    }
-
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
@@ -97,10 +94,6 @@ impl ContextMemory {
     pub fn add(&mut self, item: MemoryItem) {
         self.bm25.add(&item.id, &item.text);
         self.items.insert(item.id.clone(), item);
-    }
-
-    pub fn get(&self, id: &str) -> Option<&MemoryItem> {
-        self.items.get(id)
     }
 
     /// Stores an embedding. Vectors from a different model invalidate the
@@ -115,10 +108,12 @@ impl ContextMemory {
         }
     }
 
+    #[cfg(test)]
     pub fn vector_count(&self) -> usize {
         self.vectors.len()
     }
 
+    #[cfg(test)]
     pub fn embedding_model(&self) -> Option<&str> {
         self.embedding_model.as_deref()
     }
@@ -224,9 +219,24 @@ mod tests {
     #[test]
     fn keyword_retrieval_finds_relevant_discussion() {
         let mut m = ContextMemory::new();
-        m.add(item("1", MemoryKind::Segment, "Candidate: we used Kafka for event processing between services", 10_000));
-        m.add(item("2", MemoryKind::Segment, "Interviewer: tell me about your hobbies", 20_000));
-        m.add(item("3", MemoryKind::Segment, "Candidate: the database was PostgreSQL with read replicas", 30_000));
+        m.add(item(
+            "1",
+            MemoryKind::Segment,
+            "Candidate: we used Kafka for event processing between services",
+            10_000,
+        ));
+        m.add(item(
+            "2",
+            MemoryKind::Segment,
+            "Interviewer: tell me about your hobbies",
+            20_000,
+        ));
+        m.add(item(
+            "3",
+            MemoryKind::Segment,
+            "Candidate: the database was PostgreSQL with read replicas",
+            30_000,
+        ));
         let r = m.retrieve(query("Why did you choose Kafka?", None));
         assert!(!r.is_empty());
         assert!(r[0].text.contains("Kafka"));
@@ -259,9 +269,24 @@ mod tests {
     #[test]
     fn excludes_recent_window_and_orders_chronologically() {
         let mut m = ContextMemory::new();
-        m.add(item("old", MemoryKind::Question, "How did you shard the database?", 1_000));
-        m.add(item("mid", MemoryKind::Answer, "We sharded the database by customer id", 2_000));
-        m.add(item("new", MemoryKind::Segment, "database sharding came up again just now", 590_000));
+        m.add(item(
+            "old",
+            MemoryKind::Question,
+            "How did you shard the database?",
+            1_000,
+        ));
+        m.add(item(
+            "mid",
+            MemoryKind::Answer,
+            "We sharded the database by customer id",
+            2_000,
+        ));
+        m.add(item(
+            "new",
+            MemoryKind::Segment,
+            "database sharding came up again just now",
+            590_000,
+        ));
         let mut q = query("database sharding", None);
         q.exclude_from_ms = Some(500_000);
         let r = m.retrieve(q);
@@ -273,8 +298,18 @@ mod tests {
     #[test]
     fn screen_boost() {
         let mut m = ContextMemory::new();
-        m.add(item("o", MemoryKind::Observation, "System diagram: API -> queue -> workers -> database", 1_000));
-        m.add(item("s", MemoryKind::Segment, "the queue workers process jobs", 1_500));
+        m.add(item(
+            "o",
+            MemoryKind::Observation,
+            "System diagram: API -> queue -> workers -> database",
+            1_000,
+        ));
+        m.add(item(
+            "s",
+            MemoryKind::Segment,
+            "the queue workers process jobs",
+            1_500,
+        ));
         let mut q = query("explain this part of the queue", None);
         q.boost_screen = true;
         q.k = 1;

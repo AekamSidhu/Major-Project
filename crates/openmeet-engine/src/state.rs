@@ -128,7 +128,10 @@ mod tests {
         assert!(a.advance(AnswerState::Streaming));
         assert!(!a.advance(AnswerState::Requesting));
         assert!(a.advance(AnswerState::Complete));
-        assert!(!a.advance(AnswerState::Cancelled), "terminal states are final");
+        assert!(
+            !a.advance(AnswerState::Cancelled),
+            "terminal states are final"
+        );
         assert_eq!(a.state(), AnswerState::Complete);
     }
 
@@ -143,6 +146,9 @@ mod tests {
             assert!(answer_transition_allowed(s, AnswerState::Failed));
             assert!(answer_transition_allowed(s, AnswerState::Cancelled));
         }
-        assert!(!answer_transition_allowed(AnswerState::Created, AnswerState::Streaming));
+        assert!(!answer_transition_allowed(
+            AnswerState::Created,
+            AnswerState::Streaming
+        ));
     }
 }

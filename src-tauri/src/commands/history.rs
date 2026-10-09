@@ -1,16 +1,22 @@
-use openmeet_core::ipc::{ExportRequest, ExportResult};
-use openmeet_core::types::{MeetingListItem, MeetingRecord, MeetingSummary};
 use openmeet_core::CoreError;
+use openmeet_core::ipc::{ExportRequest, ExportResult};
+use openmeet_core::store::MeetingStore;
+use openmeet_core::types::{MeetingListItem, MeetingRecord, MeetingSummary};
 use tauri_plugin_dialog::DialogExt;
 
-use super::{check_id, AppStateRef, CmdResult};
+use super::{AppStateRef, CmdResult, check_id};
 use crate::state::blocking;
 
 #[tauri::command]
-pub async fn list_meetings(state: AppStateRef<'_>, limit: u32, offset: u32) -> CmdResult<Vec<MeetingListItem>> {
+pub async fn list_meetings(
+    state: AppStateRef<'_>,
+    limit: u32,
+    offset: u32,
+) -> CmdResult<Vec<MeetingListItem>> {
     let limit = limit.clamp(1, 200);
     let db = state.db.clone();
-    let mut items = blocking(move || db.list_meetings(limit, offset).map_err(CoreError::from)).await?;
+    let mut items =
+        blocking(move || db.list_meetings(limit, offset).map_err(CoreError::from)).await?;
     if offset == 0 {
         if let Some(current) = state.engine.unpersisted_meeting() {
             items.insert(0, current);
@@ -39,8 +45,12 @@ pub async fn get_meeting(state: AppStateRef<'_>, meeting_id: String) -> CmdResul
 #[tauri::command]
 pub async fn delete_meeting(state: AppStateRef<'_>, meeting_id: String) -> CmdResult<()> {
     check_id(&meeting_id, "meeting")?;
-    if state.engine.is_live() && state.engine.current_meeting_id().as_deref() == Some(meeting_id.as_str()) {
-        return Err(CoreError::InvalidState("End the meeting before deleting it.".into()));
+    if state.engine.is_live()
+        && state.engine.current_meeting_id().as_deref() == Some(meeting_id.as_str())
+    {
+        return Err(CoreError::InvalidState(
+            "End the meeting before deleting it.".into(),
+        ));
     }
     let db = state.db.clone();
     let shots = state.screenshots.clone();
@@ -57,7 +67,9 @@ pub async fn delete_meeting(state: AppStateRef<'_>, meeting_id: String) -> CmdRe
 #[tauri::command]
 pub async fn delete_all_data(state: AppStateRef<'_>) -> CmdResult<()> {
     if state.engine.is_live() {
-        return Err(CoreError::InvalidState("End the current meeting before deleting all data.".into()));
+        return Err(CoreError::InvalidState(
+            "End the current meeting before deleting all data.".into(),
+        ));
     }
     state.engine.flush_persistence().await;
     let db = state.db.clone();
@@ -77,19 +89,34 @@ pub async fn delete_all_data(state: AppStateRef<'_>) -> CmdResult<()> {
 pub fn safe_file_stem(title: &str) -> String {
     let cleaned: String = title
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect();
     let joined = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
     let stem: String = joined.chars().take(80).collect();
-    if stem.is_empty() { "OpenMeet meeting".into() } else { stem }
+    if stem.is_empty() {
+        "OpenMeet meeting".into()
+    } else {
+        stem
+    }
 }
 
 #[tauri::command]
-pub async fn export_meeting(state: AppStateRef<'_>, request: ExportRequest) -> CmdResult<ExportResult> {
+pub async fn export_meeting(
+    state: AppStateRef<'_>,
+    request: ExportRequest,
+) -> CmdResult<ExportResult> {
     check_id(&request.meeting_id, "meeting")?;
     let parts = request.parts;
     if !(parts.summary || parts.transcript || parts.questions || parts.followups) {
-        return Err(CoreError::InvalidInput("Choose at least one part to export.".into()));
+        return Err(CoreError::InvalidInput(
+            "Choose at least one part to export.".into(),
+        ));
     }
     let record = load(&state, &request.meeting_id).await?;
     let content = openmeet_intel::export::render(&record, request.format, &parts);
@@ -114,7 +141,10 @@ pub async fn export_meeting(state: AppStateRef<'_>, request: ExportRequest) -> C
         .add_filter(filter_name, &[ext]);
     let chosen = blocking(move || Ok(dialog.blocking_save_file())).await?;
     let Some(path) = chosen else {
-        return Ok(ExportResult { path: None, bytes: 0 });
+        return Ok(ExportResult {
+            path: None,
+            bytes: 0,
+        });
     };
     let path = path
         .into_path()
@@ -149,10 +179,17 @@ pub fn civil_date(days: i64) -> String {
 }
 
 #[tauri::command]
-pub async fn regenerate_summary(state: AppStateRef<'_>, meeting_id: String) -> CmdResult<MeetingSummary> {
+pub async fn regenerate_summary(
+    state: AppStateRef<'_>,
+    meeting_id: String,
+) -> CmdResult<MeetingSummary> {
     check_id(&meeting_id, "meeting")?;
-    if state.engine.is_live() && state.engine.current_meeting_id().as_deref() == Some(meeting_id.as_str()) {
-        return Err(CoreError::InvalidState("The summary is generated when the meeting ends.".into()));
+    if state.engine.is_live()
+        && state.engine.current_meeting_id().as_deref() == Some(meeting_id.as_str())
+    {
+        return Err(CoreError::InvalidState(
+            "The summary is generated when the meeting ends.".into(),
+        ));
     }
     let record = load(&state, &meeting_id).await?;
     state.engine.summarize_record(record).await
@@ -164,7 +201,10 @@ mod tests {
 
     #[test]
     fn file_stems() {
-        assert_eq!(safe_file_stem("Interview: Backend/Infra?"), "Interview Backend Infra");
+        assert_eq!(
+            safe_file_stem("Interview: Backend/Infra?"),
+            "Interview Backend Infra"
+        );
         assert_eq!(safe_file_stem("***"), "OpenMeet meeting");
         assert_eq!(safe_file_stem(&"a".repeat(200)).len(), 80);
     }

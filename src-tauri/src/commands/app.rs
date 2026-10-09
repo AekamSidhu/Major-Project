@@ -1,8 +1,8 @@
+use openmeet_core::CoreError;
 use openmeet_core::ids::now_ms;
 use openmeet_core::ipc::{AppInfo, BenchmarkReport, Diagnostics, EngineSnapshot};
 use openmeet_core::settings::Settings;
 use openmeet_core::types::LatencyStage;
-use openmeet_core::CoreError;
 use tauri::AppHandle;
 
 use super::{AppStateRef, CmdResult};
@@ -47,7 +47,11 @@ pub async fn get_snapshot(state: AppStateRef<'_>) -> CmdResult<EngineSnapshot> {
 #[tauri::command]
 pub async fn open_main_window(app: AppHandle, section: Option<String>) -> CmdResult<()> {
     if let Some(s) = &section {
-        if s.len() > 64 || !s.chars().all(|c| c.is_ascii_lowercase() || c == '/' || c == '-') {
+        if s.len() > 64
+            || !s
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c == '/' || c == '-')
+        {
             return Err(CoreError::InvalidInput("Invalid section.".into()));
         }
     }

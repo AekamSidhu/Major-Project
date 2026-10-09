@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-answer-style"
+description = "Enables the set_answer_style command without any pre-configured scope."
+commands.allow = ["set_answer_style"]
+
+[[permission]]
+identifier = "deny-set-answer-style"
+description = "Denies the set_answer_style command without any pre-configured scope."
+commands.deny = ["set_answer_style"]

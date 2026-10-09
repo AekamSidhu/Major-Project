@@ -1,9 +1,9 @@
+use openmeet_core::CoreError;
 use openmeet_core::ids::{new_id, now_ms};
 use openmeet_core::ipc::{CapturePrivacyStatus, Rect};
 use openmeet_core::types::{PrivacyAction, PrivacyRule, PrivacyRuleType};
-use openmeet_core::CoreError;
 
-use super::{check_id, AppStateRef, CmdResult};
+use super::{AppStateRef, CmdResult, check_id};
 use crate::state::blocking;
 
 #[tauri::command]
@@ -12,7 +12,10 @@ pub async fn get_capture_privacy_status(state: AppStateRef<'_>) -> CmdResult<Cap
 }
 
 #[tauri::command]
-pub async fn set_capture_exclusion(state: AppStateRef<'_>, enabled: bool) -> CmdResult<CapturePrivacyStatus> {
+pub async fn set_capture_exclusion(
+    state: AppStateRef<'_>,
+    enabled: bool,
+) -> CmdResult<CapturePrivacyStatus> {
     state
         .inner()
         .modify_settings(|s| s.privacy.capture_exclusion = enabled)
@@ -33,14 +36,19 @@ pub fn normalize_rule(rule_type: PrivacyRuleType, value: &str) -> CmdResult<Stri
         return Err(CoreError::InvalidInput("The rule value is empty.".into()));
     }
     if v.chars().count() > 200 || v.chars().any(char::is_control) {
-        return Err(CoreError::InvalidInput("The rule value is invalid or too long.".into()));
+        return Err(CoreError::InvalidInput(
+            "The rule value is invalid or too long.".into(),
+        ));
     }
     match rule_type {
         PrivacyRuleType::Region => {
-            let r = Rect::parse_csv(v)
-                .ok_or_else(|| CoreError::InvalidInput("Regions use the format x,y,width,height (pixels).".into()))?;
+            let r = Rect::parse_csv(v).ok_or_else(|| {
+                CoreError::InvalidInput("Regions use the format x,y,width,height (pixels).".into())
+            })?;
             if r.width == 0 || r.height == 0 {
-                return Err(CoreError::InvalidInput("Region width and height must be positive.".into()));
+                return Err(CoreError::InvalidInput(
+                    "Region width and height must be positive.".into(),
+                ));
             }
             Ok(format!("{},{},{},{}", r.x, r.y, r.width, r.height))
         }
@@ -51,7 +59,9 @@ pub fn normalize_rule(rule_type: PrivacyRuleType, value: &str) -> CmdResult<Stri
                 .trim_end_matches('/')
                 .to_ascii_lowercase();
             if d.contains(char::is_whitespace) || d.contains('/') {
-                return Err(CoreError::InvalidInput("Enter a domain such as bank.example.com.".into()));
+                return Err(CoreError::InvalidInput(
+                    "Enter a domain such as bank.example.com.".into(),
+                ));
             }
             Ok(d)
         }
@@ -60,7 +70,11 @@ pub fn normalize_rule(rule_type: PrivacyRuleType, value: &str) -> CmdResult<Stri
 }
 
 #[tauri::command]
-pub async fn add_privacy_rule(state: AppStateRef<'_>, rule_type: PrivacyRuleType, value: String) -> CmdResult<PrivacyRule> {
+pub async fn add_privacy_rule(
+    state: AppStateRef<'_>,
+    rule_type: PrivacyRuleType,
+    value: String,
+) -> CmdResult<PrivacyRule> {
     let value = normalize_rule(rule_type, &value)?;
     let rule = PrivacyRule {
         id: new_id(),
@@ -107,12 +121,21 @@ mod tests {
 
     #[test]
     fn rule_normalization() {
-        assert_eq!(normalize_rule(PrivacyRuleType::Region, " 1, 2 ,30,40").unwrap(), "1,2,30,40");
+        assert_eq!(
+            normalize_rule(PrivacyRuleType::Region, " 1, 2 ,30,40").unwrap(),
+            "1,2,30,40"
+        );
         assert!(normalize_rule(PrivacyRuleType::Region, "1,2,0,40").is_err());
         assert!(normalize_rule(PrivacyRuleType::Region, "nope").is_err());
-        assert_eq!(normalize_rule(PrivacyRuleType::Domain, "https://Bank.Example.com/").unwrap(), "bank.example.com");
+        assert_eq!(
+            normalize_rule(PrivacyRuleType::Domain, "https://Bank.Example.com/").unwrap(),
+            "bank.example.com"
+        );
         assert!(normalize_rule(PrivacyRuleType::Domain, "bank.com/login").is_err());
-        assert_eq!(normalize_rule(PrivacyRuleType::Application, " 1Password ").unwrap(), "1Password");
+        assert_eq!(
+            normalize_rule(PrivacyRuleType::Application, " 1Password ").unwrap(),
+            "1Password"
+        );
         assert!(normalize_rule(PrivacyRuleType::Window, "  ").is_err());
     }
 }

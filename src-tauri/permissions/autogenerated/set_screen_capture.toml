@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-screen-capture"
+description = "Enables the set_screen_capture command without any pre-configured scope."
+commands.allow = ["set_screen_capture"]
+
+[[permission]]
+identifier = "deny-set-screen-capture"
+description = "Denies the set_screen_capture command without any pre-configured scope."
+commands.deny = ["set_screen_capture"]

@@ -39,9 +39,12 @@ impl Engine {
         let scenario = demo::scenarios()
             .into_iter()
             .find(|s| s.id == scenario_id)
-            .ok_or_else(|| CoreError::NotFound(format!("Unknown demo scenario '{scenario_id}'.")))?;
-        let script = demo::script(scenario_id)
-            .ok_or_else(|| CoreError::NotFound(format!("Unknown demo scenario '{scenario_id}'.")))?;
+            .ok_or_else(|| {
+                CoreError::NotFound(format!("Unknown demo scenario '{scenario_id}'."))
+            })?;
+        let script = demo::script(scenario_id).ok_or_else(|| {
+            CoreError::NotFound(format!("Unknown demo scenario '{scenario_id}'."))
+        })?;
         if self.is_live() {
             return Err(CoreError::InvalidState(
                 "End the current meeting before starting a demo.".into(),
@@ -99,7 +102,12 @@ impl Engine {
         Ok(meeting)
     }
 
-    async fn run_demo_script(&self, meeting_id: Id, script: Vec<DemoStep>, cancel: CancellationToken) {
+    async fn run_demo_script(
+        &self,
+        meeting_id: Id,
+        script: Vec<DemoStep>,
+        cancel: CancellationToken,
+    ) {
         for step in script {
             let delay = match &step {
                 DemoStep::Say { delay_ms, .. } | DemoStep::Screen { delay_ms, .. } => *delay_ms,
@@ -149,7 +157,12 @@ impl Engine {
 
     /// Emits the words of `text` as partial transcripts, then the final one,
     /// exactly like a live transcription session would.
-    async fn simulate_speech(&self, speaker: SpeakerRole, text: &str, cancel: Option<&CancellationToken>) {
+    async fn simulate_speech(
+        &self,
+        speaker: SpeakerRole,
+        text: &str,
+        cancel: Option<&CancellationToken>,
+    ) {
         let utterance_id = new_id();
         let source = if speaker == SpeakerRole::User {
             AudioSourceKind::Microphone
@@ -203,7 +216,9 @@ impl Engine {
             sim.demo_meeting.clone()
         };
         match demo_meeting {
-            Some(id) if self.current_meeting_id().as_deref() == Some(id.as_str()) && self.is_live() => {
+            Some(id)
+                if self.current_meeting_id().as_deref() == Some(id.as_str()) && self.is_live() =>
+            {
                 self.stop_meeting().await
             }
             _ => {

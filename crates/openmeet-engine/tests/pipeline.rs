@@ -37,11 +37,19 @@ impl TestSink {
     }
 
     fn count(&self, name: &str) -> usize {
-        self.events.lock().iter().filter(|e| e.name() == name).count()
+        self.events
+            .lock()
+            .iter()
+            .filter(|e| e.name() == name)
+            .count()
     }
 
     /// Waits until `pred` matches an event; returns it.
-    async fn wait_for(&self, timeout: Duration, pred: impl Fn(&MeetingEvent) -> bool) -> Option<MeetingEvent> {
+    async fn wait_for(
+        &self,
+        timeout: Duration,
+        pred: impl Fn(&MeetingEvent) -> bool,
+    ) -> Option<MeetingEvent> {
         let deadline = tokio::time::Instant::now() + timeout;
         loop {
             let notified = self.notify.notified();
@@ -71,7 +79,10 @@ fn settings() -> Settings {
     s
 }
 
-fn harness_with(settings: Settings, providers: impl FnOnce(&MockLlmProvider) -> ProviderSet) -> Harness {
+fn harness_with(
+    settings: Settings,
+    providers: impl FnOnce(&MockLlmProvider) -> ProviderSet,
+) -> Harness {
     let sink = Arc::new(TestSink::default());
     let store = Arc::new(MemoryStore::new());
     let llm = MockLlmProvider::new();
@@ -132,7 +143,10 @@ async fn audio_to_overlay_pipeline_with_mock_providers() {
             ..Default::default()
         }
     });
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
 
     // 0.4 s silence, 1.5 s "speech", 1.2 s silence, as 20 ms system-audio frames
     // timestamped in the recent past (as if captured in real time).
@@ -148,22 +162,42 @@ async fn audio_to_overlay_pipeline_with_mock_providers() {
         }
     };
     let n = |ms: u32| (PIPELINE_SAMPLE_RATE * ms / 1000) as usize;
-    push((0..n(400)).map(|i| if i % 2 == 0 { 0.0004 } else { -0.0004 }).collect());
-    push((0..n(1500)).map(|i| (i as f32 * 0.09).sin() * 0.35).collect());
-    push((0..n(1200)).map(|i| if i % 2 == 0 { 0.0004 } else { -0.0004 }).collect());
+    push(
+        (0..n(400))
+            .map(|i| if i % 2 == 0 { 0.0004 } else { -0.0004 })
+            .collect(),
+    );
+    push(
+        (0..n(1500))
+            .map(|i| (i as f32 * 0.09).sin() * 0.35)
+            .collect(),
+    );
+    push(
+        (0..n(1200))
+            .map(|i| if i % 2 == 0 { 0.0004 } else { -0.0004 })
+            .collect(),
+    );
 
     let q = h
         .sink
         .wait_for(WAIT, |e| matches!(e, MeetingEvent::QuestionDetected { .. }))
         .await
         .expect("question detected from audio");
-    let MeetingEvent::QuestionDetected { question } = q else { unreachable!() };
+    let MeetingEvent::QuestionDetected { question } = q else {
+        unreachable!()
+    };
     assert!(question.question.to_lowercase().contains("rate limiter"));
     assert_eq!(question.speaker_role, SpeakerRole::Remote);
     assert!(question.requires_response);
 
-    let done = h.sink.wait_for(WAIT, is_complete).await.expect("answer completed");
-    let MeetingEvent::AnswerComplete { suggestion, .. } = done else { unreachable!() };
+    let done = h
+        .sink
+        .wait_for(WAIT, is_complete)
+        .await
+        .expect("answer completed");
+    let MeetingEvent::AnswerComplete { suggestion, .. } = done else {
+        unreachable!()
+    };
     assert_eq!(suggestion.kind, SuggestionKind::Answer);
     assert!(!suggestion.content.trim().is_empty());
     assert!(h.sink.count("ANSWER_DELTA") > 0, "answer must stream");
@@ -175,7 +209,12 @@ async fn audio_to_overlay_pipeline_with_mock_providers() {
         .iter()
         .find(|r| r.kind == RequestKind::CandidateAnswer)
         .expect("candidate answer request");
-    assert!(answer_req.messages[0].content.to_lowercase().contains("rate limiter"));
+    assert!(
+        answer_req.messages[0]
+            .content
+            .to_lowercase()
+            .contains("rate limiter")
+    );
 
     // Latency diagnostics were recorded for each stage of the pipeline.
     let stages: Vec<LatencyStage> = h.engine.latency_stats().iter().map(|s| s.stage).collect();
@@ -187,7 +226,10 @@ async fn audio_to_overlay_pipeline_with_mock_providers() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn interviewer_mode_generates_grounded_followups() {
     let h = harness();
-    h.engine.start_meeting(start_request(Mode::Interviewer)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Interviewer))
+        .await
+        .unwrap();
     h.engine
         .simulate(SimulationAction::Transcript {
             speaker: SpeakerRole::User,
@@ -201,10 +243,14 @@ async fn interviewer_mode_generates_grounded_followups() {
         .unwrap();
     let ev = h
         .sink
-        .wait_for(WAIT, |e| matches!(e, MeetingEvent::FollowupsReady { done: true, .. }))
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::FollowupsReady { done: true, .. })
+        })
         .await
         .expect("follow-ups after the candidate's turn");
-    let MeetingEvent::FollowupsReady { questions, .. } = ev else { unreachable!() };
+    let MeetingEvent::FollowupsReady { questions, .. } = ev else {
+        unreachable!()
+    };
     assert!(!questions.is_empty(), "at least one follow-up");
     for f in &questions {
         assert!(!f.question.trim().is_empty());
@@ -221,16 +267,26 @@ async fn interviewer_mode_generates_grounded_followups() {
         .into_iter()
         .find(|r| r.kind == RequestKind::InterviewerFollowups)
         .unwrap();
-    assert!(req.messages[0].content.contains("Redis"), "prompt grounded in the candidate's words");
+    assert!(
+        req.messages[0].content.contains("Redis"),
+        "prompt grounded in the candidate's words"
+    );
     // The asked question was recorded for duplicate detection.
     let snap = h.engine.snapshot();
-    assert!(snap.questions.iter().any(|q| q.speaker_role == SpeakerRole::User));
+    assert!(
+        snap.questions
+            .iter()
+            .any(|q| q.speaker_role == SpeakerRole::User)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn duplicate_followups_are_filtered() {
     let h = harness();
-    h.engine.start_meeting(start_request(Mode::Interviewer)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Interviewer))
+        .await
+        .unwrap();
     h.llm.push_response(
         [
             r#"{"type":"followup","question":"How did you handle API scaling?","category":"technical","reason":"repeat","priority":"normal","trigger":"we scaled"}"#,
@@ -251,19 +307,29 @@ async fn duplicate_followups_are_filtered() {
         .unwrap();
     let ev = h
         .sink
-        .wait_for(WAIT, |e| matches!(e, MeetingEvent::FollowupsReady { done: true, .. }))
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::FollowupsReady { done: true, .. })
+        })
         .await
         .expect("follow-ups");
-    let MeetingEvent::FollowupsReady { questions, .. } = ev else { unreachable!() };
+    let MeetingEvent::FollowupsReady { questions, .. } = ev else {
+        unreachable!()
+    };
     let texts: Vec<&str> = questions.iter().map(|q| q.question.as_str()).collect();
-    assert_eq!(texts, vec!["Which component became the scaling bottleneck?"]);
+    assert_eq!(
+        texts,
+        vec!["Which component became the scaling bottleneck?"]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn newer_question_cancels_stale_answer() {
     let h = harness();
     h.llm.set_first_token_latency_ms(400);
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     h.engine
         .simulate(SimulationAction::Question {
             text: "How did you design the billing system?".into(),
@@ -274,7 +340,9 @@ async fn newer_question_cancels_stale_answer() {
         .wait_for(WAIT, |e| matches!(e, MeetingEvent::AnswerStarted { .. }))
         .await
         .unwrap();
-    let MeetingEvent::AnswerStarted { request_id: a, .. } = first else { unreachable!() };
+    let MeetingEvent::AnswerStarted { request_id: a, .. } = first else {
+        unreachable!()
+    };
     tokio::time::sleep(Duration::from_millis(100)).await;
     h.engine
         .simulate(SimulationAction::Question {
@@ -282,14 +350,21 @@ async fn newer_question_cancels_stale_answer() {
         })
         .unwrap();
     let done = h.sink.wait_for(WAIT, is_complete).await.unwrap();
-    let MeetingEvent::AnswerComplete { request_id: b, suggestion } = done else { unreachable!() };
+    let MeetingEvent::AnswerComplete {
+        request_id: b,
+        suggestion,
+    } = done
+    else {
+        unreachable!()
+    };
     assert_ne!(a, b, "the completed answer belongs to the newer question");
     assert!(suggestion.question_text.unwrap().contains("database"));
     tokio::time::sleep(Duration::from_millis(600)).await;
     // No deltas or completion for the stale request were ever emitted.
     for e in h.sink.events() {
         match e {
-            MeetingEvent::AnswerDelta { request_id, .. } | MeetingEvent::AnswerComplete { request_id, .. } => {
+            MeetingEvent::AnswerDelta { request_id, .. }
+            | MeetingEvent::AnswerComplete { request_id, .. } => {
                 assert_ne!(request_id, a, "stale answer leaked to the UI");
             }
             _ => {}
@@ -304,7 +379,10 @@ async fn emergency_stop_halts_everything_immediately() {
     let h = harness();
     h.llm.set_first_token_latency_ms(50);
     h.llm.set_chunk_delay_ms(50);
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     h.engine
         .simulate(SimulationAction::Question {
             text: "Can you explain how you handled retries in the payment service?".into(),
@@ -320,20 +398,34 @@ async fn emergency_stop_halts_everything_immediately() {
     assert_eq!(h.engine.meeting_state(), MeetingState::Paused);
     assert!(h.engine.processing_stopped());
     tokio::time::sleep(Duration::from_millis(400)).await;
-    assert_eq!(h.sink.count("ANSWER_DELTA"), deltas_at_stop, "no output after the stop");
+    assert_eq!(
+        h.sink.count("ANSWER_DELTA"),
+        deltas_at_stop,
+        "no output after the stop"
+    );
     assert_eq!(h.sink.count("ANSWER_COMPLETE"), 0);
     // New requests are refused until the user resumes.
     assert!(h.engine.ask("anything".into()).is_err());
     h.engine.resume().unwrap();
     assert!(!h.engine.processing_stopped());
-    assert!(h.engine.ask("Now explain idempotency keys briefly.".into()).is_ok());
-    h.sink.wait_for(WAIT, is_complete).await.expect("works again after resume");
+    assert!(
+        h.engine
+            .ask("Now explain idempotency keys briefly.".into())
+            .is_ok()
+    );
+    h.sink
+        .wait_for(WAIT, is_complete)
+        .await
+        .expect("works again after resume");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn paused_meeting_does_not_auto_answer() {
     let h = harness();
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     h.engine.pause().unwrap();
     h.engine
         .simulate(SimulationAction::Question {
@@ -352,9 +444,13 @@ async fn paused_meeting_does_not_auto_answer() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn provider_failure_is_reported_and_transcription_continues() {
     let h = harness();
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
-    h.llm
-        .push_failure(openmeet_core::ProviderError::Network("connection refused".into()));
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
+    h.llm.push_failure(openmeet_core::ProviderError::Network(
+        "connection refused".into(),
+    ));
     h.engine
         .simulate(SimulationAction::Question {
             text: "How do you approach code reviews?".into(),
@@ -362,10 +458,20 @@ async fn provider_failure_is_reported_and_transcription_continues() {
         .unwrap();
     let failed = h
         .sink
-        .wait_for(WAIT, |e| matches!(e, MeetingEvent::AnswerStateChanged { state: AnswerState::Failed, .. }))
+        .wait_for(WAIT, |e| {
+            matches!(
+                e,
+                MeetingEvent::AnswerStateChanged {
+                    state: AnswerState::Failed,
+                    ..
+                }
+            )
+        })
         .await
         .expect("failure is surfaced, never silent");
-    let MeetingEvent::AnswerStateChanged { error, .. } = failed else { unreachable!() };
+    let MeetingEvent::AnswerStateChanged { error, .. } = failed else {
+        unreachable!()
+    };
     assert!(error.unwrap().contains("AI provider unavailable"));
     // The pipeline keeps working.
     h.engine
@@ -383,9 +489,18 @@ async fn provider_failure_is_reported_and_transcription_continues() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn manual_ask_works_without_a_meeting_or_transcription() {
     let h = harness();
-    let id = h.engine.ask("Explain eventual consistency simply.".into()).unwrap();
+    let id = h
+        .engine
+        .ask("Explain eventual consistency simply.".into())
+        .unwrap();
     let done = h.sink.wait_for(WAIT, is_complete).await.unwrap();
-    let MeetingEvent::AnswerComplete { request_id, suggestion } = done else { unreachable!() };
+    let MeetingEvent::AnswerComplete {
+        request_id,
+        suggestion,
+    } = done
+    else {
+        unreachable!()
+    };
     assert_eq!(request_id, id);
     assert_eq!(suggestion.kind, SuggestionKind::Ask);
     // Refinements work on detached suggestions too.
@@ -395,7 +510,9 @@ async fn manual_ask_works_without_a_meeting_or_transcription() {
         .wait_for(WAIT, |e| matches!(e, MeetingEvent::AnswerComplete { request_id, .. } if *request_id == refined))
         .await
         .unwrap();
-    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else { unreachable!() };
+    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else {
+        unreachable!()
+    };
     assert_eq!(suggestion.parent_id.as_deref(), Some(id.as_str()));
     assert_eq!(suggestion.kind, SuggestionKind::Refinement);
     assert!(h.engine.ask("   ".into()).is_err());
@@ -404,7 +521,11 @@ async fn manual_ask_works_without_a_meeting_or_transcription() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn stop_meeting_produces_summary_and_persists_everything() {
     let h = harness();
-    let meeting = h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    let meeting = h
+        .engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     h.engine
         .simulate(SimulationAction::Question {
             text: "Why did you choose Kafka for the event pipeline?".into(),
@@ -414,7 +535,9 @@ async fn stop_meeting_produces_summary_and_persists_everything() {
     h.engine
         .simulate(SimulationAction::Transcript {
             speaker: SpeakerRole::User,
-            text: "We needed durable, replayable events and our team already ran Kafka in production.".into(),
+            text:
+                "We needed durable, replayable events and our team already ran Kafka in production."
+                    .into(),
         })
         .unwrap();
     h.sink
@@ -424,22 +547,38 @@ async fn stop_meeting_produces_summary_and_persists_everything() {
     h.engine.stop_meeting().await.unwrap();
     let ev = h
         .sink
-        .wait_for(Duration::from_secs(20), |e| matches!(e, MeetingEvent::SummaryReady { .. }))
+        .wait_for(Duration::from_secs(20), |e| {
+            matches!(e, MeetingEvent::SummaryReady { .. })
+        })
         .await
         .expect("summary generated");
-    let MeetingEvent::SummaryReady { summary } = ev else { unreachable!() };
+    let MeetingEvent::SummaryReady { summary } = ev else {
+        unreachable!()
+    };
     assert_eq!(summary.meeting_id, meeting.id);
     assert!(!summary.markdown.trim().is_empty());
     assert_eq!(h.engine.meeting_state(), MeetingState::Completed);
     h.engine.flush_persistence().await;
-    let record = h.store.load_meeting(&meeting.id).expect("meeting persisted");
+    let record = h
+        .store
+        .load_meeting(&meeting.id)
+        .expect("meeting persisted");
     assert_eq!(record.meeting.state, MeetingState::Completed);
     assert!(record.meeting.ended_at.is_some());
     assert_eq!(record.segments.len(), 2);
     assert_eq!(record.questions.len(), 1);
-    assert_eq!(record.answers.len(), 1, "the user's spoken answer is linked to the question");
+    assert_eq!(
+        record.answers.len(),
+        1,
+        "the user's spoken answer is linked to the question"
+    );
     assert!(record.answers[0].text.contains("durable"));
-    assert!(record.suggestions.iter().any(|s| s.kind == SuggestionKind::Answer));
+    assert!(
+        record
+            .suggestions
+            .iter()
+            .any(|s| s.kind == SuggestionKind::Answer)
+    );
     assert!(record.summary.is_some());
 }
 
@@ -451,7 +590,11 @@ async fn retention_none_persists_nothing() {
         llm: Some(Arc::new(llm.clone())),
         ..Default::default()
     });
-    let meeting = h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    let meeting = h
+        .engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     assert!(!meeting.persisted);
     h.engine
         .simulate(SimulationAction::Question {
@@ -461,11 +604,16 @@ async fn retention_none_persists_nothing() {
     h.sink.wait_for(WAIT, is_complete).await.unwrap();
     h.engine.stop_meeting().await.unwrap();
     h.sink
-        .wait_for(Duration::from_secs(20), |e| matches!(e, MeetingEvent::SummaryReady { .. }))
+        .wait_for(Duration::from_secs(20), |e| {
+            matches!(e, MeetingEvent::SummaryReady { .. })
+        })
         .await
         .unwrap();
     h.engine.flush_persistence().await;
-    assert!(h.store.load_meeting(&meeting.id).is_err(), "nothing written to disk");
+    assert!(
+        h.store.load_meeting(&meeting.id).is_err(),
+        "nothing written to disk"
+    );
     assert_eq!(h.store.embedding_count(), 0);
 }
 
@@ -478,7 +626,10 @@ async fn screen_context_is_fused_with_the_question() {
         }) as Arc<dyn OcrEngine>),
         ..Default::default()
     });
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     h.engine.push_screen_frame(ScreenFrame {
         id: "f1".into(),
         captured_at: now_ms(),
@@ -497,7 +648,9 @@ async fn screen_context_is_fused_with_the_question() {
         .wait_for(WAIT, |e| matches!(e, MeetingEvent::ScreenUpdated { .. }))
         .await
         .expect("observation produced from OCR");
-    let MeetingEvent::ScreenUpdated { observation } = ev else { unreachable!() };
+    let MeetingEvent::ScreenUpdated { observation } = ev else {
+        unreachable!()
+    };
     assert!(observation.visible_text.unwrap().contains("Queue"));
     assert_eq!(observation.frame_hash.as_deref(), Some("000000000000002a"));
 
@@ -522,7 +675,10 @@ async fn screen_context_is_fused_with_the_question() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn answer_controls_pin_and_dismiss() {
     let h = harness();
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     let id = h
         .engine
         .generate_answer(GenerateAnswerRequest {
@@ -544,8 +700,16 @@ async fn meeting_lifecycle_rejects_invalid_transitions() {
     let h = harness();
     assert!(h.engine.pause().is_err());
     assert!(h.engine.stop_meeting().await.is_err());
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
-    assert!(h.engine.start_meeting(start_request(Mode::Candidate)).await.is_err());
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
+    assert!(
+        h.engine
+            .start_meeting(start_request(Mode::Candidate))
+            .await
+            .is_err()
+    );
     h.engine.pause().unwrap();
     h.engine.pause().unwrap(); // idempotent
     h.engine.resume().unwrap();
@@ -560,7 +724,13 @@ async fn meeting_lifecycle_rejects_invalid_transitions() {
             _ => None,
         })
         .collect();
-    assert!(states.starts_with(&[MeetingState::Starting, MeetingState::Active, MeetingState::Paused, MeetingState::Active, MeetingState::Stopping]));
+    assert!(states.starts_with(&[
+        MeetingState::Starting,
+        MeetingState::Active,
+        MeetingState::Paused,
+        MeetingState::Active,
+        MeetingState::Stopping
+    ]));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -579,16 +749,24 @@ async fn demo_mode_runs_without_external_services() {
     let h = harness();
     let scenarios = h.engine.demo_scenarios();
     assert!(scenarios.iter().any(|s| s.id == "rate-limiter-interviewer"));
-    let meeting = h.engine.start_demo("rate-limiter-interviewer").await.unwrap();
+    let meeting = h
+        .engine
+        .start_demo("rate-limiter-interviewer")
+        .await
+        .unwrap();
     assert!(!meeting.persisted, "demo meetings are never stored");
     assert!(h.engine.demo_running());
     h.sink
-        .wait_for(Duration::from_secs(60), |e| matches!(e, MeetingEvent::FollowupsReady { done: true, .. }))
+        .wait_for(Duration::from_secs(60), |e| {
+            matches!(e, MeetingEvent::FollowupsReady { done: true, .. })
+        })
         .await
         .expect("demo produces follow-ups");
     h.engine.stop_demo().await.unwrap();
     h.sink
-        .wait_for(Duration::from_secs(30), |e| matches!(e, MeetingEvent::SummaryReady { .. }))
+        .wait_for(Duration::from_secs(30), |e| {
+            matches!(e, MeetingEvent::SummaryReady { .. })
+        })
         .await
         .expect("demo summary");
     assert!(!h.engine.demo_running());
@@ -599,7 +777,10 @@ async fn demo_mode_runs_without_external_services() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn developer_simulation_of_ai_failure_and_latency() {
     let h = harness();
-    h.engine.start_meeting(start_request(Mode::Candidate)).await.unwrap();
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
     h.engine
         .simulate(SimulationAction::AiFailure {
             message: "simulated outage".into(),
@@ -608,7 +789,15 @@ async fn developer_simulation_of_ai_failure_and_latency() {
     assert!(h.engine.simulation_active());
     h.engine.ask("Will this fail?".into()).unwrap();
     h.sink
-        .wait_for(WAIT, |e| matches!(e, MeetingEvent::AnswerStateChanged { state: AnswerState::Failed, .. }))
+        .wait_for(WAIT, |e| {
+            matches!(
+                e,
+                MeetingEvent::AnswerStateChanged {
+                    state: AnswerState::Failed,
+                    ..
+                }
+            )
+        })
         .await
         .expect("simulated failure surfaced");
     h.engine
@@ -618,7 +807,9 @@ async fn developer_simulation_of_ai_failure_and_latency() {
         .unwrap();
     h.engine.ask("And now?".into()).unwrap();
     let ev = h.sink.wait_for(WAIT, is_complete).await.unwrap();
-    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else { unreachable!() };
+    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else {
+        unreachable!()
+    };
     assert!(suggestion.content.contains("Simulated answer"));
     h.engine.clear_simulation();
     assert!(!h.engine.simulation_active());
@@ -633,7 +824,11 @@ async fn benchmark_runs_offline() {
     assert!(names.iter().any(|n| n.starts_with("Pipeline: question")));
     for i in &items {
         if i.name == "Question detection" {
-            assert!(i.value < 5.0, "detection should be well under 5 ms, got {}", i.value);
+            assert!(
+                i.value < 5.0,
+                "detection should be well under 5 ms, got {}",
+                i.value
+            );
         }
     }
 }

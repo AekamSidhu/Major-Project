@@ -150,7 +150,10 @@ impl Engine {
         spawn_embedder(Arc::downgrade(&inner), embed_rx, &handle);
         let engine = Engine { inner };
         engine.refresh_provider_health();
-        engine.inner.health.set(Component::Meeting, ComponentStatus::Inactive, None);
+        engine
+            .inner
+            .health
+            .set(Component::Meeting, ComponentStatus::Inactive, None);
         engine
     }
 
@@ -170,7 +173,12 @@ impl Engine {
         self.inner.sink.emit(event);
     }
 
-    pub(crate) fn notice(&self, level: NoticeLevel, message: impl Into<String>, component: Option<Component>) {
+    pub(crate) fn notice(
+        &self,
+        level: NoticeLevel,
+        message: impl Into<String>,
+        component: Option<Component>,
+    ) {
         self.emit(MeetingEvent::Notice {
             level,
             message: message.into(),
@@ -271,7 +279,10 @@ impl Engine {
             if mode_changed {
                 st.mode = settings.mode;
             }
-            (style_changed.then_some(st.style), mode_changed.then_some(st.mode))
+            (
+                style_changed.then_some(st.style),
+                mode_changed.then_some(st.mode),
+            )
         };
         *self.inner.settings.write() = settings;
         if let Some(style) = style_changed {
@@ -299,9 +310,9 @@ impl Engine {
             }
             // Keep a developer mock override in place (restored on clear).
             let mut p = providers;
-            if let Some(mock) = &sim.mock {
+            if let Some(mock) = sim.mock.clone() {
                 sim.saved_llm = Some(p.llm.take());
-                p.llm = Some(Arc::new(mock.clone()));
+                p.llm = Some(Arc::new(mock));
             }
             *self.inner.providers.write() = p;
         }
@@ -312,7 +323,7 @@ impl Engine {
                 st.runtime
                     .as_ref()
                     .filter(|r| r.state() == MeetingState::Active && r.sessions_running)
-                    .map(|r| sources_of(r))
+                    .map(sources_of)
             };
             if let Some(sources) = restart {
                 let _ = self.inner.audio_ctl.send(AudioControl::Stop);
@@ -371,7 +382,10 @@ impl Engine {
             if let Some(rt) = &st.runtime {
                 if matches!(
                     rt.state(),
-                    MeetingState::Starting | MeetingState::Active | MeetingState::Paused | MeetingState::Stopping
+                    MeetingState::Starting
+                        | MeetingState::Active
+                        | MeetingState::Paused
+                        | MeetingState::Stopping
                 ) {
                     return Err(CoreError::InvalidState(
                         "A meeting is already running. End it before starting another.".into(),
@@ -428,7 +442,12 @@ impl Engine {
         self.inner.settings.write().mode = req.mode;
         self.emit_state(&meeting_id);
         self.emit(MeetingEvent::ModeChanged { mode: req.mode });
-        crate::conversation::spawn_conversation(self.clone(), meeting_id.clone(), trans_rx, conv_rx);
+        crate::conversation::spawn_conversation(
+            self.clone(),
+            meeting_id.clone(),
+            trans_rx,
+            conv_rx,
+        );
 
         // Demo meetings are fed by a script, not by audio.
         if !demo {
@@ -455,7 +474,9 @@ impl Engine {
             meeting: started.clone(),
         });
         self.emit_state(&meeting_id);
-        self.inner.health.set(Component::Meeting, ComponentStatus::Active, None);
+        self.inner
+            .health
+            .set(Component::Meeting, ComponentStatus::Active, None);
         self.inner
             .health
             .set(Component::QuestionDetector, ComponentStatus::Active, None);
@@ -501,7 +522,8 @@ impl Engine {
             let cfg = TranscriptionSessionConfig {
                 source,
                 language: settings.transcription.language.clone(),
-                vocabulary: Some(settings.transcription.vocabulary.clone()).filter(|v| !v.trim().is_empty()),
+                vocabulary: Some(settings.transcription.vocabulary.clone())
+                    .filter(|v| !v.trim().is_empty()),
                 interim_results: settings.transcription.interim_results,
                 vad_sensitivity: settings.audio.vad_sensitivity,
                 silence_ms: settings.audio.silence_ms,
@@ -568,7 +590,9 @@ impl Engine {
         self.inner.accepting_audio.store(false, Ordering::Release);
         let _ = self.inner.audio_ctl.send(AudioControl::Flush(None));
         self.inner.requests.cancel_all(false);
-        self.inner.health.set(Component::Meeting, ComponentStatus::Paused, None);
+        self.inner
+            .health
+            .set(Component::Meeting, ComponentStatus::Paused, None);
         self.emit_state(&meeting_id);
         Ok(())
     }
@@ -595,7 +619,9 @@ impl Engine {
             self.start_sessions(&sources);
         }
         self.inner.accepting_audio.store(true, Ordering::Release);
-        self.inner.health.set(Component::Meeting, ComponentStatus::Active, None);
+        self.inner
+            .health
+            .set(Component::Meeting, ComponentStatus::Active, None);
         self.emit_state(&meeting_id);
         Ok(())
     }
@@ -634,11 +660,17 @@ impl Engine {
         });
         if let Some(id) = meeting_id {
             self.emit_state(&id);
-            self.inner.health.set(Component::Meeting, ComponentStatus::Paused, Some("Emergency stop".into()));
+            self.inner.health.set(
+                Component::Meeting,
+                ComponentStatus::Paused,
+                Some("Emergency stop".into()),
+            );
         }
-        self.inner
-            .health
-            .set(Component::Transcription, ComponentStatus::Paused, Some("Emergency stop".into()));
+        self.inner.health.set(
+            Component::Transcription,
+            ComponentStatus::Paused,
+            Some("Emergency stop".into()),
+        );
         tracing::warn!("emergency stop");
     }
 
@@ -652,7 +684,9 @@ impl Engine {
                 .as_mut()
                 .ok_or_else(|| CoreError::InvalidState("No meeting is running.".into()))?;
             if !rt.state().is_live() {
-                return Err(CoreError::InvalidState("The meeting is not running.".into()));
+                return Err(CoreError::InvalidState(
+                    "The meeting is not running.".into(),
+                ));
             }
             rt.transition(MeetingState::Stopping)
                 .map_err(CoreError::InvalidState)?;
@@ -700,7 +734,12 @@ impl Engine {
             rt.meeting.ended_at = Some(now_ms());
             rt.transition(MeetingState::Summarizing)
                 .map_err(CoreError::InvalidState)?;
-            (rt.store.clone(), rt.meeting.clone(), answer, rt.topics.topics())
+            (
+                rt.store.clone(),
+                rt.meeting.clone(),
+                answer,
+                rt.topics.topics(),
+            )
         };
         if let Some(a) = answer {
             self.persist(&store, PersistOp::Answer(a));
@@ -717,7 +756,9 @@ impl Engine {
             meeting_id: meeting_id.clone(),
         });
         self.emit_state(&meeting_id);
-        self.inner.health.set(Component::Meeting, ComponentStatus::Inactive, None);
+        self.inner
+            .health
+            .set(Component::Meeting, ComponentStatus::Inactive, None);
         self.inner
             .health
             .set(Component::QuestionDetector, ComponentStatus::Inactive, None);
@@ -829,9 +870,9 @@ impl Engine {
                 .as_mut()
                 .ok_or_else(|| CoreError::InvalidState("No meeting is running.".into()))?;
             let store = rt.store.clone();
-            let s = rt
-                .suggestion_mut(request_id)
-                .ok_or_else(|| CoreError::NotFound("That suggestion is no longer available.".into()))?;
+            let s = rt.suggestion_mut(request_id).ok_or_else(|| {
+                CoreError::NotFound("That suggestion is no longer available.".into())
+            })?;
             s.pinned = pinned;
             (store, s.clone())
         };
@@ -897,7 +938,12 @@ impl Engine {
 
     /// Lets the desktop layer report health of OS components (microphone,
     /// overlay, hotkeys, capture privacy...).
-    pub fn set_component_status(&self, component: Component, status: ComponentStatus, message: Option<String>) {
+    pub fn set_component_status(
+        &self,
+        component: Component,
+        status: ComponentStatus,
+        message: Option<String>,
+    ) {
         self.inner.health.set(component, status, message);
     }
 
@@ -936,18 +982,16 @@ impl Engine {
                     mode: st.mode,
                     style: st.style,
                     transcript: rt.segments[tail_start..].to_vec(),
-                    questions: rt
-                        .questions
-                        .iter()
-                        .rev()
-                        .take(20)
-                        .rev()
-                        .cloned()
-                        .collect(),
+                    questions: rt.questions.iter().rev().take(20).rev().cloned().collect(),
                     active: rt.active_primary.clone(),
                     followups: rt.latest_followups.clone(),
                     followups_request_id: rt.latest_followups_request.clone(),
-                    pinned: rt.suggestions.iter().filter(|s| s.pinned).cloned().collect(),
+                    pinned: rt
+                        .suggestions
+                        .iter()
+                        .filter(|s| s.pinned)
+                        .cloned()
+                        .collect(),
                     topics: rt.topics.topics(),
                     suggested_next_topic: rt.topics.suggested_next(),
                     components,
@@ -1011,7 +1055,10 @@ impl Engine {
     }
 
     /// Generates a summary for a stored meeting (history view) and saves it.
-    pub async fn summarize_record(&self, record: MeetingRecord) -> Result<MeetingSummary, CoreError> {
+    pub async fn summarize_record(
+        &self,
+        record: MeetingRecord,
+    ) -> Result<MeetingSummary, CoreError> {
         let summary = crate::assist::summarize_record(self, &record).await;
         let store = self.inner.db_store.clone();
         if record.meeting.persisted {
@@ -1074,7 +1121,7 @@ async fn audio_router(
             biased;
             ctl = control.recv() => match ctl {
                 Some(AudioControl::Start(new_sessions)) => {
-                    for (_, s) in sessions.iter_mut() {
+                    for s in sessions.values_mut() {
                         s.stop();
                     }
                     sessions.clear();
@@ -1090,7 +1137,7 @@ async fn audio_router(
                             s.push_audio(frame);
                         }
                     }
-                    for (_, s) in sessions.iter_mut() {
+                    for s in sessions.values_mut() {
                         s.flush();
                     }
                     if let Some(ack) = ack {
@@ -1098,7 +1145,7 @@ async fn audio_router(
                     }
                 }
                 Some(AudioControl::Stop) => {
-                    for (_, s) in sessions.iter_mut() {
+                    for s in sessions.values_mut() {
                         s.stop();
                     }
                     sessions.clear();
@@ -1116,7 +1163,7 @@ async fn audio_router(
             },
         }
     }
-    for (_, s) in sessions.iter_mut() {
+    for s in sessions.values_mut() {
         s.stop();
     }
 }

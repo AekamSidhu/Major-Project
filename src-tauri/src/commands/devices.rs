@@ -1,6 +1,6 @@
+use openmeet_core::CoreError;
 use openmeet_core::ipc::{AudioDevices, DisplayInfo, ScreenSourceInfo, ScreenSourceSpec};
 use openmeet_core::types::AudioSourceKind;
-use openmeet_core::CoreError;
 use tauri::AppHandle;
 
 use super::{AppStateRef, CmdResult};
@@ -12,7 +12,11 @@ pub async fn list_audio_devices() -> CmdResult<AudioDevices> {
 }
 
 #[tauri::command]
-pub async fn start_audio_test(state: AppStateRef<'_>, source: AudioSourceKind, device: Option<String>) -> CmdResult<()> {
+pub async fn start_audio_test(
+    state: AppStateRef<'_>,
+    source: AudioSourceKind,
+    device: Option<String>,
+) -> CmdResult<()> {
     if device.as_ref().is_some_and(|d| d.len() > 512) {
         return Err(CoreError::InvalidInput("Invalid device.".into()));
     }
@@ -38,9 +42,15 @@ pub async fn list_screen_sources(state: AppStateRef<'_>) -> CmdResult<Vec<Screen
 /// Enables/disables screen context (and remembers the source). Takes effect
 /// immediately when a meeting is running.
 #[tauri::command]
-pub async fn set_screen_capture(state: AppStateRef<'_>, enabled: bool, source: Option<ScreenSourceSpec>) -> CmdResult<()> {
+pub async fn set_screen_capture(
+    state: AppStateRef<'_>,
+    enabled: bool,
+    source: Option<ScreenSourceSpec>,
+) -> CmdResult<()> {
     if enabled && source.is_none() && state.settings().screen.source.is_none() {
-        return Err(CoreError::InvalidInput("Choose what to capture first.".into()));
+        return Err(CoreError::InvalidInput(
+            "Choose what to capture first.".into(),
+        ));
     }
     if let Some(s) = &source {
         if s.id.len() > 256 || s.label.chars().count() > 300 {

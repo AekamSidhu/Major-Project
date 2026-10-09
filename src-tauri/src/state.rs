@@ -1,15 +1,14 @@
 //! Application state shared by commands, hotkeys and the tray.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use openmeet_core::CoreError;
 use openmeet_core::events::{EventSink, MeetingEvent, NoticeLevel};
 use openmeet_core::ids::now_ms;
 use openmeet_core::ipc::{ScreenSourceKind, ScreenSourceSpec, StartMeetingRequest, UiCommand};
 use openmeet_core::settings::Settings;
 use openmeet_core::types::{AudioSourceKind, Component, ComponentStatus, Meeting, MeetingState};
-use openmeet_core::CoreError;
 use openmeet_engine::Engine;
 use openmeet_platform::system::ProcessStats;
 use openmeet_store::Database;
@@ -19,8 +18,8 @@ use tauri_plugin_autostart::ManagerExt as AutostartExt;
 
 use crate::capture::{CaptureManager, MeetingSources};
 use crate::local_ai::{self, LocalAiManager};
-use crate::screenshots::ScreenshotStore;
 use crate::overlay::OverlayController;
+use crate::screenshots::ScreenshotStore;
 use crate::secrets::SecretStore;
 use crate::shortcuts::ShortcutManager;
 use crate::sink::TauriSink;
@@ -38,7 +37,6 @@ pub struct AppState {
     pub local_ai: LocalAiManager,
     pub stats: Mutex<ProcessStats>,
     pub screenshots: Arc<ScreenshotStore>,
-    pub data_dir: PathBuf,
     /// Serializes settings updates (read-modify-write).
     settings_lock: tokio::sync::Mutex<()>,
 }
@@ -62,7 +60,7 @@ impl AppState {
         db: Arc<Database>,
         secrets: Arc<SecretStore>,
         sink: Arc<TauriSink>,
-        data_dir: PathBuf,
+        data_dir: &std::path::Path,
     ) -> Self {
         AppState {
             capture: CaptureManager::new(sink.clone() as Arc<dyn EventSink>),
@@ -70,14 +68,13 @@ impl AppState {
             shortcuts: ShortcutManager::new(),
             local_ai: LocalAiManager::new(&app),
             stats: Mutex::new(ProcessStats::new()),
-            screenshots: Arc::new(ScreenshotStore::new(&data_dir)),
+            screenshots: Arc::new(ScreenshotStore::new(data_dir)),
             settings_lock: tokio::sync::Mutex::new(()),
             app,
             engine,
             db,
             secrets,
             sink,
-            data_dir,
         }
     }
 
@@ -98,7 +95,10 @@ impl AppState {
     // ------------------------------------------------------------------
 
     /// Validates, persists and applies new settings; returns the stored value.
-    pub async fn update_settings(self: &Arc<Self>, requested: Settings) -> Result<Settings, CoreError> {
+    pub async fn update_settings(
+        self: &Arc<Self>,
+        requested: Settings,
+    ) -> Result<Settings, CoreError> {
         let _guard = self.settings_lock.lock().await;
         let next = requested.sanitized();
         next.validate()
@@ -113,7 +113,10 @@ impl AppState {
     }
 
     /// Applies a mutation to the current settings.
-    pub async fn modify_settings(self: &Arc<Self>, f: impl FnOnce(&mut Settings)) -> Result<Settings, CoreError> {
+    pub async fn modify_settings(
+        self: &Arc<Self>,
+        f: impl FnOnce(&mut Settings),
+    ) -> Result<Settings, CoreError> {
         let mut s = self.settings();
         f(&mut s);
         self.update_settings(s).await
@@ -144,7 +147,9 @@ impl AppState {
             }
         }
         if prev.privacy.capture_exclusion != next.privacy.capture_exclusion {
-            let status = self.overlay.apply_capture_privacy(next.privacy.capture_exclusion);
+            let status = self
+                .overlay
+                .apply_capture_privacy(next.privacy.capture_exclusion);
             self.sink.emit(MeetingEvent::PrivacyStateChanged {
                 enabled: status.requested,
                 supported: status.supported,
@@ -163,7 +168,10 @@ impl AppState {
             };
             if let Err(e) = r {
                 tracing::warn!(error = %e, "autostart change failed");
-                self.notice(NoticeLevel::Warning, "Could not change the launch-at-startup setting.");
+                self.notice(
+                    NoticeLevel::Warning,
+                    "Could not change the launch-at-startup setting.",
+                );
             }
         }
         if prev.privacy.retention != next.privacy.retention {
@@ -193,7 +201,10 @@ impl AppState {
     // Meeting lifecycle (spec §39, §68)
     // ------------------------------------------------------------------
 
-    pub async fn start_meeting(self: &Arc<Self>, req: StartMeetingRequest) -> Result<Meeting, CoreError> {
+    pub async fn start_meeting(
+        self: &Arc<Self>,
+        req: StartMeetingRequest,
+    ) -> Result<Meeting, CoreError> {
         let settings = self.settings();
         if !req.microphone && !req.system_audio {
             self.notice(
@@ -211,7 +222,10 @@ impl AppState {
                         ComponentStatus::Error,
                         Some(e.to_string()),
                     );
-                    self.notice(NoticeLevel::Warning, format!("Local transcription unavailable: {e}"));
+                    self.notice(
+                        NoticeLevel::Warning,
+                        format!("Local transcription unavailable: {e}"),
+                    );
                 }
             }
         }
@@ -282,8 +296,14 @@ impl AppState {
         let settings = self.settings();
         let keep = (settings.screen.store_screenshots && settings.privacy.retention.persists())
             .then(|| self.screenshots.clone());
-        if let Err(e) = self.capture.start_screen(&self.engine, spec, &settings, rules, keep) {
-            self.notice(NoticeLevel::Error, format!("Screen capture unavailable: {e}"));
+        if let Err(e) = self
+            .capture
+            .start_screen(&self.engine, spec, &settings, rules, keep)
+        {
+            self.notice(
+                NoticeLevel::Error,
+                format!("Screen capture unavailable: {e}"),
+            );
         }
     }
 
@@ -293,7 +313,11 @@ impl AppState {
         if !self.engine.is_live() || self.engine.meeting_state() == MeetingState::Paused {
             return;
         }
-        let spec = settings.screen.source.clone().filter(|_| settings.screen.enabled);
+        let spec = settings
+            .screen
+            .source
+            .clone()
+            .filter(|_| settings.screen.enabled);
         if let Some(mut sources) = self.capture.sources() {
             sources.screen = spec.clone();
             self.capture.set_sources(Some(sources));
@@ -355,7 +379,9 @@ impl AppState {
     /// Manual screen capture (hotkey / overlay button).
     pub async fn capture_screen_now(self: &Arc<Self>) -> Result<(), CoreError> {
         if !self.engine.is_live() {
-            return Err(CoreError::InvalidState("Start a meeting to capture the screen.".into()));
+            return Err(CoreError::InvalidState(
+                "Start a meeting to capture the screen.".into(),
+            ));
         }
         if self.capture.capture_now() {
             return Ok(());
@@ -405,7 +431,9 @@ impl AppState {
         let shots = self.screenshots.clone();
         let current = self.engine.current_meeting_id();
         let r = blocking(move || {
-            let deleted = db.apply_retention(policy, now_ms()).map_err(CoreError::from)?;
+            let deleted = db
+                .apply_retention(policy, now_ms())
+                .map_err(CoreError::from)?;
             let mut existing: std::collections::HashSet<String> = db
                 .list_meetings(u32::MAX, 0)
                 .map_err(CoreError::from)?

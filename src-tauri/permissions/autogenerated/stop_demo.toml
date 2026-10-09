@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stop-demo"
+description = "Enables the stop_demo command without any pre-configured scope."
+commands.allow = ["stop_demo"]
+
+[[permission]]
+identifier = "deny-stop-demo"
+description = "Denies the stop_demo command without any pre-configured scope."
+commands.deny = ["stop_demo"]

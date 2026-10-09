@@ -1,9 +1,9 @@
 //! Demo mode (available to everyone) and developer simulation tools
 //! (developer mode only).
 
+use openmeet_core::CoreError;
 use openmeet_core::ipc::{DemoScenario, SimulationAction};
 use openmeet_core::types::Meeting;
-use openmeet_core::CoreError;
 
 use super::{AppStateRef, CmdResult};
 
@@ -35,7 +35,9 @@ fn require_dev(state: &AppStateRef<'_>) -> CmdResult<()> {
     if state.settings().general.developer_mode {
         Ok(())
     } else {
-        Err(CoreError::PermissionDenied("Enable developer mode to use simulation tools.".into()))
+        Err(CoreError::PermissionDenied(
+            "Enable developer mode to use simulation tools.".into(),
+        ))
     }
 }
 
@@ -47,14 +49,22 @@ pub async fn simulate(state: AppStateRef<'_>, action: SimulationAction) -> CmdRe
         | SimulationAction::Question { text }
         | SimulationAction::CandidateAnswer { text }
         | SimulationAction::AiResponse { text } => text.chars().count() > 8000,
-        SimulationAction::ScreenChange { description, visible_text } => {
-            description.chars().count() > 4000 || visible_text.as_ref().is_some_and(|t| t.chars().count() > 8000)
+        SimulationAction::ScreenChange {
+            description,
+            visible_text,
+        } => {
+            description.chars().count() > 4000
+                || visible_text
+                    .as_ref()
+                    .is_some_and(|t| t.chars().count() > 8000)
         }
         SimulationAction::AiFailure { message } => message.chars().count() > 500,
         SimulationAction::NetworkLatency { ms } => *ms > 120_000,
     };
     if too_long {
-        return Err(CoreError::InvalidInput("Simulation input is too large.".into()));
+        return Err(CoreError::InvalidInput(
+            "Simulation input is too large.".into(),
+        ));
     }
     state.engine.simulate(action)
 }

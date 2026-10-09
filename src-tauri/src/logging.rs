@@ -9,7 +9,8 @@ pub fn init() {
     } else {
         "warn,openmeet_lib=info,openmeet_engine=info,openmeet_providers=info,openmeet_platform=info,openmeet_store=info"
     };
-    let filter = EnvFilter::try_from_env("OPENMEET_LOG").unwrap_or_else(|_| EnvFilter::new(default));
+    let filter =
+        EnvFilter::try_from_env("OPENMEET_LOG").unwrap_or_else(|_| EnvFilter::new(default));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)

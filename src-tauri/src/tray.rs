@@ -14,17 +14,21 @@ use crate::windows;
 pub const TRAY_ID: &str = "openmeet";
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let title = MenuItemBuilder::with_id("title", "OpenMeet").enabled(false).build(app)?;
+    let title = MenuItemBuilder::with_id("title", "OpenMeet")
+        .enabled(false)
+        .build(app)?;
     let start = MenuItemBuilder::with_id("start", "Start Meeting…").build(app)?;
     let pause = MenuItemBuilder::with_id("pause", "Pause").build(app)?;
     let resume = MenuItemBuilder::with_id("resume", "Resume").build(app)?;
     let show_overlay = MenuItemBuilder::with_id("show_overlay", "Show Overlay").build(app)?;
     let hide_overlay = MenuItemBuilder::with_id("hide_overlay", "Hide Overlay").build(app)?;
     let candidate = MenuItemBuilder::with_id("mode_candidate", "Candidate Mode").build(app)?;
-    let interviewer = MenuItemBuilder::with_id("mode_interviewer", "Interviewer Mode").build(app)?;
+    let interviewer =
+        MenuItemBuilder::with_id("mode_interviewer", "Interviewer Mode").build(app)?;
     let settings = MenuItemBuilder::with_id("settings", "Settings…").build(app)?;
     let end = MenuItemBuilder::with_id("end", "End Meeting").build(app)?;
-    let stop = MenuItemBuilder::with_id("emergency", "Emergency Stop (stop all processing)").build(app)?;
+    let stop =
+        MenuItemBuilder::with_id("emergency", "Emergency Stop (stop all processing)").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit OpenMeet").build(app)?;
     let menu = MenuBuilder::new(app)
         .items(&[&title, &PredefinedMenuItem::separator(app)?])
@@ -98,7 +102,11 @@ fn handle_menu(app: &AppHandle, id: &str) {
                 Ok(())
             }
             "mode_candidate" | "mode_interviewer" => {
-                let mode = if id == "mode_candidate" { Mode::Candidate } else { Mode::Interviewer };
+                let mode = if id == "mode_candidate" {
+                    Mode::Candidate
+                } else {
+                    Mode::Interviewer
+                };
                 state.engine.set_mode(mode);
                 state.modify_settings(|s| s.mode = mode).await.map(|_| ())
             }

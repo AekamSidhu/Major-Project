@@ -90,7 +90,14 @@ impl Builder {
                 previous,
                 refinement,
                 style,
-            } => refine_prompt::build(ctx, question.as_deref(), previous, *refinement, *style, budget),
+            } => refine_prompt::build(
+                ctx,
+                question.as_deref(),
+                previous,
+                *refinement,
+                *style,
+                budget,
+            ),
         }
     }
 }
@@ -110,13 +117,27 @@ struct PrimarySpec {
     builder: Builder,
 }
 
-pub(crate) fn generate_answer(engine: &Engine, req: GenerateAnswerRequest) -> Result<Id, CoreError> {
+pub(crate) fn generate_answer(
+    engine: &Engine,
+    req: GenerateAnswerRequest,
+) -> Result<Id, CoreError> {
     let style = req.style.unwrap_or_else(|| engine.style());
-    if let Some(q) = req.question.map(|q| q.trim().to_string()).filter(|q| !q.is_empty()) {
+    if let Some(q) = req
+        .question
+        .map(|q| q.trim().to_string())
+        .filter(|q| !q.is_empty())
+    {
         let category = classify_category(&q);
         return start_primary(
             engine,
-            answer_spec(None, q.clone(), category, style, engine.settings().assistant.response_length, None),
+            answer_spec(
+                None,
+                q.clone(),
+                category,
+                style,
+                engine.settings().assistant.response_length,
+                None,
+            ),
         );
     }
     let (latest, recent_remote) = {
@@ -137,7 +158,14 @@ pub(crate) fn generate_answer(engine: &Engine, req: GenerateAnswerRequest) -> Re
         let category = classify_category(&text);
         return start_primary(
             engine,
-            answer_spec(None, text, category, style, engine.settings().assistant.response_length, None),
+            answer_spec(
+                None,
+                text,
+                category,
+                style,
+                engine.settings().assistant.response_length,
+                None,
+            ),
         );
     }
     Err(CoreError::InvalidState(
@@ -172,7 +200,11 @@ fn answer_spec(
     }
 }
 
-pub(crate) fn answer_question(engine: &Engine, q: &DetectedQuestion, style: AnswerStyle) -> Result<Id, CoreError> {
+pub(crate) fn answer_question(
+    engine: &Engine,
+    q: &DetectedQuestion,
+    style: AnswerStyle,
+) -> Result<Id, CoreError> {
     let length = engine.settings().assistant.response_length;
     start_primary(
         engine,
@@ -190,7 +222,9 @@ pub(crate) fn answer_question(engine: &Engine, q: &DetectedQuestion, style: Answ
 pub(crate) fn ask(engine: &Engine, prompt: String) -> Result<Id, CoreError> {
     let prompt = prompt.trim().to_string();
     if prompt.is_empty() {
-        return Err(CoreError::InvalidInput("Type a question for OpenMeet.".into()));
+        return Err(CoreError::InvalidInput(
+            "Type a question for OpenMeet.".into(),
+        ));
     }
     if prompt.chars().count() > MAX_ASK_CHARS {
         return Err(CoreError::InvalidInput(format!(
@@ -241,11 +275,18 @@ pub(crate) fn clarify(engine: &Engine) -> Result<Id, CoreError> {
     )
 }
 
-pub(crate) fn refine(engine: &Engine, request_id: &str, refinement: Refinement) -> Result<Id, CoreError> {
+pub(crate) fn refine(
+    engine: &Engine,
+    request_id: &str,
+    refinement: Refinement,
+) -> Result<Id, CoreError> {
     // Completed suggestion, or the text streamed so far.
     let source = {
         let st = engine.inner.state.lock();
-        let from_rt = st.runtime.as_ref().and_then(|rt| rt.suggestion(request_id).cloned());
+        let from_rt = st
+            .runtime
+            .as_ref()
+            .and_then(|rt| rt.suggestion(request_id).cloned());
         let from_detached = || st.detached.iter().find(|s| s.id == request_id).cloned();
         let from_active = || {
             st.runtime
@@ -330,7 +371,9 @@ pub(crate) fn refine(engine: &Engine, request_id: &str, refinement: Refinement) 
         return start_primary(engine, spec);
     }
 
-    let query = question_text.clone().unwrap_or_else(|| truncate_to_tokens(&previous, 120));
+    let query = question_text
+        .clone()
+        .unwrap_or_else(|| truncate_to_tokens(&previous, 120));
     start_primary(
         engine,
         PrimarySpec {
@@ -552,16 +595,20 @@ fn llm_health(engine: &Engine, result: &Result<String, ProviderError>) {
             .health
             .set(Component::Llm, ComponentStatus::Active, None),
         Err(ProviderError::Cancelled) | Err(ProviderError::Refused(_)) => {}
-        Err(e @ (ProviderError::Unauthorized(_) | ProviderError::NotConfigured(_) | ProviderError::BlockedByLocalOnly(_))) => {
-            engine
-                .inner
-                .health
-                .set(Component::Llm, ComponentStatus::Error, Some(e.user_message()))
-        }
-        Err(e) => engine
-            .inner
-            .health
-            .set(Component::Llm, ComponentStatus::Degraded, Some(e.user_message())),
+        Err(
+            e @ (ProviderError::Unauthorized(_)
+            | ProviderError::NotConfigured(_)
+            | ProviderError::BlockedByLocalOnly(_)),
+        ) => engine.inner.health.set(
+            Component::Llm,
+            ComponentStatus::Error,
+            Some(e.user_message()),
+        ),
+        Err(e) => engine.inner.health.set(
+            Component::Llm,
+            ComponentStatus::Degraded,
+            Some(e.user_message()),
+        ),
     }
 }
 
@@ -587,18 +634,21 @@ fn start_primary(engine: &Engine, spec: PrimarySpec) -> Result<Id, CoreError> {
         ));
     }
     let llm = engine.llm();
-    let ticket = engine.inner.requests.begin(RequestSlot::Primary, spec.kind, |id| {
-        Some(MeetingEvent::AnswerStarted {
-            request_id: id.clone(),
-            kind: spec.kind,
-            slot: RequestSlot::Primary,
-            question_id: spec.question_id.clone(),
-            question_text: spec.question_text.clone(),
-            category: spec.category,
-            style: spec.style,
-            parent_id: spec.parent_id.clone(),
-        })
-    });
+    let ticket = engine
+        .inner
+        .requests
+        .begin(RequestSlot::Primary, spec.kind, |id| {
+            Some(MeetingEvent::AnswerStarted {
+                request_id: id.clone(),
+                kind: spec.kind,
+                slot: RequestSlot::Primary,
+                question_id: spec.question_id.clone(),
+                question_text: spec.question_text.clone(),
+                category: spec.category,
+                style: spec.style,
+                parent_id: spec.parent_id.clone(),
+            })
+        });
     let view = ActiveRequestView {
         request_id: ticket.id.clone(),
         kind: spec.kind,
@@ -638,7 +688,12 @@ fn start_primary(engine: &Engine, spec: PrimarySpec) -> Result<Id, CoreError> {
     Ok(id)
 }
 
-async fn run_primary(engine: Engine, ticket: RequestTicket, llm: Arc<dyn LlmProvider>, spec: PrimarySpec) {
+async fn run_primary(
+    engine: Engine,
+    ticket: RequestTicket,
+    llm: Arc<dyn LlmProvider>,
+    spec: PrimarySpec,
+) {
     let rm = &engine.inner.requests;
     let set = |state: AnswerState, error: Option<String>| {
         rm.set_state(&ticket, state, error.clone());
@@ -671,19 +726,26 @@ async fn run_primary(engine: Engine, ticket: RequestTicket, llm: Arc<dyn LlmProv
     };
     set(AnswerState::Requesting, None);
     let info = llm.info();
-    let result = stream_text(&engine, &ticket, llm, request, spec.detected_at, |delta, first| {
-        if first {
-            set(AnswerState::Streaming, None);
-        }
-        rm.emit_if_current(
-            &ticket,
-            MeetingEvent::AnswerDelta {
-                request_id: ticket.id.clone(),
-                text: delta.to_string(),
-            },
-        );
-        update_view(&engine, &ticket.id, |v| v.text.push_str(delta));
-    })
+    let result = stream_text(
+        &engine,
+        &ticket,
+        llm,
+        request,
+        spec.detected_at,
+        |delta, first| {
+            if first {
+                set(AnswerState::Streaming, None);
+            }
+            rm.emit_if_current(
+                &ticket,
+                MeetingEvent::AnswerDelta {
+                    request_id: ticket.id.clone(),
+                    text: delta.to_string(),
+                },
+            );
+            update_view(&engine, &ticket.id, |v| v.text.push_str(delta));
+        },
+    )
     .await;
     llm_health(&engine, &result);
     match result {
@@ -799,7 +861,12 @@ pub(crate) fn start_followups(engine: &Engine, turn_text: String) -> Result<Id, 
     Ok(id)
 }
 
-fn is_duplicate(engine: &Engine, candidate: &str, existing: &[String], accepted: &[FollowUpQuestion]) -> bool {
+fn is_duplicate(
+    engine: &Engine,
+    candidate: &str,
+    existing: &[String],
+    accepted: &[FollowUpQuestion],
+) -> bool {
     let hashing = engine.hashing();
     let cv = hashing.embed_one(candidate);
     existing
@@ -812,7 +879,12 @@ fn is_duplicate(engine: &Engine, candidate: &str, existing: &[String], accepted:
         })
 }
 
-async fn run_followups(engine: Engine, ticket: RequestTicket, llm: Arc<dyn LlmProvider>, turn_text: String) {
+async fn run_followups(
+    engine: Engine,
+    ticket: RequestTicket,
+    llm: Arc<dyn LlmProvider>,
+    turn_text: String,
+) {
     let rm = &engine.inner.requests;
     rm.set_state(&ticket, AnswerState::ContextBuilding, None);
     let settings = engine.settings();
@@ -859,7 +931,7 @@ async fn run_followups(engine: Engine, ticket: RequestTicket, llm: Arc<dyn LlmPr
     let info = llm.info();
     let mut parser = FollowupStreamParser::new();
     let mut accepted: Vec<FollowUpQuestion> = Vec::new();
-    let mut handle_items = |items: Vec<FollowupItem>, accepted: &mut Vec<FollowUpQuestion>| {
+    let handle_items = |items: Vec<FollowupItem>, accepted: &mut Vec<FollowUpQuestion>| {
         for item in items {
             match item {
                 FollowupItem::Followup {
@@ -910,8 +982,14 @@ async fn run_followups(engine: Engine, ticket: RequestTicket, llm: Arc<dyn LlmPr
                     }
                     let (claim, store) = {
                         let mut st = engine.inner.state.lock();
-                        let Some(rt) = st.runtime.as_mut() else { continue };
-                        if rt.claims.iter().any(|c| lexical_similarity(&c.text, &text) >= 0.8) {
+                        let Some(rt) = st.runtime.as_mut() else {
+                            continue;
+                        };
+                        if rt
+                            .claims
+                            .iter()
+                            .any(|c| lexical_similarity(&c.text, &text) >= 0.8)
+                        {
                             continue;
                         }
                         let claim = Claim {
@@ -928,15 +1006,22 @@ async fn run_followups(engine: Engine, ticket: RequestTicket, llm: Arc<dyn LlmPr
                         (claim, rt.store.clone())
                     };
                     engine.persist(&store, PersistOp::Claims(vec![claim.clone()]));
-                    engine.emit(MeetingEvent::ClaimsExtracted { claims: vec![claim] });
+                    engine.emit(MeetingEvent::ClaimsExtracted {
+                        claims: vec![claim],
+                    });
                 }
                 FollowupItem::Topic { name, status } => {
                     let update = {
                         let mut st = engine.inner.state.lock();
                         st.runtime.as_mut().and_then(|rt| {
-                            rt.topics
-                                .apply_analysis(&[(name, status)])
-                                .then(|| (rt.meeting.id.clone(), rt.topics.topics(), rt.topics.suggested_next(), rt.store.clone()))
+                            rt.topics.apply_analysis(&[(name, status)]).then(|| {
+                                (
+                                    rt.meeting.id.clone(),
+                                    rt.topics.topics(),
+                                    rt.topics.suggested_next(),
+                                    rt.store.clone(),
+                                )
+                            })
                         })
                     };
                     if let Some((mid, topics, next, store)) = update {
@@ -957,7 +1042,9 @@ async fn run_followups(engine: Engine, ticket: RequestTicket, llm: Arc<dyn LlmPr
                     let mut st = engine.inner.state.lock();
                     if let Some(rt) = st.runtime.as_mut() {
                         let text = text.trim().to_string();
-                        if !text.is_empty() && !rt.gaps.iter().any(|g| lexical_similarity(g, &text) >= 0.8) {
+                        if !text.is_empty()
+                            && !rt.gaps.iter().any(|g| lexical_similarity(g, &text) >= 0.8)
+                        {
                             rt.gaps.push(text);
                         }
                     }
@@ -1067,10 +1154,17 @@ pub(crate) fn spawn_semantic_check(
             .requests
             .set_state(&ticket, AnswerState::Requesting, None);
         let result = complete(&ticket, llm, request, Duration::from_secs(5)).await;
-        let classification = result.as_ref().ok().and_then(|t| question_detection::parse(t));
+        let classification = result
+            .as_ref()
+            .ok()
+            .and_then(|t| question_detection::parse(t));
         engine.inner.requests.set_state(
             &ticket,
-            if result.is_ok() { AnswerState::Complete } else { AnswerState::Failed },
+            if result.is_ok() {
+                AnswerState::Complete
+            } else {
+                AnswerState::Failed
+            },
             None,
         );
         let Some(c) = classification else { return };
@@ -1089,11 +1183,15 @@ pub(crate) fn spawn_semantic_check(
             else {
                 return;
             };
-            let text = [c.question.trim(), heuristic.question.trim(), segment.text.trim()]
-                .into_iter()
-                .find(|t| !t.is_empty())
-                .unwrap_or_default()
-                .to_string();
+            let text = [
+                c.question.trim(),
+                heuristic.question.trim(),
+                segment.text.trim(),
+            ]
+            .into_iter()
+            .find(|t| !t.is_empty())
+            .unwrap_or_default()
+            .to_string();
             let q = DetectedQuestion {
                 id: new_id(),
                 meeting_id: meeting_id.clone(),
@@ -1161,10 +1259,11 @@ pub(crate) fn spawn_compression(
     {
         return;
     }
-    let ticket = engine
-        .inner
-        .requests
-        .begin(RequestSlot::Background, RequestKind::Compression, |_| None);
+    let ticket =
+        engine
+            .inner
+            .requests
+            .begin(RequestSlot::Background, RequestKind::Compression, |_| None);
     let handle = engine.inner.handle.clone();
     handle.spawn(async move {
         let mode = engine.mode();
@@ -1231,7 +1330,11 @@ pub(crate) fn extractive_compress(previous: &str, lines: &[TranscriptLine]) -> S
             || t.chars().any(|c| c.is_ascii_digit())
             || !openmeet_intel::claims::extract_entities(t).is_empty();
         if keep {
-            out.push_str(&format!("- {}: {}\n", line.speaker, truncate_to_tokens(t, 60)));
+            out.push_str(&format!(
+                "- {}: {}\n",
+                line.speaker,
+                truncate_to_tokens(t, 60)
+            ));
         }
     }
     tail_to_tokens(out.trim(), 700)
@@ -1254,10 +1357,13 @@ pub(crate) fn spawn_topic_analysis(
     {
         return;
     }
-    let ticket = engine
-        .inner
-        .requests
-        .begin(RequestSlot::Background, RequestKind::TopicAnalysis, |_| None);
+    let ticket =
+        engine
+            .inner
+            .requests
+            .begin(RequestSlot::Background, RequestKind::TopicAnalysis, |_| {
+                None
+            });
     let handle = engine.inner.handle.clone();
     handle.spawn(async move {
         let mode = engine.mode();
@@ -1275,7 +1381,11 @@ pub(crate) fn spawn_topic_analysis(
         let result = complete(&ticket, llm, request, Duration::from_secs(60)).await;
         engine.inner.requests.set_state(
             &ticket,
-            if result.is_ok() { AnswerState::Complete } else { AnswerState::Failed },
+            if result.is_ok() {
+                AnswerState::Complete
+            } else {
+                AnswerState::Failed
+            },
             None,
         );
         let Ok(text) = result else { return };
@@ -1289,9 +1399,13 @@ pub(crate) fn spawn_topic_analysis(
                 .as_mut()
                 .filter(|r| r.meeting.id == meeting_id)
                 .and_then(|rt| {
-                    rt.topics
-                        .apply_analysis(&items)
-                        .then(|| (rt.topics.topics(), rt.topics.suggested_next(), rt.store.clone()))
+                    rt.topics.apply_analysis(&items).then(|| {
+                        (
+                            rt.topics.topics(),
+                            rt.topics.suggested_next(),
+                            rt.store.clone(),
+                        )
+                    })
                 })
         };
         if let Some((topics, next, store)) = update {
@@ -1321,7 +1435,14 @@ pub(crate) fn spawn_meeting_summary(engine: Engine, meeting_id: String) {
         st.runtime
             .as_ref()
             .filter(|r| r.meeting.id == meeting_id)
-            .map(|rt| (rt.to_record(), rt.memory.long_term_summary.clone(), rt.gaps.clone(), rt.store.clone()))
+            .map(|rt| {
+                (
+                    rt.to_record(),
+                    rt.memory.long_term_summary.clone(),
+                    rt.gaps.clone(),
+                    rt.store.clone(),
+                )
+            })
     };
     let Some((record, long_term, gaps, store)) = snapshot else {
         return;
@@ -1363,7 +1484,8 @@ fn fallback_summary(record: &MeetingRecord, gaps: &[String]) -> MeetingSummary {
     let mut s = extractive_summary(record);
     merge_gaps(&mut s, gaps);
     if s.markdown.trim().is_empty() {
-        s.markdown = meeting_summary::render_markdown(&s, &record.meeting.title, record.meeting.mode);
+        s.markdown =
+            meeting_summary::render_markdown(&s, &record.meeting.title, record.meeting.mode);
     }
     s
 }
@@ -1408,7 +1530,11 @@ async fn summarize_with(
             at_ms: s.start_time,
         })
         .collect();
-    let questions: Vec<String> = record.questions.iter().map(|q| q.question.clone()).collect();
+    let questions: Vec<String> = record
+        .questions
+        .iter()
+        .map(|q| q.question.clone())
+        .collect();
     let answers: Vec<String> = record.answers.iter().map(|a| a.text.clone()).collect();
     let followups: Vec<String> = record
         .suggestions
@@ -1463,7 +1589,11 @@ async fn summarize_with(
         .and_then(|t| meeting_summary::parse(t, &record.meeting.id, mode, &generated_by));
     engine.inner.requests.set_state(
         &ticket,
-        if parsed.is_some() { AnswerState::Complete } else { AnswerState::Failed },
+        if parsed.is_some() {
+            AnswerState::Complete
+        } else {
+            AnswerState::Failed
+        },
         None,
     );
     match parsed {

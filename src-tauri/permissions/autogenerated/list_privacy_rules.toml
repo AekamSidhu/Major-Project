@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-privacy-rules"
+description = "Enables the list_privacy_rules command without any pre-configured scope."
+commands.allow = ["list_privacy_rules"]
+
+[[permission]]
+identifier = "deny-list-privacy-rules"
+description = "Denies the list_privacy_rules command without any pre-configured scope."
+commands.deny = ["list_privacy_rules"]

@@ -1,6 +1,6 @@
+use openmeet_core::CoreError;
 use openmeet_core::ipc::{MeetingAppInfo, StartMeetingRequest};
 use openmeet_core::types::{Meeting, MeetingState};
-use openmeet_core::CoreError;
 
 use super::{AppStateRef, CmdResult};
 use crate::state::blocking;
@@ -12,8 +12,14 @@ fn validate_start(req: &StartMeetingRequest) -> CmdResult<()> {
         }
     }
     if let Some(id) = &req.focus_app_id {
-        if id.len() > 64 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
-            return Err(CoreError::InvalidInput("Invalid meeting application.".into()));
+        if id.len() > 64
+            || !id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+        {
+            return Err(CoreError::InvalidInput(
+                "Invalid meeting application.".into(),
+            ));
         }
     }
     if let Some(s) = &req.screen {
@@ -25,7 +31,10 @@ fn validate_start(req: &StartMeetingRequest) -> CmdResult<()> {
 }
 
 #[tauri::command]
-pub async fn start_meeting(state: AppStateRef<'_>, request: StartMeetingRequest) -> CmdResult<Meeting> {
+pub async fn start_meeting(
+    state: AppStateRef<'_>,
+    request: StartMeetingRequest,
+) -> CmdResult<Meeting> {
     validate_start(&request)?;
     crate::tray::set_tooltip(&state.app, "OpenMeet — meeting in progress");
     let r = state.inner().start_meeting(request).await;
@@ -54,7 +63,11 @@ pub async fn toggle_pause(state: AppStateRef<'_>) -> CmdResult<MeetingState> {
     let s = state.inner().toggle_pause().await?;
     crate::tray::set_tooltip(
         &state.app,
-        if s == MeetingState::Paused { "OpenMeet — paused" } else { "OpenMeet — meeting in progress" },
+        if s == MeetingState::Paused {
+            "OpenMeet — paused"
+        } else {
+            "OpenMeet — meeting in progress"
+        },
     );
     Ok(s)
 }
@@ -82,5 +95,6 @@ pub async fn focus_meeting_app(window_id: String) -> CmdResult<()> {
     if window_id.is_empty() || window_id.len() > 64 {
         return Err(CoreError::InvalidInput("Invalid window.".into()));
     }
-    blocking(move || openmeet_platform::focus::focus_window(&window_id).map_err(CoreError::from)).await
+    blocking(move || openmeet_platform::focus::focus_window(&window_id).map_err(CoreError::from))
+        .await
 }

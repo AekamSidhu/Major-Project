@@ -234,7 +234,10 @@ impl Engine {
 
     /// Adds an observation to the meeting context (also used by simulation
     /// and demo mode).
-    pub(crate) fn add_observation(&self, mut observation: ScreenObservation) -> Result<(), CoreError> {
+    pub(crate) fn add_observation(
+        &self,
+        mut observation: ScreenObservation,
+    ) -> Result<(), CoreError> {
         let (store, job) = {
             let mut st = self.inner.state.lock();
             let rt = st

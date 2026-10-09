@@ -48,7 +48,6 @@ enum Action {
         heuristic: DetectionResult,
         recent: Vec<TranscriptLine>,
     },
-    Followups(String),
     Voice(VoiceCommand),
     Compress {
         lines: Vec<TranscriptLine>,
@@ -59,7 +58,10 @@ enum Action {
         lines: Vec<TranscriptLine>,
         topics: Vec<Topic>,
     },
-    TurnTimer { version: u64, delay_ms: u64 },
+    TurnTimer {
+        version: u64,
+        delay_ms: u64,
+    },
 }
 
 pub(crate) fn spawn_conversation(
@@ -432,7 +434,9 @@ impl Engine {
                     let accept = match mode {
                         Mode::Candidate => result.confidence >= threshold,
                         Mode::Interviewer if asker_is_user => result.confidence >= threshold * 0.85,
-                        Mode::Interviewer => result.requires_response && result.confidence >= threshold,
+                        Mode::Interviewer => {
+                            result.requires_response && result.confidence >= threshold
+                        }
                     };
                     if accept {
                         is_accepted_question = true;
@@ -451,7 +455,9 @@ impl Engine {
                             kind: MemoryKind::Question,
                             text: q.question.clone(),
                         });
-                        events.push(MeetingEvent::QuestionDetected { question: q.clone() });
+                        events.push(MeetingEvent::QuestionDetected {
+                            question: q.clone(),
+                        });
 
                         // Answer tracking: the next speech of the other side
                         // answers this question.
@@ -545,7 +551,7 @@ impl Engine {
 
         if measured {
             let audio_to_text = (now_ms() - d.end_ms) as f64;
-            if audio_to_text >= 0.0 && audio_to_text < 120_000.0 {
+            if (0.0..120_000.0).contains(&audio_to_text) {
                 record_latency(
                     &self.inner.latency,
                     &self.inner.sink,
@@ -632,9 +638,6 @@ impl Engine {
                     heuristic,
                     recent,
                 ),
-                Action::Followups(text) => {
-                    let _ = crate::assist::start_followups(self, text);
-                }
                 Action::Voice(cmd) => self.execute_voice_command(cmd),
                 Action::Compress {
                     lines,
@@ -708,7 +711,10 @@ impl Engine {
     }
 
     /// Injects a transcript line (simulation / demo).
-    pub(crate) fn inject_draft(&self, draft: TranscriptDraft) -> Result<(), openmeet_core::CoreError> {
+    pub(crate) fn inject_draft(
+        &self,
+        draft: TranscriptDraft,
+    ) -> Result<(), openmeet_core::CoreError> {
         let tx = {
             let st = self.inner.state.lock();
             st.runtime
@@ -726,7 +732,11 @@ impl Engine {
 
 /// When remote speech ends without producing text, re-arm the turn timer so
 /// follow-ups still fire for the text collected so far.
-fn reschedule_turn(rt: &mut MeetingRuntime, source: AudioSourceKind, delay_ms: u32) -> Option<Action> {
+fn reschedule_turn(
+    rt: &mut MeetingRuntime,
+    source: AudioSourceKind,
+    delay_ms: u32,
+) -> Option<Action> {
     (rt.mode() == Mode::Interviewer
         && rt.state() == MeetingState::Active
         && rt.role_for(source) != SpeakerRole::User
@@ -762,7 +772,10 @@ pub(crate) fn remember_answer(
     });
 }
 
-fn compression_due(rt: &MeetingRuntime, settings: &openmeet_core::settings::Settings) -> Option<Action> {
+fn compression_due(
+    rt: &MeetingRuntime,
+    settings: &openmeet_core::settings::Settings,
+) -> Option<Action> {
     let window_start = rt.now_rel() - settings.assistant.context_window_secs as i64 * 1000;
     let old: Vec<&TranscriptSegment> = rt
         .segments

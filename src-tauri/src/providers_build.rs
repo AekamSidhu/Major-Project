@@ -34,7 +34,8 @@ pub fn build(settings: &Settings, secrets: &dyn SecretResolver) -> ProviderSet {
     }
     match factory::build_transcriber(&ctx) {
         Ok(t) => {
-            set.transcription = Some(Arc::new(VadTranscriptionProvider::new(t)) as Arc<dyn TranscriptionProvider>)
+            set.transcription =
+                Some(Arc::new(VadTranscriptionProvider::new(t)) as Arc<dyn TranscriptionProvider>)
         }
         Err(e) => set.issues.push(ProviderIssue {
             component: Component::Transcription,
@@ -94,7 +95,12 @@ fn location_of(info: &ProviderInfo) -> DataLocation {
     }
 }
 
-fn node(component: Component, label: &str, info: Option<ProviderInfo>, fallback: (DataLocation, &str)) -> DataFlowNode {
+fn node(
+    component: Component,
+    label: &str,
+    info: Option<ProviderInfo>,
+    fallback: (DataLocation, &str),
+) -> DataFlowNode {
     match info {
         Some(info) => DataFlowNode {
             component,
@@ -123,7 +129,11 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
     let mic = DataFlowNode {
         component: Component::Microphone,
         label: "Microphone".into(),
-        location: if settings.audio.microphone_enabled { DataLocation::Local } else { DataLocation::Disabled },
+        location: if settings.audio.microphone_enabled {
+            DataLocation::Local
+        } else {
+            DataLocation::Disabled
+        },
         provider: settings
             .audio
             .microphone_device
@@ -134,7 +144,11 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
     let system = DataFlowNode {
         component: Component::SystemAudio,
         label: "System audio".into(),
-        location: if settings.audio.system_audio_enabled { DataLocation::Local } else { DataLocation::Disabled },
+        location: if settings.audio.system_audio_enabled {
+            DataLocation::Local
+        } else {
+            DataLocation::Disabled
+        },
         provider: settings
             .audio
             .system_audio_device
@@ -146,8 +160,16 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
     let transcription = node(
         Component::Transcription,
         "Transcription",
-        providers.transcription.as_ref().map(|p| p.info()).filter(|_| audio_enabled),
-        if audio_enabled { (DataLocation::Disabled, "Not configured") } else { (DataLocation::Disabled, "Audio off") },
+        providers
+            .transcription
+            .as_ref()
+            .map(|p| p.info())
+            .filter(|_| audio_enabled),
+        if audio_enabled {
+            (DataLocation::Disabled, "Not configured")
+        } else {
+            (DataLocation::Disabled, "Audio off")
+        },
     );
     let context = DataFlowNode {
         component: Component::QuestionDetector,
@@ -165,7 +187,11 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
     let screen = DataFlowNode {
         component: Component::Screen,
         label: "Screen".into(),
-        location: if settings.screen.enabled { DataLocation::Local } else { DataLocation::Disabled },
+        location: if settings.screen.enabled {
+            DataLocation::Local
+        } else {
+            DataLocation::Disabled
+        },
         provider: settings
             .screen
             .source
@@ -179,7 +205,12 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
         .as_ref()
         .map(|v| v.info())
         .or_else(|| providers.ocr.as_ref().map(|o| o.info()));
-    let vision = node(Component::Vision, "Vision / OCR", vision_info, (DataLocation::Disabled, "Off"));
+    let vision = node(
+        Component::Vision,
+        "Vision / OCR",
+        vision_info,
+        (DataLocation::Disabled, "Off"),
+    );
     let embeddings = node(
         Component::Embeddings,
         "Embeddings",
@@ -203,8 +234,21 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
         },
         endpoint: None,
     };
-    let nodes = vec![mic, system, transcription, context, llm, screen, vision, embeddings, database];
-    let remote: Vec<&DataFlowNode> = nodes.iter().filter(|n| n.location == DataLocation::Remote).collect();
+    let nodes = vec![
+        mic,
+        system,
+        transcription,
+        context,
+        llm,
+        screen,
+        vision,
+        embeddings,
+        database,
+    ];
+    let remote: Vec<&DataFlowNode> = nodes
+        .iter()
+        .filter(|n| n.location == DataLocation::Remote)
+        .collect();
     let all_local = remote.is_empty();
     let statement = if all_local {
         "No meeting data leaves this device.".to_string()
@@ -216,7 +260,10 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
                 None => n.label.clone(),
             })
             .collect();
-        format!("Meeting data is sent off this device for: {}.", parts.join(", "))
+        format!(
+            "Meeting data is sent off this device for: {}.",
+            parts.join(", ")
+        )
     };
     DataFlowReport {
         nodes,
@@ -248,7 +295,10 @@ mod tests {
         s.ai.llm.base_url = None;
         s.ai.llm.model = "gpt-5-mini".into();
         s.transcription.provider = TranscriptionProviderKind::LocalAi;
-        let secrets = StaticSecrets(vec![(openmeet_core::ipc::SecretProvider::Openai, "sk-test".into())]);
+        let secrets = StaticSecrets(vec![(
+            openmeet_core::ipc::SecretProvider::Openai,
+            "sk-test".into(),
+        )]);
         let set = build(&s, &secrets);
         let report = data_flow(&s, &set);
         assert!(!report.all_local);

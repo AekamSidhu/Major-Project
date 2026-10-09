@@ -15,7 +15,11 @@ pub struct ScreenshotStore {
 
 /// Only plain ids may become directory / file names (no path traversal).
 fn safe_name(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 impl ScreenshotStore {
@@ -25,6 +29,7 @@ impl ScreenshotStore {
         }
     }
 
+    #[cfg(test)]
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -60,11 +65,16 @@ impl ScreenshotStore {
     /// Removes screenshot folders of meetings that no longer exist. Returns
     /// the number of folders removed.
     pub fn prune(&self, existing: &HashSet<String>) -> usize {
-        let Ok(entries) = std::fs::read_dir(&self.root) else { return 0 };
+        let Ok(entries) = std::fs::read_dir(&self.root) else {
+            return 0;
+        };
         let mut removed = 0;
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
-            if entry.path().is_dir() && !existing.contains(&name) && std::fs::remove_dir_all(entry.path()).is_ok() {
+            if entry.path().is_dir()
+                && !existing.contains(&name)
+                && std::fs::remove_dir_all(entry.path()).is_ok()
+            {
                 removed += 1;
             }
         }

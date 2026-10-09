@@ -193,7 +193,14 @@ fn setup(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         },
         tauri::async_runtime::handle().inner().clone(),
     );
-    let state = Arc::new(AppState::new(app.clone(), engine, db, secrets, sink.clone(), data_dir));
+    let state = Arc::new(AppState::new(
+        app.clone(),
+        engine,
+        db,
+        secrets,
+        sink.clone(),
+        &data_dir,
+    ));
     app.manage(state.clone());
 
     // Windows: the main window is secondary; the overlay starts hidden.
@@ -205,7 +212,9 @@ fn setup(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     if settings.overlay.click_through {
         state.overlay.set_click_through(true);
     }
-    let privacy = state.overlay.apply_capture_privacy(settings.privacy.capture_exclusion);
+    let privacy = state
+        .overlay
+        .apply_capture_privacy(settings.privacy.capture_exclusion);
     sink.emit(MeetingEvent::PrivacyStateChanged {
         enabled: privacy.requested,
         supported: privacy.supported,
@@ -226,9 +235,11 @@ fn setup(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .engine
         .set_component_status(Component::Overlay, ComponentStatus::Active, None);
     match &db_error {
-        None => state
-            .engine
-            .set_component_status(Component::Database, ComponentStatus::Active, None),
+        None => {
+            state
+                .engine
+                .set_component_status(Component::Database, ComponentStatus::Active, None)
+        }
         Some(_) => state.engine.set_component_status(
             Component::Database,
             ComponentStatus::Error,

@@ -31,7 +31,11 @@ pub(crate) struct EmbedJob {
     pub text: String,
 }
 
-pub(crate) fn spawn_embedder(weak: Weak<Inner>, mut rx: mpsc::UnboundedReceiver<EmbedJob>, handle: &Handle) {
+pub(crate) fn spawn_embedder(
+    weak: Weak<Inner>,
+    mut rx: mpsc::UnboundedReceiver<EmbedJob>,
+    handle: &Handle,
+) {
     handle.spawn(async move {
         while let Some(first) = rx.recv().await {
             let mut batch = vec![first];
@@ -57,7 +61,12 @@ impl Engine {
             let h = self.hashing();
             texts.iter().map(|t| h.embed_one(t)).collect::<Vec<_>>()
         } else {
-            match tokio::time::timeout(EMBED_TIMEOUT, provider.embed(texts, CancellationToken::new())).await {
+            match tokio::time::timeout(
+                EMBED_TIMEOUT,
+                provider.embed(texts, CancellationToken::new()),
+            )
+            .await
+            {
                 Ok(Ok(v)) if v.len() == batch.len() => {
                     self.inner.health.set(
                         Component::Embeddings,
@@ -79,7 +88,9 @@ impl Engine {
         let model = info.model.clone();
         let (store, current_meeting) = {
             let mut st = self.inner.state.lock();
-            let Some(rt) = st.runtime.as_mut() else { return };
+            let Some(rt) = st.runtime.as_mut() else {
+                return;
+            };
             for (job, v) in batch.iter().zip(vectors.iter()) {
                 if job.meeting_id == rt.meeting.id {
                     rt.memory.set_vector(&job.item_id, &model, v.clone());

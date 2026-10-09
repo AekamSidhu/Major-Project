@@ -124,7 +124,8 @@ impl HealthRegistry {
             }
         };
         if let Some(health) = changed {
-            self.sink.emit(MeetingEvent::ComponentStatusChanged { health });
+            self.sink
+                .emit(MeetingEvent::ComponentStatusChanged { health });
         }
     }
 

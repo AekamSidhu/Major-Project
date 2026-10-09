@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-overlay-move-to-display"
+description = "Enables the overlay_move_to_display command without any pre-configured scope."
+commands.allow = ["overlay_move_to_display"]
+
+[[permission]]
+identifier = "deny-overlay-move-to-display"
+description = "Denies the overlay_move_to_display command without any pre-configured scope."
+commands.deny = ["overlay_move_to_display"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remove-privacy-rule"
+description = "Enables the remove_privacy_rule command without any pre-configured scope."
+commands.allow = ["remove_privacy_rule"]
+
+[[permission]]
+identifier = "deny-remove-privacy-rule"
+description = "Denies the remove_privacy_rule command without any pre-configured scope."
+commands.deny = ["remove_privacy_rule"]

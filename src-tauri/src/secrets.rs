@@ -5,9 +5,9 @@
 
 use std::collections::HashMap;
 
+use openmeet_core::CoreError;
 use openmeet_core::ipc::{ApiKeyStatus, SecretProvider, SecretSource};
 use openmeet_core::providers::SecretResolver;
-use openmeet_core::CoreError;
 use parking_lot::Mutex;
 
 const SERVICE: &str = "dev.openmeet.desktop";
@@ -82,7 +82,10 @@ impl SecretStore {
     }
 
     pub fn all_status(&self) -> Vec<ApiKeyStatus> {
-        SecretProvider::ALL.into_iter().map(|p| self.status(p)).collect()
+        SecretProvider::ALL
+            .into_iter()
+            .map(|p| self.status(p))
+            .collect()
     }
 
     /// Stores a key in the OS credential store.
@@ -90,7 +93,9 @@ impl SecretStore {
         let key = validate_key(key)?;
         Self::entry(provider)?.set_password(&key).map_err(|e| {
             tracing::warn!(provider = provider.account(), error = %e, "credential write failed");
-            CoreError::Platform("Could not save the API key in the system credential store.".to_string())
+            CoreError::Platform(
+                "Could not save the API key in the system credential store.".to_string(),
+            )
         })?;
         self.cache.lock().insert(provider, Some(key));
         Ok(self.status(provider))
@@ -115,7 +120,8 @@ impl SecretStore {
 
 impl SecretResolver for SecretStore {
     fn api_key(&self, provider: SecretProvider) -> Option<String> {
-        self.keychain_value(provider).or_else(|| Self::env_value(provider))
+        self.keychain_value(provider)
+            .or_else(|| Self::env_value(provider))
     }
 }
 
@@ -126,7 +132,9 @@ pub fn validate_key(key: &str) -> Result<String, CoreError> {
         return Err(CoreError::InvalidInput("The API key is empty.".to_string()));
     }
     if key.len() > MAX_KEY_LEN {
-        return Err(CoreError::InvalidInput("The API key is too long.".to_string()));
+        return Err(CoreError::InvalidInput(
+            "The API key is too long.".to_string(),
+        ));
     }
     if key.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return Err(CoreError::InvalidInput(

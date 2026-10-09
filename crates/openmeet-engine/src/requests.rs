@@ -307,7 +307,11 @@ mod tests {
     fn slots_are_independent() {
         let (m, _) = mgr();
         let a = m.begin(RequestSlot::Primary, RequestKind::CandidateAnswer, |_| None);
-        let f = m.begin(RequestSlot::Followups, RequestKind::InterviewerFollowups, |_| None);
+        let f = m.begin(
+            RequestSlot::Followups,
+            RequestKind::InterviewerFollowups,
+            |_| None,
+        );
         let bg1 = m.begin(RequestSlot::Background, RequestKind::Compression, |_| None);
         let bg2 = m.begin(RequestSlot::Background, RequestKind::Summary, |_| None);
         assert!(m.is_current(&a) && m.is_current(&f) && m.is_current(&bg1) && m.is_current(&bg2));

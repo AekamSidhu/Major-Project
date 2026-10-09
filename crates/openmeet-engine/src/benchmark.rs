@@ -244,7 +244,12 @@ impl Engine {
                 LatencyStage::ScreenProcessing => "Observed: screen processing (p50)",
                 LatencyStage::OverlayRender => "Observed: overlay render (p50)",
             };
-            items.push(item(name, s.p50_ms, "ms", Some(&format!("{} samples, p95 {:.0} ms", s.count, s.p95_ms))));
+            items.push(item(
+                name,
+                s.p50_ms,
+                "ms",
+                Some(&format!("{} samples, p95 {:.0} ms", s.count, s.p95_ms)),
+            ));
         }
         items
     }
@@ -302,7 +307,9 @@ async fn end_to_end(handle: &tokio::runtime::Handle) -> Option<(f64, f64, f64)> 
             }
             MeetingEvent::AnswerDelta { .. } if first.is_none() => first = Some(start.elapsed()),
             MeetingEvent::AnswerComplete { .. } => {
-                let (Some(d), Some(f)) = (detected, first) else { break None };
+                let (Some(d), Some(f)) = (detected, first) else {
+                    break None;
+                };
                 let done = start.elapsed();
                 break Some((
                     d.as_secs_f64() * 1000.0,

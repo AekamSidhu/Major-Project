@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-detect-meeting-apps"
+description = "Enables the detect_meeting_apps command without any pre-configured scope."
+commands.allow = ["detect_meeting_apps"]
+
+[[permission]]
+identifier = "deny-detect-meeting-apps"
+description = "Denies the detect_meeting_apps command without any pre-configured scope."
+commands.deny = ["detect_meeting_apps"]

@@ -9,13 +9,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
+use openmeet_core::CoreError;
 use openmeet_core::ipc::LocalAiStatus;
 use openmeet_core::providers::location_for_url;
 use openmeet_core::settings::{
     DEFAULT_LOCAL_AI_URL, EmbeddingProviderKind, Settings, TranscriptionProviderKind,
 };
 use openmeet_core::types::ProviderLocation;
-use openmeet_core::CoreError;
 use openmeet_providers::local_ai::LocalAiClient;
 use parking_lot::Mutex;
 use tauri::{AppHandle, Manager};
@@ -80,7 +80,11 @@ impl LocalAiManager {
         let candidates: Vec<PathBuf> = [
             std::env::var_os("OPENMEET_LOCAL_AI_DIR").map(PathBuf::from),
             // Development checkout (compile-time path of this crate).
-            Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("local-ai")),
+            Some(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("..")
+                    .join("local-ai"),
+            ),
             app.path().resource_dir().ok().map(|d| d.join("local-ai")),
         ]
         .into_iter()
@@ -130,7 +134,12 @@ impl LocalAiManager {
                 h.embedding_model,
                 "Local AI is running on this device.".to_string(),
             ),
-            Ok(Ok(_)) => (false, None, None, "Local AI responded but is not healthy.".to_string()),
+            Ok(Ok(_)) => (
+                false,
+                None,
+                None,
+                "Local AI responded but is not healthy.".to_string(),
+            ),
             Ok(Err(_)) | Err(_) => (
                 false,
                 None,
@@ -169,13 +178,15 @@ impl LocalAiManager {
         if current.running {
             return Ok(current);
         }
-        let dir = self
-            .dir
-            .clone()
-            .ok_or_else(|| CoreError::NotFound(format!("Local AI files were not found. {}", setup_hint())))?;
+        let dir = self.dir.clone().ok_or_else(|| {
+            CoreError::NotFound(format!("Local AI files were not found. {}", setup_hint()))
+        })?;
         let python = venv_python(&dir);
         if !python.is_file() {
-            return Err(CoreError::NotFound(format!("Local AI is not installed. {}", setup_hint())));
+            return Err(CoreError::NotFound(format!(
+                "Local AI is not installed. {}",
+                setup_hint()
+            )));
         }
         if !self.child_alive() {
             let port = port_of(&url).unwrap_or(8765);
@@ -189,9 +200,10 @@ impl LocalAiManager {
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
-            if let Some(model) = Some(settings.transcription.model.trim())
-                .filter(|m| !m.is_empty() && settings.transcription.provider == TranscriptionProviderKind::LocalAi)
-            {
+            if let Some(model) = Some(settings.transcription.model.trim()).filter(|m| {
+                !m.is_empty()
+                    && settings.transcription.provider == TranscriptionProviderKind::LocalAi
+            }) {
                 cmd.arg("--whisper-model").arg(model);
             }
             #[cfg(windows)]
@@ -219,7 +231,9 @@ impl LocalAiManager {
                 ));
             }
             if tokio::time::Instant::now() >= deadline {
-                return Err(CoreError::Platform("The local AI server did not become ready in time.".into()));
+                return Err(CoreError::Platform(
+                    "The local AI server did not become ready in time.".into(),
+                ));
             }
             tokio::time::sleep(Duration::from_millis(400)).await;
         }

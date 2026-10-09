@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-add-privacy-rule"
+description = "Enables the add_privacy_rule command without any pre-configured scope."
+commands.allow = ["add_privacy_rule"]
+
+[[permission]]
+identifier = "deny-add-privacy-rule"
+description = "Denies the add_privacy_rule command without any pre-configured scope."
+commands.deny = ["add_privacy_rule"]

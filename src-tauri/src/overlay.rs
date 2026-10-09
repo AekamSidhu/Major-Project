@@ -43,7 +43,9 @@ impl OverlayController {
     }
 
     pub fn is_visible(&self) -> bool {
-        self.window().and_then(|w| w.is_visible().ok()).unwrap_or(false)
+        self.window()
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false)
     }
 
     pub fn set_app_name(&self, name: Option<String>) {
@@ -58,7 +60,10 @@ impl OverlayController {
         let ok = w.show().is_ok();
         // Some window managers drop the topmost flag while hidden.
         let _ = w.set_always_on_top(true);
-        windows::emit_ui(&self.app, UiCommand::OverlayVisibilityChanged { visible: ok });
+        windows::emit_ui(
+            &self.app,
+            UiCommand::OverlayVisibilityChanged { visible: ok },
+        );
         ok
     }
 
@@ -68,7 +73,10 @@ impl OverlayController {
         }
         let Some(w) = self.window() else { return false };
         let ok = w.hide().is_ok();
-        windows::emit_ui(&self.app, UiCommand::OverlayVisibilityChanged { visible: false });
+        windows::emit_ui(
+            &self.app,
+            UiCommand::OverlayVisibilityChanged { visible: false },
+        );
         ok
     }
 
@@ -98,7 +106,10 @@ impl OverlayController {
         if !width.is_finite() || !height.is_finite() {
             return;
         }
-        let w = width.clamp(OVERLAY_MIN_WIDTH, OVERLAY_MAX_WIDTH.min(f64::from(settings.width).max(OVERLAY_MIN_WIDTH)));
+        let w = width.clamp(
+            OVERLAY_MIN_WIDTH,
+            OVERLAY_MAX_WIDTH.min(f64::from(settings.width).max(OVERLAY_MIN_WIDTH)),
+        );
         let h = height.clamp(OVERLAY_MIN_HEIGHT, f64::from(settings.max_height));
         {
             let mut st = self.state.lock();
@@ -134,7 +145,9 @@ impl OverlayController {
     fn apply_position(&self, settings: &OverlaySettings) {
         let Some(win) = self.window() else { return };
         let displays = windows::list_displays(&self.app);
-        let Some(display) = windows::pick_display(&displays, settings) else { return };
+        let Some(display) = windows::pick_display(&displays, settings) else {
+            return;
+        };
         let size = win.outer_size().map(|s| (s.width, s.height)).unwrap_or((
             (f64::from(settings.width) * display.scale_factor) as u32,
             (windows::OVERLAY_INITIAL_HEIGHT * display.scale_factor) as u32,
@@ -157,7 +170,11 @@ impl OverlayController {
             .or_else(|| displays.iter().find(|d| d.is_primary))?;
         let app_name = self.state.lock().app_name.clone();
         let key = windows::position_key(&display.key, app_name.as_deref());
-        Some((display.key.clone(), key, windows::relative_point(display, (pos.x, pos.y))))
+        Some((
+            display.key.clone(),
+            key,
+            windows::relative_point(display, (pos.x, pos.y)),
+        ))
     }
 
     /// Lets the overlay take keyboard focus for typing (Ask OpenMeet),
@@ -211,9 +228,13 @@ impl OverlayController {
             if st.privacy.iter().any(|(l, _)| l == label) {
                 continue;
             }
-            let Some(win) = self.app.get_webview_window(label) else { continue };
+            let Some(win) = self.app.get_webview_window(label) else {
+                continue;
+            };
             match win.window_handle() {
-                Ok(handle) => st.privacy.push((label.to_string(), privacy::for_window(handle.as_raw()))),
+                Ok(handle) => st
+                    .privacy
+                    .push((label.to_string(), privacy::for_window(handle.as_raw()))),
                 Err(e) => tracing::warn!(window = label, error = %e, "no native window handle"),
             }
         }

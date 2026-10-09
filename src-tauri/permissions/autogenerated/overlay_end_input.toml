@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-overlay-end-input"
+description = "Enables the overlay_end_input command without any pre-configured scope."
+commands.allow = ["overlay_end_input"]
+
+[[permission]]
+identifier = "deny-overlay-end-input"
+description = "Denies the overlay_end_input command without any pre-configured scope."
+commands.deny = ["overlay_end_input"]

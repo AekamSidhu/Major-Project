@@ -1,8 +1,10 @@
 use std::time::{Duration, Instant};
 
-use openmeet_core::ipc::{ApiKeyStatus, DataFlowReport, LocalAiStatus, ProviderTestResult, SecretProvider};
-use openmeet_core::types::Component;
 use openmeet_core::CoreError;
+use openmeet_core::ipc::{
+    ApiKeyStatus, DataFlowReport, LocalAiStatus, ProviderTestResult, SecretProvider,
+};
+use openmeet_core::types::Component;
 use openmeet_providers::factory::{self, BuildContext};
 use tokio_util::sync::CancellationToken;
 
@@ -18,7 +20,11 @@ pub async fn get_api_key_status(state: AppStateRef<'_>) -> CmdResult<Vec<ApiKeyS
 }
 
 #[tauri::command]
-pub async fn set_api_key(state: AppStateRef<'_>, provider: SecretProvider, key: String) -> CmdResult<ApiKeyStatus> {
+pub async fn set_api_key(
+    state: AppStateRef<'_>,
+    provider: SecretProvider,
+    key: String,
+) -> CmdResult<ApiKeyStatus> {
     let secrets = state.secrets.clone();
     let status = blocking(move || secrets.set(provider, &key)).await?;
     state.rebuild_providers().await;
@@ -26,14 +32,22 @@ pub async fn set_api_key(state: AppStateRef<'_>, provider: SecretProvider, key: 
 }
 
 #[tauri::command]
-pub async fn clear_api_key(state: AppStateRef<'_>, provider: SecretProvider) -> CmdResult<ApiKeyStatus> {
+pub async fn clear_api_key(
+    state: AppStateRef<'_>,
+    provider: SecretProvider,
+) -> CmdResult<ApiKeyStatus> {
     let secrets = state.secrets.clone();
     let status = blocking(move || secrets.clear(provider)).await?;
     state.rebuild_providers().await;
     Ok(status)
 }
 
-fn result(component: Component, started: Instant, outcome: Result<String, String>, info: Option<openmeet_core::types::ProviderInfo>) -> ProviderTestResult {
+fn result(
+    component: Component,
+    started: Instant,
+    outcome: Result<String, String>,
+    info: Option<openmeet_core::types::ProviderInfo>,
+) -> ProviderTestResult {
     let latency = started.elapsed().as_millis() as u64;
     match outcome {
         Ok(message) => ProviderTestResult {
@@ -54,11 +68,17 @@ fn result(component: Component, started: Instant, outcome: Result<String, String
 }
 
 #[tauri::command]
-pub async fn test_provider(state: AppStateRef<'_>, component: Component) -> CmdResult<ProviderTestResult> {
+pub async fn test_provider(
+    state: AppStateRef<'_>,
+    component: Component,
+) -> CmdResult<ProviderTestResult> {
     let providers = state.engine.provider_set();
     let started = Instant::now();
     let issue = providers.issue_for(component).map(|i| i.message.clone());
-    let timed = |r: Result<Result<(), openmeet_core::ProviderError>, tokio::time::error::Elapsed>| match r {
+    let timed = |r: Result<
+        Result<(), openmeet_core::ProviderError>,
+        tokio::time::error::Elapsed,
+    >| match r {
         Ok(Ok(())) => Ok("Connected.".to_string()),
         Ok(Err(e)) => Err(e.user_message()),
         Err(_) => Err("The provider did not respond in time.".to_string()),
@@ -70,7 +90,12 @@ pub async fn test_provider(state: AppStateRef<'_>, component: Component) -> CmdR
                 let r = timed(tokio::time::timeout(TEST_TIMEOUT, llm.health_check()).await);
                 result(component, started, r, Some(info))
             }
-            None => result(component, started, Err(issue.unwrap_or_else(|| "No AI provider is configured.".into())), None),
+            None => result(
+                component,
+                started,
+                Err(issue.unwrap_or_else(|| "No AI provider is configured.".into())),
+                None,
+            ),
         },
         Component::Transcription => match providers.transcription.clone() {
             Some(t) => {
@@ -95,8 +120,18 @@ pub async fn test_provider(state: AppStateRef<'_>, component: Component) -> CmdR
                 ));
             };
             let info = e.info();
-            let r = match tokio::time::timeout(TEST_TIMEOUT, e.embed(vec!["OpenMeet connection test".into()], CancellationToken::new())).await {
-                Ok(Ok(v)) if v.first().is_some_and(|x| !x.is_empty()) => Ok(format!("Connected ({} dimensions).", v[0].len())),
+            let r = match tokio::time::timeout(
+                TEST_TIMEOUT,
+                e.embed(
+                    vec!["OpenMeet connection test".into()],
+                    CancellationToken::new(),
+                ),
+            )
+            .await
+            {
+                Ok(Ok(v)) if v.first().is_some_and(|x| !x.is_empty()) => {
+                    Ok(format!("Connected ({} dimensions).", v[0].len()))
+                }
                 Ok(Ok(_)) => Err("The provider returned no embedding.".into()),
                 Ok(Err(e)) => Err(e.user_message()),
                 Err(_) => Err("The provider did not respond in time.".into()),
@@ -107,8 +142,11 @@ pub async fn test_provider(state: AppStateRef<'_>, component: Component) -> CmdR
             let settings = state.settings();
             let secrets = state.secrets.clone();
             let vision_llm = blocking(move || {
-                factory::build_vision_llm(&BuildContext { settings: &settings, secrets: secrets.as_ref() })
-                    .map_err(|e| CoreError::Provider(e.user_message()))
+                factory::build_vision_llm(&BuildContext {
+                    settings: &settings,
+                    secrets: secrets.as_ref(),
+                })
+                .map_err(|e| CoreError::Provider(e.user_message()))
             })
             .await;
             match vision_llm {
@@ -118,7 +156,12 @@ pub async fn test_provider(state: AppStateRef<'_>, component: Component) -> CmdR
                     result(component, started, r, Some(info))
                 }
                 Ok(None) => match providers.ocr.clone() {
-                    Some(ocr) => result(component, started, Ok("Local OCR is available.".into()), Some(ocr.info())),
+                    Some(ocr) => result(
+                        component,
+                        started,
+                        Ok("Local OCR is available.".into()),
+                        Some(ocr.info()),
+                    ),
                     None => result(
                         component,
                         started,
@@ -130,7 +173,10 @@ pub async fn test_provider(state: AppStateRef<'_>, component: Component) -> CmdR
             }
         }
         other => {
-            return Err(CoreError::InvalidInput(format!("{} cannot be tested here.", other.label())));
+            return Err(CoreError::InvalidInput(format!(
+                "{} cannot be tested here.",
+                other.label()
+            )));
         }
     };
     Ok(out)
@@ -144,15 +190,18 @@ pub async fn list_models(state: AppStateRef<'_>, component: Component) -> CmdRes
             let settings = state.settings();
             let secrets = state.secrets.clone();
             blocking(move || {
-                factory::build_vision_llm(&BuildContext { settings: &settings, secrets: secrets.as_ref() })
-                    .map_err(|e| CoreError::Provider(e.user_message()))
+                factory::build_vision_llm(&BuildContext {
+                    settings: &settings,
+                    secrets: secrets.as_ref(),
+                })
+                .map_err(|e| CoreError::Provider(e.user_message()))
             })
             .await?
         }
         _ => {
             return Err(CoreError::InvalidInput(
                 "Model lists are available for the AI and vision providers.".into(),
-            ))
+            ));
         }
     };
     let llm = llm.ok_or_else(|| CoreError::InvalidState("Configure the provider first.".into()))?;
@@ -166,7 +215,10 @@ pub async fn list_models(state: AppStateRef<'_>, component: Component) -> CmdRes
 
 #[tauri::command]
 pub async fn get_data_flow(state: AppStateRef<'_>) -> CmdResult<DataFlowReport> {
-    Ok(crate::providers_build::data_flow(&state.settings(), &state.engine.provider_set()))
+    Ok(crate::providers_build::data_flow(
+        &state.settings(),
+        &state.engine.provider_set(),
+    ))
 }
 
 #[tauri::command]

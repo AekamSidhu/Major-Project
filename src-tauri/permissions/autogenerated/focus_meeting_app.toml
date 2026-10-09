@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-focus-meeting-app"
+description = "Enables the focus_meeting_app command without any pre-configured scope."
+commands.allow = ["focus_meeting_app"]
+
+[[permission]]
+identifier = "deny-focus-meeting-app"
+description = "Denies the focus_meeting_app command without any pre-configured scope."
+commands.deny = ["focus_meeting_app"]

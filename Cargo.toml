@@ -7,7 +7,7 @@ members = [
     "crates/openmeet-providers",
     "crates/openmeet-platform",
     "crates/openmeet-store",
-    # "src-tauri" is added once the app crate exists
+    "src-tauri",
 ]
 
 [workspace.package]
