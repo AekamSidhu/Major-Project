@@ -374,17 +374,18 @@ impl Segmenter {
         while consumed < input.len() {
             let need = self.frame_samples - self.pending.len();
             let take = need.min(input.len() - consumed);
-            self.pending.extend(
-                input[consumed..consumed + take]
-                    .iter()
-                    .map(|s| if s.is_finite() { s.clamp(-1.0, 1.0) } else { 0.0 }),
-            );
+            self.pending
+                .extend(input[consumed..consumed + take].iter().map(|s| {
+                    if s.is_finite() {
+                        s.clamp(-1.0, 1.0)
+                    } else {
+                        0.0
+                    }
+                }));
             consumed += take;
             if self.pending.len() == self.frame_samples {
-                let samples = std::mem::replace(
-                    &mut self.pending,
-                    Vec::with_capacity(self.frame_samples),
-                );
+                let samples =
+                    std::mem::replace(&mut self.pending, Vec::with_capacity(self.frame_samples));
                 let start = self.pending_start_ms;
                 self.process_frame(samples, start, &mut out);
                 // Re-synchronise with the input clock: the next frame starts
@@ -580,7 +581,10 @@ impl Segmenter {
                 if std < STATIONARY_MAX_STD_DB && mean < STATIONARY_MAX_LEVEL_DB {
                     utt.noise_suspect = true;
                     self.noise_floor = Some((mean + 1.0).clamp(FLOOR_MIN_DB, FLOOR_MAX_DB));
-                    tracing::debug!(level_db = mean, "stationary noise detected; noise floor raised");
+                    tracing::debug!(
+                        level_db = mean,
+                        "stationary noise detected; noise floor raised"
+                    );
                 }
             }
         }
@@ -882,9 +886,16 @@ mod tests {
         assert_eq!(c.min_utterance_ms, 350);
         assert_eq!(c.max_utterance_ms, 20_000);
         assert_eq!(c.interim_interval_ms, None);
-        assert!((c.absolute_floor_dbfs + 55.0).abs() < 0.01, "{}", c.absolute_floor_dbfs);
+        assert!(
+            (c.absolute_floor_dbfs + 55.0).abs() < 0.01,
+            "{}",
+            c.absolute_floor_dbfs
+        );
         assert!((100..=150).contains(&c.min_speech_ms));
-        assert_eq!(VadConfig::default(), VadConfig::from_settings(0.6, 700, false));
+        assert_eq!(
+            VadConfig::default(),
+            VadConfig::from_settings(0.6, 700, false)
+        );
         assert_eq!(
             VadConfig::from_settings(0.6, 500, true).interim_interval_ms,
             Some(VadConfig::DEFAULT_INTERIM_INTERVAL_MS)
@@ -919,7 +930,10 @@ mod tests {
         let (fed_at, id, at_ms) = started[0].clone();
         let latency_ms = (fed_at - tone_start_samples) as f64 / SAMPLES_PER_MS;
         assert!(latency_ms <= 150.0, "speech start took {latency_ms} ms");
-        assert!((at_ms as f64 - tone_start_ms).abs() <= 20.0, "{at_ms} vs {tone_start_ms}");
+        assert!(
+            (at_ms as f64 - tone_start_ms).abs() <= 20.0,
+            "{at_ms} vs {tone_start_ms}"
+        );
         assert!(f.seg.is_speaking());
 
         // 480 ms of noise: still within the 500 ms hangover.
@@ -937,7 +951,11 @@ mod tests {
         assert_eq!(clip.source, AudioSourceKind::System);
         assert_eq!(clip.sample_rate, PIPELINE_SAMPLE_RATE);
         let pre_roll = 240.0;
-        assert!(clip.start_ms as f64 >= tone_start_ms - pre_roll - 1.0, "{}", clip.start_ms);
+        assert!(
+            clip.start_ms as f64 >= tone_start_ms - pre_roll - 1.0,
+            "{}",
+            clip.start_ms
+        );
         assert!(clip.start_ms as f64 <= tone_start_ms);
         assert!(clip.end_ms as f64 >= tone_end_ms - 1.0);
         assert!(clip.end_ms as f64 <= tone_end_ms + TRAILING_KEEP_MS + 21.0);
@@ -1033,7 +1051,11 @@ mod tests {
         assert_eq!(finals.len(), 2, "{:?}", f.started());
         let first = &finals[0];
         assert!(first.duration_ms() <= max + 20, "{}", first.duration_ms());
-        assert!(first.duration_ms() >= max - 1_600, "{}", first.duration_ms());
+        assert!(
+            first.duration_ms() >= max - 1_600,
+            "{}",
+            first.duration_ms()
+        );
         assert!(
             (first.end_ms as f64) >= dip_start - 1.0 && (first.end_ms as f64) <= dip_end + 1.0,
             "cut at {} expected within the dip {dip_start}..{dip_end}",
@@ -1105,7 +1127,10 @@ mod tests {
         assert_eq!(finals.len(), 2);
         assert_ne!(finals[0].utterance_id, finals[1].utterance_id);
         // Contiguous audio: the next utterance starts where the flushed one ended.
-        assert!(finals[1].start_ms >= finals[0].end_ms, "no overlap after flush");
+        assert!(
+            finals[1].start_ms >= finals[0].end_ms,
+            "no overlap after flush"
+        );
         // A flushed blip shorter than min_utterance_ms is discarded.
         f.feed(&noise(600), 320);
         f.feed(&tone(200, 0.3), 320);
@@ -1134,7 +1159,10 @@ mod tests {
             assert!(clip.end_ms as f64 >= tone_end - 21.0, "chunk {chunk}");
             let span = (clip.end_ms - clip.start_ms) as f64;
             let len_ms = clip.samples.len() as f64 / SAMPLES_PER_MS;
-            assert!((span - len_ms).abs() <= 2.0, "chunk {chunk}: {span} vs {len_ms}");
+            assert!(
+                (span - len_ms).abs() <= 2.0,
+                "chunk {chunk}: {span} vs {len_ms}"
+            );
         }
     }
 
@@ -1161,13 +1189,21 @@ mod tests {
         let mut f = Feeder::new(VadConfig::default());
         f.feed(&room, 320);
         assert!(f.started().is_empty());
-        assert!((f.seg.noise_floor_dbfs() + 50.5).abs() < 2.0, "{}", f.seg.noise_floor_dbfs());
+        assert!(
+            (f.seg.noise_floor_dbfs() + 50.5).abs() < 2.0,
+            "{}",
+            f.seg.noise_floor_dbfs()
+        );
         // Speech on top of it is still detected.
         f.feed(&tone(800, 0.3), 320);
         assert_eq!(f.started().len(), 1);
         // Fast adaptation downward when the room gets quiet.
         f.feed(&noise(300), 320);
-        assert!(f.seg.noise_floor_dbfs() < -60.0, "{}", f.seg.noise_floor_dbfs());
+        assert!(
+            f.seg.noise_floor_dbfs() < -60.0,
+            "{}",
+            f.seg.noise_floor_dbfs()
+        );
     }
 
     #[test]
@@ -1190,20 +1226,26 @@ mod tests {
         f.feed(&voice, 320);
         let hum_tail = tone(1_000, 0.01);
         f.feed(&hum_tail, 320);
-        assert_eq!(f.finals().len(), 1, "{:?}", f.events.iter().map(|(_, e)| e).collect::<Vec<_>>());
+        assert_eq!(
+            f.finals().len(),
+            1,
+            "{:?}",
+            f.events.iter().map(|(_, e)| e).collect::<Vec<_>>()
+        );
     }
 
     #[test]
     fn discontinuities_and_bad_samples_are_handled() {
         let mut seg = Segmenter::new(AudioSourceKind::Microphone, VadConfig::default());
         // Partial frame, then a timestamp jump.
-        assert!(seg
-            .push(&AudioFrame {
+        assert!(
+            seg.push(&AudioFrame {
                 source: AudioSourceKind::Microphone,
                 samples: vec![0.0005; 100],
                 captured_at_ms: 0,
             })
-            .is_empty());
+            .is_empty()
+        );
         let mut events = seg.push(&AudioFrame {
             source: AudioSourceKind::Microphone,
             samples: vec![f32::NAN; 320],
@@ -1217,13 +1259,14 @@ mod tests {
         assert!(events.is_empty());
         assert!(seg.level().is_finite());
         assert!(seg.noise_floor_dbfs().is_finite());
-        assert!(seg
-            .push(&AudioFrame {
+        assert!(
+            seg.push(&AudioFrame {
                 source: AudioSourceKind::Microphone,
                 samples: Vec::new(),
                 captured_at_ms: 10_040,
             })
-            .is_empty());
+            .is_empty()
+        );
         assert_eq!(seg.config(), &VadConfig::default());
     }
 }

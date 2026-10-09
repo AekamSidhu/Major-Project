@@ -7,7 +7,9 @@
 use std::sync::LazyLock;
 
 use openmeet_core::ids::{new_id, now_ms};
-use openmeet_core::types::{ActionItem, Claim, ClaimKind, ExtractionSource, SpeakerRole, TranscriptSegment};
+use openmeet_core::types::{
+    ActionItem, Claim, ClaimKind, ExtractionSource, SpeakerRole, TranscriptSegment,
+};
 use regex::Regex;
 
 use crate::lexicon::find_technologies;
@@ -18,14 +20,18 @@ const MAX_CLAIM_CHARS: usize = 240;
 
 /// Technologies mentioned in `text`, canonical casing, first occurrence first.
 pub fn extract_entities(text: &str) -> Vec<String> {
-    find_technologies(text).iter().map(|t| t.name.to_string()).collect()
+    find_technologies(text)
+        .iter()
+        .map(|t| t.name.to_string())
+        .collect()
 }
 
 static METRIC_RES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     let num = r"(?:\d{1,3}(?:[,.]\d{3})+|\d+(?:\.\d+)?)";
     let words = r"(?:one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty|thirty|forty|fifty|a hundred|hundreds of|several|a few)";
     let scale = r"(?:\s*(?:k|m|b|thousand|million|billion|trillion))?";
-    let rate = r"(?:\s*(?:per|/|a|an|every)\s*(?:second|sec|s|minute|min|hour|hr|day|week|month|year))?";
+    let rate =
+        r"(?:\s*(?:per|/|a|an|every)\s*(?:second|sec|s|minute|min|hour|hr|day|week|month|year))?";
     let units_count = r"(?:requests?|reqs?|rps|qps|tps|users?|customers?|clients?|events?|messages?|transactions?|queries|calls|orders?|records?|rows?|jobs?|tasks?|tickets?|services?|microservices?|servers?|nodes?|instances?|pods?|clusters?|regions?|engineers?|developers?|people|teams?|lines of code|deploys?|deployments?|releases?)";
     [
         // 40%, 40 percent
@@ -77,39 +83,144 @@ pub fn extract_metrics(text: &str) -> Vec<String> {
 }
 
 const DECISION: &[&str] = &[
-    "we decided", "i decided", "we chose", "i chose", "we went with", "i went with", "we picked",
-    "we opted", "we settled on", "the decision was", "we ended up going with", "we switched to",
-    "we moved to", "we migrated to", "we replaced",
+    "we decided",
+    "i decided",
+    "we chose",
+    "i chose",
+    "we went with",
+    "i went with",
+    "we picked",
+    "we opted",
+    "we settled on",
+    "the decision was",
+    "we ended up going with",
+    "we switched to",
+    "we moved to",
+    "we migrated to",
+    "we replaced",
 ];
 const TRADEOFF: &[&str] = &[
-    "trade-off", "tradeoff", "trade off", "the downside", "downside was", "at the cost of",
-    "in exchange for", "the cost was", "but it meant", "the drawback", "we gave up", "we sacrificed",
-    "the catch was", "on the flip side",
+    "trade-off",
+    "tradeoff",
+    "trade off",
+    "the downside",
+    "downside was",
+    "at the cost of",
+    "in exchange for",
+    "the cost was",
+    "but it meant",
+    "the drawback",
+    "we gave up",
+    "we sacrificed",
+    "the catch was",
+    "on the flip side",
 ];
 const RISK: &[&str] = &[
-    "single point of failure", "the risk", "risky", "bottleneck", "outage", "failure mode",
-    "data loss", "could fail", "might fail", "race condition", "security hole", "vulnerab", "incident",
-    "went down", "took down", "blast radius",
+    "single point of failure",
+    "the risk",
+    "risky",
+    "bottleneck",
+    "outage",
+    "failure mode",
+    "data loss",
+    "could fail",
+    "might fail",
+    "race condition",
+    "security hole",
+    "vulnerab",
+    "incident",
+    "went down",
+    "took down",
+    "blast radius",
 ];
 const OWNERSHIP: &[&str] = &[
-    "i led", "i owned", "i was responsible", "i was in charge", "my team owned", "i managed",
-    "i drove", "i headed", "i was the tech lead", "i was the lead", "i ran the", "i mentored",
-    "i coordinated", "i was accountable",
+    "i led",
+    "i owned",
+    "i was responsible",
+    "i was in charge",
+    "my team owned",
+    "i managed",
+    "i drove",
+    "i headed",
+    "i was the tech lead",
+    "i was the lead",
+    "i ran the",
+    "i mentored",
+    "i coordinated",
+    "i was accountable",
 ];
 const FIRST_PERSON_ACTION: &[&str] = &[
-    "i built", "i designed", "i implemented", "i wrote", "i migrated", "i architected", "i created",
-    "i launched", "i shipped", "i reduced", "i improved", "i optimized", "i scaled", "i introduced",
-    "i automated", "i rewrote", "i refactored", "i set up", "i added", "i fixed", "i developed",
-    "we built", "we designed", "we implemented", "we wrote", "we migrated", "we architected",
-    "we created", "we launched", "we shipped", "we reduced", "we improved", "we optimized",
-    "we scaled", "we introduced", "we automated", "we rewrote", "we refactored", "we set up",
-    "we added", "we fixed", "we developed", "we sharded", "we cached", "we partitioned",
-    "we split", "we moved", "we used", "i used", "we rolled out", "i rolled out",
+    "i built",
+    "i designed",
+    "i implemented",
+    "i wrote",
+    "i migrated",
+    "i architected",
+    "i created",
+    "i launched",
+    "i shipped",
+    "i reduced",
+    "i improved",
+    "i optimized",
+    "i scaled",
+    "i introduced",
+    "i automated",
+    "i rewrote",
+    "i refactored",
+    "i set up",
+    "i added",
+    "i fixed",
+    "i developed",
+    "we built",
+    "we designed",
+    "we implemented",
+    "we wrote",
+    "we migrated",
+    "we architected",
+    "we created",
+    "we launched",
+    "we shipped",
+    "we reduced",
+    "we improved",
+    "we optimized",
+    "we scaled",
+    "we introduced",
+    "we automated",
+    "we rewrote",
+    "we refactored",
+    "we set up",
+    "we added",
+    "we fixed",
+    "we developed",
+    "we sharded",
+    "we cached",
+    "we partitioned",
+    "we split",
+    "we moved",
+    "we used",
+    "i used",
+    "we rolled out",
+    "i rolled out",
 ];
 const IMPLEMENTATION: &[&str] = &[
-    " by adding", " by using", "using a ", "using an ", " on top of", " behind a ", " with a ",
-    " so that ", "we put ", "we store", "we stored", "we kept", "we run", "we ran", "is stored",
-    "implemented with", "built on", "backed by",
+    " by adding",
+    " by using",
+    "using a ",
+    "using an ",
+    " on top of",
+    " behind a ",
+    " with a ",
+    " so that ",
+    "we put ",
+    "we store",
+    "we stored",
+    "we kept",
+    "we run",
+    "we ran",
+    "is stored",
+    "implemented with",
+    "built on",
+    "backed by",
 ];
 
 fn contains_any(haystack: &str, needles: &[&str]) -> bool {
@@ -153,7 +264,9 @@ fn classify_sentence(sentence: &str) -> Option<ClaimKind> {
         } else {
             ClaimKind::Claim
         }
-    } else if has_tech && (lower.contains(" we ") || lower.contains(" i ") || lower.contains(" our ")) {
+    } else if has_tech
+        && (lower.contains(" we ") || lower.contains(" i ") || lower.contains(" our "))
+    {
         ClaimKind::Technology
     } else {
         return None;
@@ -168,7 +281,9 @@ pub fn extract_claims(segment: &TranscriptSegment) -> Vec<Claim> {
     let mut out: Vec<Claim> = Vec::new();
     let now = now_ms();
     for sentence in split_sentences(&segment.text) {
-        let Some(kind) = classify_sentence(&sentence) else { continue };
+        let Some(kind) = classify_sentence(&sentence) else {
+            continue;
+        };
         let text = clip(&sentence);
         if out.iter().any(|c| c.text.eq_ignore_ascii_case(&text)) {
             continue;
@@ -188,30 +303,87 @@ pub fn extract_claims(segment: &TranscriptSegment) -> Vec<Claim> {
 }
 
 const SELF_COMMIT: &[&str] = &[
-    "i'll send", "i will send", "i'll share", "i will share", "i'll follow up", "i will follow up",
-    "i'll get back", "i will get back", "i'll schedule", "i will schedule", "i'll set up",
-    "i will set up", "i'll email", "i will email", "i'll write up", "i'll put together",
-    "i'll look into", "i will look into", "i'll check", "i will check", "i'll circle back",
-    "i'll loop in", "i'll forward", "i'll reach out", "i will reach out", "let me send",
-    "let me follow up", "let me get back", "let me check", "let me look into",
+    "i'll send",
+    "i will send",
+    "i'll share",
+    "i will share",
+    "i'll follow up",
+    "i will follow up",
+    "i'll get back",
+    "i will get back",
+    "i'll schedule",
+    "i will schedule",
+    "i'll set up",
+    "i will set up",
+    "i'll email",
+    "i will email",
+    "i'll write up",
+    "i'll put together",
+    "i'll look into",
+    "i will look into",
+    "i'll check",
+    "i will check",
+    "i'll circle back",
+    "i'll loop in",
+    "i'll forward",
+    "i'll reach out",
+    "i will reach out",
+    "let me send",
+    "let me follow up",
+    "let me get back",
+    "let me check",
+    "let me look into",
 ];
 const TEAM_COMMIT: &[&str] = &[
-    "we'll send", "we will send", "we'll follow up", "we will follow up", "we'll get back",
-    "we will get back", "we'll schedule", "we will schedule", "we'll share", "we will share",
-    "we'll reach out", "we will reach out", "we'll be in touch", "we will be in touch",
-    "let's schedule", "let's set up", "let's follow up", "let's sync", "let's meet",
-    "action item", "next step is", "next steps are", "the next step", "to do:", "todo:",
+    "we'll send",
+    "we will send",
+    "we'll follow up",
+    "we will follow up",
+    "we'll get back",
+    "we will get back",
+    "we'll schedule",
+    "we will schedule",
+    "we'll share",
+    "we will share",
+    "we'll reach out",
+    "we will reach out",
+    "we'll be in touch",
+    "we will be in touch",
+    "let's schedule",
+    "let's set up",
+    "let's follow up",
+    "let's sync",
+    "let's meet",
+    "action item",
+    "next step is",
+    "next steps are",
+    "the next step",
+    "to do:",
+    "todo:",
 ];
 const REQUEST: &[&str] = &[
-    "can you send", "could you send", "please send", "can you share", "could you share",
-    "please share", "can you email", "could you email", "send me", "share with me", "can you follow up",
-    "could you follow up", "can you schedule", "could you schedule",
+    "can you send",
+    "could you send",
+    "please send",
+    "can you share",
+    "could you share",
+    "please share",
+    "can you email",
+    "could you email",
+    "send me",
+    "share with me",
+    "can you follow up",
+    "could you follow up",
+    "can you schedule",
+    "could you schedule",
 ];
 
 fn owner_label(role: SpeakerRole, self_owned: bool) -> Option<String> {
     match (role, self_owned) {
         (SpeakerRole::User, true) | (SpeakerRole::Remote, false) => Some("You".to_string()),
-        (SpeakerRole::Remote, true) | (SpeakerRole::User, false) => Some("Other participant".to_string()),
+        (SpeakerRole::Remote, true) | (SpeakerRole::User, false) => {
+            Some("Other participant".to_string())
+        }
         (SpeakerRole::Unknown, _) => None,
     }
 }
@@ -284,8 +456,13 @@ mod tests {
 
     #[test]
     fn metrics() {
-        let m = extract_metrics("The system handles 10 million requests per day with a p99 of 120 ms and 40% less cost.");
-        assert!(m.iter().any(|x| x.contains("10 million requests per day")), "{m:?}");
+        let m = extract_metrics(
+            "The system handles 10 million requests per day with a p99 of 120 ms and 40% less cost.",
+        );
+        assert!(
+            m.iter().any(|x| x.contains("10 million requests per day")),
+            "{m:?}"
+        );
         assert!(m.iter().any(|x| x.contains("120 ms")), "{m:?}");
         assert!(m.iter().any(|x| x == "40%"), "{m:?}");
         assert_eq!(extract_metrics("about 5k QPS at peak"), vec!["5k QPS"]);
@@ -313,19 +490,32 @@ mod tests {
                 ClaimKind::Implementation
             ]
         );
-        assert!(claims.iter().all(|c| c.source == ExtractionSource::Heuristic));
+        assert!(
+            claims
+                .iter()
+                .all(|c| c.source == ExtractionSource::Heuristic)
+        );
         assert!(claims.iter().all(|c| c.speaker_role == SpeakerRole::Remote));
     }
 
     #[test]
     fn ordinary_chatter_is_not_a_claim() {
-        assert!(extract_claims(&seg("Yeah, that makes sense. Sounds good to me.", SpeakerRole::Remote)).is_empty());
+        assert!(
+            extract_claims(&seg(
+                "Yeah, that makes sense. Sounds good to me.",
+                SpeakerRole::Remote
+            ))
+            .is_empty()
+        );
         assert!(extract_claims(&seg("How did you scale it?", SpeakerRole::Remote)).is_empty());
     }
 
     #[test]
     fn technology_mentions() {
-        let c = extract_claims(&seg("Our backend runs on Go with Redis in front.", SpeakerRole::Remote));
+        let c = extract_claims(&seg(
+            "Our backend runs on Go with Redis in front.",
+            SpeakerRole::Remote,
+        ));
         assert_eq!(c.len(), 1);
         assert_eq!(c[0].kind, ClaimKind::Technology);
     }
@@ -340,12 +530,17 @@ mod tests {
         assert_eq!(items[0].owner.as_deref(), Some("You"));
         assert_eq!(items[1].owner.as_deref(), Some("Other participant"));
         assert_eq!(items[2].owner, None);
-        assert!(extract_action_items(&seg("We talked about caching.", SpeakerRole::User)).is_empty());
+        assert!(
+            extract_action_items(&seg("We talked about caching.", SpeakerRole::User)).is_empty()
+        );
     }
 
     #[test]
     fn duplicates_are_removed() {
-        let c = extract_claims(&seg("We migrated to Kafka. We migrated to Kafka.", SpeakerRole::Remote));
+        let c = extract_claims(&seg(
+            "We migrated to Kafka. We migrated to Kafka.",
+            SpeakerRole::Remote,
+        ));
         assert_eq!(c.len(), 1);
     }
 }

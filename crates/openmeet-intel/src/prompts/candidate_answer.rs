@@ -205,7 +205,10 @@ mod tests {
                 ResponseLength::Medium,
                 2000,
             );
-            assert!(p.user.contains(&format!("Answer style: {}", style_slug(style))));
+            assert!(
+                p.user
+                    .contains(&format!("Answer style: {}", style_slug(style)))
+            );
             systems.insert(p.system);
         }
         assert_eq!(systems.len(), AnswerStyle::ALL.len());

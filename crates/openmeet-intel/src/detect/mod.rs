@@ -13,7 +13,9 @@
 pub mod voice;
 
 use openmeet_core::ids::Id;
-use openmeet_core::types::{DetectedQuestion, Mode, QuestionCategory, SpeakerRole, TranscriptSegment};
+use openmeet_core::types::{
+    DetectedQuestion, Mode, QuestionCategory, SpeakerRole, TranscriptSegment,
+};
 
 use crate::lexicon::find_technologies;
 
@@ -67,11 +69,43 @@ pub struct DetectionResult {
 // Lexicons
 // ---------------------------------------------------------------------------
 
-const WH_WORDS: &[&str] = &["what", "why", "how", "when", "where", "which", "who", "whom", "whose"];
+const WH_WORDS: &[&str] = &[
+    "what", "why", "how", "when", "where", "which", "who", "whom", "whose",
+];
 const AUX_VERBS: &[&str] = &[
-    "can", "could", "would", "will", "do", "does", "did", "have", "has", "had", "is", "are", "was",
-    "were", "should", "shall", "may", "might", "am", "must", "isn't", "aren't", "wasn't", "weren't",
-    "don't", "doesn't", "didn't", "haven't", "hasn't", "won't", "wouldn't", "can't", "couldn't",
+    "can",
+    "could",
+    "would",
+    "will",
+    "do",
+    "does",
+    "did",
+    "have",
+    "has",
+    "had",
+    "is",
+    "are",
+    "was",
+    "were",
+    "should",
+    "shall",
+    "may",
+    "might",
+    "am",
+    "must",
+    "isn't",
+    "aren't",
+    "wasn't",
+    "weren't",
+    "don't",
+    "doesn't",
+    "didn't",
+    "haven't",
+    "hasn't",
+    "won't",
+    "wouldn't",
+    "can't",
+    "couldn't",
     "shouldn't",
 ];
 const SUBJECTS: &[&str] = &[
@@ -80,71 +114,283 @@ const SUBJECTS: &[&str] = &[
 ];
 /// Discourse markers stripped before analysing the start of a sentence.
 const LEADING_FILLERS: &[&str] = &[
-    "so", "okay", "ok", "alright", "all right", "and", "but", "well", "now", "right", "um", "uh",
-    "uhm", "erm", "hmm", "great", "cool", "nice", "perfect", "thanks", "thank you", "sure", "yeah",
-    "yes", "got it", "interesting", "awesome", "excellent", "fair enough", "makes sense",
-    "i see", "gotcha", "alrighty", "then", "also", "next", "lastly", "finally", "and then",
+    "so",
+    "okay",
+    "ok",
+    "alright",
+    "all right",
+    "and",
+    "but",
+    "well",
+    "now",
+    "right",
+    "um",
+    "uh",
+    "uhm",
+    "erm",
+    "hmm",
+    "great",
+    "cool",
+    "nice",
+    "perfect",
+    "thanks",
+    "thank you",
+    "sure",
+    "yeah",
+    "yes",
+    "got it",
+    "interesting",
+    "awesome",
+    "excellent",
+    "fair enough",
+    "makes sense",
+    "i see",
+    "gotcha",
+    "alrighty",
+    "then",
+    "also",
+    "next",
+    "lastly",
+    "finally",
+    "and then",
 ];
 const IMPERATIVE_PROMPTS: &[&str] = &[
-    "tell me", "tell us", "walk me through", "walk us through", "talk me through", "talk us through",
-    "take me through", "run me through", "run us through", "explain", "describe", "give me an example",
-    "give me a example", "give us an example", "give me some examples", "share an example",
-    "share a time", "talk about", "help me understand", "help us understand", "elaborate",
-    "expand on", "go through", "go over", "show me", "show us", "define", "compare", "contrast",
-    "design a", "design an", "design the", "implement a", "implement an", "write a function",
-    "write a program", "write code", "write some code", "code up", "imagine you", "imagine that",
-    "suppose you", "suppose that", "say you have", "let's say you", "assume you", "assume that",
-    "pretend you", "list the", "name a", "name some", "summarize", "clarify", "remind me",
-    "convince me", "estimate", "sketch", "outline", "please explain", "please describe",
+    "tell me",
+    "tell us",
+    "walk me through",
+    "walk us through",
+    "talk me through",
+    "talk us through",
+    "take me through",
+    "run me through",
+    "run us through",
+    "explain",
+    "describe",
+    "give me an example",
+    "give me a example",
+    "give us an example",
+    "give me some examples",
+    "share an example",
+    "share a time",
+    "talk about",
+    "help me understand",
+    "help us understand",
+    "elaborate",
+    "expand on",
+    "go through",
+    "go over",
+    "show me",
+    "show us",
+    "define",
+    "compare",
+    "contrast",
+    "design a",
+    "design an",
+    "design the",
+    "implement a",
+    "implement an",
+    "write a function",
+    "write a program",
+    "write code",
+    "write some code",
+    "code up",
+    "imagine you",
+    "imagine that",
+    "suppose you",
+    "suppose that",
+    "say you have",
+    "let's say you",
+    "assume you",
+    "assume that",
+    "pretend you",
+    "list the",
+    "name a",
+    "name some",
+    "summarize",
+    "clarify",
+    "remind me",
+    "convince me",
+    "estimate",
+    "sketch",
+    "outline",
+    "please explain",
+    "please describe",
 ];
 const EMBEDDED_PROMPTS: &[&str] = &[
-    "i was wondering", "i'm wondering", "i am wondering", "i'm curious", "i am curious",
-    "i'd love to hear", "i would love to hear", "i'd like to hear", "i would like to hear",
-    "i'd like to know", "i would like to know", "i want to know", "i want to understand",
-    "i'd like to understand", "i would like to understand", "i'd love to understand",
-    "i'm interested in", "i am interested in", "i'd be interested", "i want to hear",
-    "i wonder if you", "i wonder whether you", "i wonder how you", "i wonder why you",
-    "i wonder what you", "curious to hear", "curious how", "curious why", "curious what",
-    "keen to hear", "keen to understand",
+    "i was wondering",
+    "i'm wondering",
+    "i am wondering",
+    "i'm curious",
+    "i am curious",
+    "i'd love to hear",
+    "i would love to hear",
+    "i'd like to hear",
+    "i would like to hear",
+    "i'd like to know",
+    "i would like to know",
+    "i want to know",
+    "i want to understand",
+    "i'd like to understand",
+    "i would like to understand",
+    "i'd love to understand",
+    "i'm interested in",
+    "i am interested in",
+    "i'd be interested",
+    "i want to hear",
+    "i wonder if you",
+    "i wonder whether you",
+    "i wonder how you",
+    "i wonder why you",
+    "i wonder what you",
+    "curious to hear",
+    "curious how",
+    "curious why",
+    "curious what",
+    "keen to hear",
+    "keen to understand",
 ];
 const LEAD_IN_PHRASES: &[&str] = &[
-    "next question", "another question", "one more question", "follow up question",
-    "follow-up question", "i have a question", "i've got a question", "quick question",
-    "question for you", "my question is", "my next question", "let me ask you", "let me ask",
-    "i want to ask", "i'd like to ask", "moving on", "let's move on", "let's talk about",
-    "let's switch to", "let's switch gears", "switching gears", "changing topics",
-    "let's go back to", "going back to", "let's dive into", "let's look at", "on to",
+    "next question",
+    "another question",
+    "one more question",
+    "follow up question",
+    "follow-up question",
+    "i have a question",
+    "i've got a question",
+    "quick question",
+    "question for you",
+    "my question is",
+    "my next question",
+    "let me ask you",
+    "let me ask",
+    "i want to ask",
+    "i'd like to ask",
+    "moving on",
+    "let's move on",
+    "let's talk about",
+    "let's switch to",
+    "let's switch gears",
+    "switching gears",
+    "changing topics",
+    "let's go back to",
+    "going back to",
+    "let's dive into",
+    "let's look at",
+    "on to",
 ];
 const FALSE_POSITIVE_PHRASES: &[&str] = &[
-    "the question i was thinking about", "the question i had in mind was",
-    "the question is whether", "that's a good question", "that is a good question",
-    "good question", "great question", "excellent question", "interesting question",
-    "fair question", "no question about it", "without question", "out of the question",
-    "question for later", "i have no questions", "i don't have any questions",
-    "i don't have questions", "no questions from me", "no further questions",
-    "that was my question", "that answers my question", "answered my question",
+    "the question i was thinking about",
+    "the question i had in mind was",
+    "the question is whether",
+    "that's a good question",
+    "that is a good question",
+    "good question",
+    "great question",
+    "excellent question",
+    "interesting question",
+    "fair question",
+    "no question about it",
+    "without question",
+    "out of the question",
+    "question for later",
+    "i have no questions",
+    "i don't have any questions",
+    "i don't have questions",
+    "no questions from me",
+    "no further questions",
+    "that was my question",
+    "that answers my question",
+    "answered my question",
 ];
 const REPORTED_SPEECH: &[&str] = &[
-    "he asked", "she asked", "they asked", "he asked me", "she asked me", "they asked me",
-    "asked me how", "asked me why", "asked me what", "asked me whether", "asked me if",
-    "asked us how", "asked us why", "asked us what", "asked us whether", "asked us if",
-    "i asked him", "i asked her", "i asked them", "we asked them", "we asked him", "we asked her",
-    "wanted to know", "the customer asked", "the client asked", "my manager asked",
-    "people ask", "people often ask", "customers ask", "users ask", "they were asking",
-    "he was asking", "she was asking", "someone asked", "everyone asks", "was wondering whether i",
-    "i wonder if i", "i wonder whether i", "i wonder if we", "i wonder whether we",
+    "he asked",
+    "she asked",
+    "they asked",
+    "he asked me",
+    "she asked me",
+    "they asked me",
+    "asked me how",
+    "asked me why",
+    "asked me what",
+    "asked me whether",
+    "asked me if",
+    "asked us how",
+    "asked us why",
+    "asked us what",
+    "asked us whether",
+    "asked us if",
+    "i asked him",
+    "i asked her",
+    "i asked them",
+    "we asked them",
+    "we asked him",
+    "we asked her",
+    "wanted to know",
+    "the customer asked",
+    "the client asked",
+    "my manager asked",
+    "people ask",
+    "people often ask",
+    "customers ask",
+    "users ask",
+    "they were asking",
+    "he was asking",
+    "she was asking",
+    "someone asked",
+    "everyone asks",
+    "was wondering whether i",
+    "i wonder if i",
+    "i wonder whether i",
+    "i wonder if we",
+    "i wonder whether we",
 ];
 const SHORT_CLARIFICATIONS: &[&str] = &[
-    "why", "how", "how so", "meaning", "like what", "such as", "for example", "for instance",
-    "and then", "then what", "what else", "anything else", "why not", "which one", "what for",
-    "how come", "really", "in what way", "sorry", "pardon", "come again", "what do you mean",
+    "why",
+    "how",
+    "how so",
+    "meaning",
+    "like what",
+    "such as",
+    "for example",
+    "for instance",
+    "and then",
+    "then what",
+    "what else",
+    "anything else",
+    "why not",
+    "which one",
+    "what for",
+    "how come",
+    "really",
+    "in what way",
+    "sorry",
+    "pardon",
+    "come again",
+    "what do you mean",
 ];
 const FILLER_QUESTIONS: &[&str] = &[
-    "you know", "right", "okay", "ok", "yeah", "see", "you see", "huh", "isn't it", "know what i mean",
-    "you know what i mean", "eh", "no", "yes", "sure", "alright", "all right",
+    "you know",
+    "right",
+    "okay",
+    "ok",
+    "yeah",
+    "see",
+    "you see",
+    "huh",
+    "isn't it",
+    "know what i mean",
+    "you know what i mean",
+    "eh",
+    "no",
+    "yes",
+    "sure",
+    "alright",
+    "all right",
 ];
 /// "<wh> <subject> <verb…> is/was" statements: "how we did it was…".
-const CLEFT_SUBJECTS: &[&str] = &["we", "i", "they", "he", "she", "it", "the team", "our team", "my team", "you"];
+const CLEFT_SUBJECTS: &[&str] = &[
+    "we", "i", "they", "he", "she", "it", "the team", "our team", "my team", "you",
+];
 
 // ---------------------------------------------------------------------------
 // Text utilities
@@ -206,7 +452,11 @@ fn sentences(text: &str) -> Vec<String> {
     for (i, &c) in chars.iter().enumerate() {
         cur.push(c);
         let terminal = matches!(c, '?' | '!' | '…' | '.');
-        if terminal && chars.get(i + 1).is_none_or(|n| n.is_whitespace() || *n == '"') {
+        if terminal
+            && chars
+                .get(i + 1)
+                .is_none_or(|n| n.is_whitespace() || *n == '"')
+        {
             let t = cur.trim().to_string();
             if !t.is_empty() {
                 out.push(t);
@@ -239,7 +489,9 @@ struct SentenceScore {
 
 /// Probability-style combination of independent positive cues.
 fn combine(weights: &[f32]) -> f32 {
-    1.0 - weights.iter().fold(1.0, |acc, w| acc * (1.0 - w.clamp(0.0, 0.99)))
+    1.0 - weights
+        .iter()
+        .fold(1.0, |acc, w| acc * (1.0 - w.clamp(0.0, 0.99)))
 }
 
 fn score_sentence(sentence: &str) -> SentenceScore {
@@ -265,12 +517,28 @@ fn score_sentence(sentence: &str) -> SentenceScore {
 
     let wh_start = WH_WORDS.contains(&first)
         || (first == "and" && WH_WORDS.contains(&second))
-        || matches!(first, "what's" | "how's" | "where's" | "who's" | "why's" | "when's" | "what're");
+        || matches!(
+            first,
+            "what's" | "how's" | "where's" | "who's" | "why's" | "when's" | "what're"
+        );
     if wh_start {
         weights.push(0.45);
         signals.push("wh_start".into());
         if AUX_VERBS.contains(&second)
-            || matches!(second, "about" | "if" | "much" | "many" | "long" | "often" | "kind" | "sort" | "type" | "would" | "come")
+            || matches!(
+                second,
+                "about"
+                    | "if"
+                    | "much"
+                    | "many"
+                    | "long"
+                    | "often"
+                    | "kind"
+                    | "sort"
+                    | "type"
+                    | "would"
+                    | "come"
+            )
             || first.ends_with("'s")
             || first.ends_with("'re")
         {
@@ -280,10 +548,16 @@ fn score_sentence(sentence: &str) -> SentenceScore {
             // "What happens…", "Which component became…": a WH-word followed
             // by something other than a subject pronoun (cleft statements such
             // as "how we did it was…" have the subject right after).
-            let after_wh = if first == "and" { words.get(2) } else { words.get(1) }
-                .map(String::as_str)
-                .unwrap_or("");
-            let subject_next = CLEFT_SUBJECTS.iter().any(|s| s.split(' ').next() == Some(after_wh));
+            let after_wh = if first == "and" {
+                words.get(2)
+            } else {
+                words.get(1)
+            }
+            .map(String::as_str)
+            .unwrap_or("");
+            let subject_next = CLEFT_SUBJECTS
+                .iter()
+                .any(|s| s.split(' ').next() == Some(after_wh));
             if !after_wh.is_empty() && !subject_next {
                 weights.push(0.25);
                 signals.push("wh_direct".into());
@@ -330,7 +604,13 @@ fn score_sentence(sentence: &str) -> SentenceScore {
     if tag && !wh_start && !aux_start {
         signals.push("tag_question".into());
     }
-    if !weights.is_empty() && (has_phrase(&norm, "you") || has_phrase(&norm, "your") || has_phrase(&norm, "you've") || has_phrase(&norm, "you'd") || has_phrase(&norm, "you're")) {
+    if !weights.is_empty()
+        && (has_phrase(&norm, "you")
+            || has_phrase(&norm, "your")
+            || has_phrase(&norm, "you've")
+            || has_phrase(&norm, "you'd")
+            || has_phrase(&norm, "you're"))
+    {
         weights.push(0.15);
         signals.push("addressed_to_listener".into());
     }
@@ -338,7 +618,10 @@ fn score_sentence(sentence: &str) -> SentenceScore {
 
     // --- false positives ---
     if FALSE_POSITIVE_PHRASES.iter().any(|p| has_phrase(&norm, p)) {
-        let explicit_question_after = ends_q && (aux_start || wh_start) && !has_phrase(&norm, "good question") && !has_phrase(&norm, "great question");
+        let explicit_question_after = ends_q
+            && (aux_start || wh_start)
+            && !has_phrase(&norm, "good question")
+            && !has_phrase(&norm, "great question");
         if !explicit_question_after {
             score *= 0.1;
             negative = true;
@@ -368,7 +651,9 @@ fn score_sentence(sentence: &str) -> SentenceScore {
     // Very short utterances: only clarification requests count.
     let wc = all_words.len();
     if wc < 3 {
-        if SHORT_CLARIFICATIONS.contains(&joined.as_str()) && (ends_q || matches!(first, "why" | "how")) {
+        if SHORT_CLARIFICATIONS.contains(&joined.as_str())
+            && (ends_q || matches!(first, "why" | "how"))
+        {
             score = score.max(0.55);
             signals.push("short_clarification".into());
         } else if !negative {
@@ -386,20 +671,26 @@ fn score_sentence(sentence: &str) -> SentenceScore {
 
 /// "How we did it was…", "What I did was…", "Why we chose X is…" (no '?').
 fn is_cleft_statement(words: &[String]) -> bool {
-    let Some(first) = words.first() else { return false };
+    let Some(first) = words.first() else {
+        return false;
+    };
     if !WH_WORDS.contains(&first.as_str()) {
         return false;
     }
     let rest = words[1..].join(" ");
-    if !CLEFT_SUBJECTS.iter().any(|s| rest.starts_with(&format!("{s} "))) {
+    if !CLEFT_SUBJECTS
+        .iter()
+        .any(|s| rest.starts_with(&format!("{s} ")))
+    {
         return false;
     }
     // A copula later in the clause marks the statement.
-    words
-        .iter()
-        .skip(2)
-        .take(10)
-        .any(|w| matches!(w.as_str(), "is" | "was" | "were" | "are" | "means" | "meant"))
+    words.iter().skip(2).take(10).any(|w| {
+        matches!(
+            w.as_str(),
+            "is" | "was" | "were" | "are" | "means" | "meant"
+        )
+    })
 }
 
 fn is_lead_in(text: &str) -> bool {
@@ -418,14 +709,56 @@ fn is_lead_in(text: &str) -> bool {
 pub fn has_deictic_reference(text: &str) -> bool {
     let norm = phrase_norm(text);
     const STRONG: &[&str] = &[
-        "this", "these", "here", "the diagram", "this diagram", "that diagram", "the code above",
-        "the code below", "this code", "that code", "on the screen", "on screen", "on your screen",
-        "on my screen", "the screen", "what you're showing", "what you are showing", "you're showing",
-        "being shown", "shown here", "the slide", "this slide", "that slide", "the chart",
-        "this chart", "the graph", "this graph", "the image", "the picture", "the whiteboard",
-        "the drawing", "the figure", "that part", "this part", "that box", "this box", "that arrow",
-        "this arrow", "highlighted", "the error above", "this error", "that error", "this function",
-        "that function", "this line", "that line", "this table", "that table", "this one", "that one",
+        "this",
+        "these",
+        "here",
+        "the diagram",
+        "this diagram",
+        "that diagram",
+        "the code above",
+        "the code below",
+        "this code",
+        "that code",
+        "on the screen",
+        "on screen",
+        "on your screen",
+        "on my screen",
+        "the screen",
+        "what you're showing",
+        "what you are showing",
+        "you're showing",
+        "being shown",
+        "shown here",
+        "the slide",
+        "this slide",
+        "that slide",
+        "the chart",
+        "this chart",
+        "the graph",
+        "this graph",
+        "the image",
+        "the picture",
+        "the whiteboard",
+        "the drawing",
+        "the figure",
+        "that part",
+        "this part",
+        "that box",
+        "this box",
+        "that arrow",
+        "this arrow",
+        "highlighted",
+        "the error above",
+        "this error",
+        "that error",
+        "this function",
+        "that function",
+        "this line",
+        "that line",
+        "this table",
+        "that table",
+        "this one",
+        "that one",
     ];
     if STRONG.iter().any(|p| has_phrase(&norm, p)) {
         return true;
@@ -449,121 +782,314 @@ static CATEGORY_RULES: &[CategoryRule] = &[
     CategoryRule {
         category: QuestionCategory::Clarification,
         phrases: &[
-            ("what do you mean", 4), ("could you clarify", 4), ("can you clarify", 4),
-            ("can you repeat", 4), ("could you repeat", 4), ("do you mean", 4), ("say that again", 4),
-            ("did you say", 3), ("what does that mean", 3), ("just to clarify", 4), ("to clarify", 2),
-            ("just to confirm", 3), ("so you're saying", 3), ("are you saying", 3), ("come again", 3),
-            ("sorry", 1), ("pardon", 2), ("rephrase", 3),
+            ("what do you mean", 4),
+            ("could you clarify", 4),
+            ("can you clarify", 4),
+            ("can you repeat", 4),
+            ("could you repeat", 4),
+            ("do you mean", 4),
+            ("say that again", 4),
+            ("did you say", 3),
+            ("what does that mean", 3),
+            ("just to clarify", 4),
+            ("to clarify", 2),
+            ("just to confirm", 3),
+            ("so you're saying", 3),
+            ("are you saying", 3),
+            ("come again", 3),
+            ("sorry", 1),
+            ("pardon", 2),
+            ("rephrase", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::SystemDesign,
         phrases: &[
-            ("how would you design", 5), ("design a", 3), ("design an", 3), ("design the", 2),
-            ("system design", 4), ("url shortener", 4), ("rate limiter", 4), ("news feed", 4),
-            ("chat system", 4), ("notification system", 4), ("distributed", 2), ("at scale", 2),
-            ("scale to", 2), ("millions of users", 3), ("high availability", 3), ("load balanc", 2),
-            ("sharding", 2), ("partition", 1), ("throughput", 1), ("scalable", 2), ("architect a", 3),
-            ("would you build", 2), ("how would you build", 3), ("key value store", 3),
-            ("design twitter", 4), ("design youtube", 4), ("parking lot", 3), ("ride sharing", 3),
+            ("how would you design", 5),
+            ("design a", 3),
+            ("design an", 3),
+            ("design the", 2),
+            ("system design", 4),
+            ("url shortener", 4),
+            ("rate limiter", 4),
+            ("news feed", 4),
+            ("chat system", 4),
+            ("notification system", 4),
+            ("distributed", 2),
+            ("at scale", 2),
+            ("scale to", 2),
+            ("millions of users", 3),
+            ("high availability", 3),
+            ("load balanc", 2),
+            ("sharding", 2),
+            ("partition", 1),
+            ("throughput", 1),
+            ("scalable", 2),
+            ("architect a", 3),
+            ("would you build", 2),
+            ("how would you build", 3),
+            ("key value store", 3),
+            ("design twitter", 4),
+            ("design youtube", 4),
+            ("parking lot", 3),
+            ("ride sharing", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Coding,
         phrases: &[
-            ("algorithm", 3), ("time complexity", 4), ("space complexity", 4), ("big o", 4),
-            ("complexity", 2), ("implement a function", 4), ("write a function", 4),
-            ("write code", 3), ("write a program", 4), ("data structure", 3), ("linked list", 4),
-            ("binary tree", 4), ("binary search", 4), ("hash map", 3), ("hashmap", 3), ("array", 2),
-            ("recursion", 3), ("recursive", 2), ("dynamic programming", 4), ("sort", 1),
-            ("pseudocode", 3), ("function that", 2), ("leetcode", 4), ("palindrome", 4),
-            ("reverse a", 3), ("o n", 2), ("edge cases", 2), ("unit test for", 2), ("code this", 3),
+            ("algorithm", 3),
+            ("time complexity", 4),
+            ("space complexity", 4),
+            ("big o", 4),
+            ("complexity", 2),
+            ("implement a function", 4),
+            ("write a function", 4),
+            ("write code", 3),
+            ("write a program", 4),
+            ("data structure", 3),
+            ("linked list", 4),
+            ("binary tree", 4),
+            ("binary search", 4),
+            ("hash map", 3),
+            ("hashmap", 3),
+            ("array", 2),
+            ("recursion", 3),
+            ("recursive", 2),
+            ("dynamic programming", 4),
+            ("sort", 1),
+            ("pseudocode", 3),
+            ("function that", 2),
+            ("leetcode", 4),
+            ("palindrome", 4),
+            ("reverse a", 3),
+            ("o n", 2),
+            ("edge cases", 2),
+            ("unit test for", 2),
+            ("code this", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Behavioral,
         phrases: &[
-            ("tell me about a time", 5), ("describe a time", 5), ("a time when", 4),
-            ("a time you", 4), ("a situation where", 4), ("situation when", 3), ("conflict", 3),
-            ("disagree", 3), ("disagreement", 3), ("failure", 2), ("failed", 2), ("mistake", 3),
-            ("challenge you faced", 4), ("biggest challenge", 3), ("difficult", 2), ("proud of", 3),
-            ("feedback", 2), ("under pressure", 3), ("tight deadline", 3), ("deadline", 1),
-            ("how do you handle", 2), ("weakness", 3), ("strengths", 2), ("teammate", 2),
-            ("coworker", 2), ("difficult person", 4), ("went wrong", 2), ("learned from", 3),
+            ("tell me about a time", 5),
+            ("describe a time", 5),
+            ("a time when", 4),
+            ("a time you", 4),
+            ("a situation where", 4),
+            ("situation when", 3),
+            ("conflict", 3),
+            ("disagree", 3),
+            ("disagreement", 3),
+            ("failure", 2),
+            ("failed", 2),
+            ("mistake", 3),
+            ("challenge you faced", 4),
+            ("biggest challenge", 3),
+            ("difficult", 2),
+            ("proud of", 3),
+            ("feedback", 2),
+            ("under pressure", 3),
+            ("tight deadline", 3),
+            ("deadline", 1),
+            ("how do you handle", 2),
+            ("weakness", 3),
+            ("strengths", 2),
+            ("teammate", 2),
+            ("coworker", 2),
+            ("difficult person", 4),
+            ("went wrong", 2),
+            ("learned from", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Experience,
         phrases: &[
-            ("your experience", 4), ("experience with", 3), ("have you worked with", 4),
-            ("have you used", 3), ("have you ever", 2), ("in your previous role", 4),
-            ("your last project", 4), ("your current role", 4), ("your current job", 4),
-            ("worked on", 2), ("tell me about yourself", 5), ("introduce yourself", 5),
-            ("your background", 4), ("your resume", 4), ("your role", 3), ("your responsibilities", 3),
-            ("your day to day", 3), ("in your career", 3), ("previous company", 3), ("your team at", 2),
+            ("your experience", 4),
+            ("experience with", 3),
+            ("have you worked with", 4),
+            ("have you used", 3),
+            ("have you ever", 2),
+            ("in your previous role", 4),
+            ("your last project", 4),
+            ("your current role", 4),
+            ("your current job", 4),
+            ("worked on", 2),
+            ("tell me about yourself", 5),
+            ("introduce yourself", 5),
+            ("your background", 4),
+            ("your resume", 4),
+            ("your role", 3),
+            ("your responsibilities", 3),
+            ("your day to day", 3),
+            ("in your career", 3),
+            ("previous company", 3),
+            ("your team at", 2),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Tradeoff,
         phrases: &[
-            ("trade-off", 4), ("tradeoff", 4), ("trade off", 4), ("trade-offs", 4), ("tradeoffs", 4),
-            ("pros and cons", 4), ("why did you choose", 4), ("why did you pick", 4),
-            ("why did you go with", 4), ("why did you decide", 3), ("why not", 3), ("versus", 3),
-            ("vs", 2), ("instead of", 3), ("compared to", 3), ("compare", 2), ("advantages", 2),
-            ("disadvantages", 3), ("downside", 3), ("downsides", 3), ("benefits of", 2),
-            ("when would you use", 3), ("rather than", 3), ("over the alternatives", 3),
-            ("alternatives", 2), ("why would you use", 3), ("choose between", 3),
+            ("trade-off", 4),
+            ("tradeoff", 4),
+            ("trade off", 4),
+            ("trade-offs", 4),
+            ("tradeoffs", 4),
+            ("pros and cons", 4),
+            ("why did you choose", 4),
+            ("why did you pick", 4),
+            ("why did you go with", 4),
+            ("why did you decide", 3),
+            ("why not", 3),
+            ("versus", 3),
+            ("vs", 2),
+            ("instead of", 3),
+            ("compared to", 3),
+            ("compare", 2),
+            ("advantages", 2),
+            ("disadvantages", 3),
+            ("downside", 3),
+            ("downsides", 3),
+            ("benefits of", 2),
+            ("when would you use", 3),
+            ("rather than", 3),
+            ("over the alternatives", 3),
+            ("alternatives", 2),
+            ("why would you use", 3),
+            ("choose between", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Leadership,
         phrases: &[
-            ("leadership", 4), ("lead a team", 4), ("led a team", 4), ("as a lead", 3), ("mentor", 3),
-            ("mentoring", 3), ("manage a team", 4), ("managed a team", 4), ("managing people", 4),
-            ("influence", 2), ("stakeholder", 2), ("stakeholders", 2), ("hiring", 2), ("delegate", 3),
-            ("vision", 2), ("motivate", 3), ("grow your team", 3), ("underperforming", 4),
-            ("direct reports", 4), ("technical direction", 3),
+            ("leadership", 4),
+            ("lead a team", 4),
+            ("led a team", 4),
+            ("as a lead", 3),
+            ("mentor", 3),
+            ("mentoring", 3),
+            ("manage a team", 4),
+            ("managed a team", 4),
+            ("managing people", 4),
+            ("influence", 2),
+            ("stakeholder", 2),
+            ("stakeholders", 2),
+            ("hiring", 2),
+            ("delegate", 3),
+            ("vision", 2),
+            ("motivate", 3),
+            ("grow your team", 3),
+            ("underperforming", 4),
+            ("direct reports", 4),
+            ("technical direction", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Product,
         phrases: &[
-            ("product", 2), ("customer", 2), ("customers", 2), ("user experience", 3), ("users want", 3),
-            ("kpi", 3), ("metric would you", 3), ("success metric", 3), ("prioritize", 3),
-            ("prioritise", 3), ("feature", 1), ("market", 2), ("roadmap", 2), ("requirements", 1),
-            ("business impact", 3), ("business value", 3), ("go to market", 3), ("north star", 3),
+            ("product", 2),
+            ("customer", 2),
+            ("customers", 2),
+            ("user experience", 3),
+            ("users want", 3),
+            ("kpi", 3),
+            ("metric would you", 3),
+            ("success metric", 3),
+            ("prioritize", 3),
+            ("prioritise", 3),
+            ("feature", 1),
+            ("market", 2),
+            ("roadmap", 2),
+            ("requirements", 1),
+            ("business impact", 3),
+            ("business value", 3),
+            ("go to market", 3),
+            ("north star", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Culture,
         phrases: &[
-            ("culture", 3), ("values", 2), ("why do you want to work", 5), ("why this company", 5),
-            ("why us", 4), ("work environment", 3), ("team culture", 4), ("work-life", 3),
-            ("work life balance", 3), ("what motivates you", 4), ("where do you see yourself", 5),
-            ("ideal team", 4), ("ideal manager", 4), ("why are you leaving", 4),
-            ("why are you looking", 4), ("what are you looking for", 3), ("questions for me", 4),
+            ("culture", 3),
+            ("values", 2),
+            ("why do you want to work", 5),
+            ("why this company", 5),
+            ("why us", 4),
+            ("work environment", 3),
+            ("team culture", 4),
+            ("work-life", 3),
+            ("work life balance", 3),
+            ("what motivates you", 4),
+            ("where do you see yourself", 5),
+            ("ideal team", 4),
+            ("ideal manager", 4),
+            ("why are you leaving", 4),
+            ("why are you looking", 4),
+            ("what are you looking for", 3),
+            ("questions for me", 4),
             ("questions for us", 4),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Architecture,
         phrases: &[
-            ("architecture", 3), ("microservice", 3), ("microservices", 3), ("monolith", 3),
-            ("service boundaries", 4), ("event driven", 3), ("event-driven", 3), ("message queue", 2),
-            ("api gateway", 2), ("components", 2), ("diagram", 2), ("this part of the", 3),
-            ("data flow", 3), ("pipeline", 1), ("infrastructure", 2), ("layer", 1), ("layers", 1),
-            ("how does the", 1), ("how do these", 2), ("this component", 3),
+            ("architecture", 3),
+            ("microservice", 3),
+            ("microservices", 3),
+            ("monolith", 3),
+            ("service boundaries", 4),
+            ("event driven", 3),
+            ("event-driven", 3),
+            ("message queue", 2),
+            ("api gateway", 2),
+            ("components", 2),
+            ("diagram", 2),
+            ("this part of the", 3),
+            ("data flow", 3),
+            ("pipeline", 1),
+            ("infrastructure", 2),
+            ("layer", 1),
+            ("layers", 1),
+            ("how does the", 1),
+            ("how do these", 2),
+            ("this component", 3),
         ],
     },
     CategoryRule {
         category: QuestionCategory::Technical,
         phrases: &[
-            ("database", 2), ("sql", 2), ("index", 2), ("query", 2), ("cache", 2), ("caching", 2),
-            ("api", 1), ("http", 2), ("latency", 2), ("memory", 2), ("thread", 2), ("concurrency", 3),
-            ("deploy", 2), ("deployment", 2), ("test", 1), ("testing", 2), ("bug", 2), ("debug", 2),
-            ("performance", 2), ("security", 2), ("scale", 1), ("scaling", 1), ("server", 1),
-            ("network", 2), ("protocol", 2), ("encryption", 2), ("authentication", 2), ("garbage", 1),
-            ("consistency", 2), ("transaction", 2), ("replication", 2), ("monitoring", 2),
+            ("database", 2),
+            ("sql", 2),
+            ("index", 2),
+            ("query", 2),
+            ("cache", 2),
+            ("caching", 2),
+            ("api", 1),
+            ("http", 2),
+            ("latency", 2),
+            ("memory", 2),
+            ("thread", 2),
+            ("concurrency", 3),
+            ("deploy", 2),
+            ("deployment", 2),
+            ("test", 1),
+            ("testing", 2),
+            ("bug", 2),
+            ("debug", 2),
+            ("performance", 2),
+            ("security", 2),
+            ("scale", 1),
+            ("scaling", 1),
+            ("server", 1),
+            ("network", 2),
+            ("protocol", 2),
+            ("encryption", 2),
+            ("authentication", 2),
+            ("garbage", 1),
+            ("consistency", 2),
+            ("transaction", 2),
+            ("replication", 2),
+            ("monitoring", 2),
         ],
     },
 ];
@@ -578,7 +1104,9 @@ pub fn classify_category(text: &str) -> QuestionCategory {
         let score: u32 = rule
             .phrases
             .iter()
-            .filter(|(p, _)| has_phrase(&norm, p) || (p.ends_with(['c', 'e']) && norm.contains(&format!(" {p}"))))
+            .filter(|(p, _)| {
+                has_phrase(&norm, p) || (p.ends_with(['c', 'e']) && norm.contains(&format!(" {p}")))
+            })
             .map(|(_, w)| *w)
             .sum();
         if score > best.1 {
@@ -591,7 +1119,9 @@ pub fn classify_category(text: &str) -> QuestionCategory {
     }
     // Short questions that refer back to what was just said are follow-ups.
     let first = stripped.first().map(String::as_str).unwrap_or("");
-    let refers_back = stripped.iter().any(|w| matches!(w.as_str(), "that" | "it" | "this" | "those" | "them"));
+    let refers_back = stripped
+        .iter()
+        .any(|w| matches!(w.as_str(), "that" | "it" | "this" | "those" | "them"));
     let follow_start = matches!(first, "and" | "why" | "how" | "so")
         || starts_with_phrase(stripped, "what about")
         || starts_with_phrase(stripped, "how about")
@@ -617,7 +1147,11 @@ fn capitalize(s: &str) -> String {
 
 fn ensure_question_mark(s: &str) -> String {
     let t = s.trim().trim_end_matches(['.', ',', ';', ':']).trim();
-    if t.ends_with('?') { t.to_string() } else { format!("{t}?") }
+    if t.ends_with('?') {
+        t.to_string()
+    } else {
+        format!("{t}?")
+    }
 }
 
 /// Sub-questions of a (possibly multi-part) question: "What database did you
@@ -709,11 +1243,26 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
                 let w = words_of(&s.text);
                 let first = w.first().map(String::as_str).unwrap_or("");
                 w.len() >= 3
-                    && matches!(first, "we" | "i" | "it" | "the" | "basically" | "well" | "so" | "they" | "our" | "that's" | "it's" | "we're" | "i'm")
+                    && matches!(
+                        first,
+                        "we" | "i"
+                            | "it"
+                            | "the"
+                            | "basically"
+                            | "well"
+                            | "so"
+                            | "they"
+                            | "our"
+                            | "that's"
+                            | "it's"
+                            | "we're"
+                            | "i'm"
+                    )
             });
             // "What did we do? We added caching." — the question is about the
             // speaker's own work and is answered immediately.
-            let self_referential = has_phrase(&phrase_norm(&scored[i].text), "we") || has_phrase(&phrase_norm(&scored[i].text), "i");
+            let self_referential = has_phrase(&phrase_norm(&scored[i].text), "we")
+                || has_phrase(&phrase_norm(&scored[i].text), "i");
             if answer_like && self_referential {
                 rhetorical = true;
                 signals.push("negative:rhetorical".into());
@@ -723,7 +1272,10 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
 
     // Question sentences (everything scoring above the threshold) plus the
     // non-question context before them (kept for display).
-    let q_sents: Vec<&SentenceScore> = scored.iter().filter(|s| s.score >= QUESTION_THRESHOLD).collect();
+    let q_sents: Vec<&SentenceScore> = scored
+        .iter()
+        .filter(|s| s.score >= QUESTION_THRESHOLD)
+        .collect();
     let mut confidence = scored.iter().map(|s| s.score).fold(0.0f32, f32::max);
     for s in &scored {
         for sig in &s.signals {
@@ -740,7 +1292,10 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
     } else {
         // Keep the leading context sentence when it introduces the topic
         // ("Let's talk about caching. How do you invalidate?").
-        let first_q = scored.iter().position(|s| s.score >= QUESTION_THRESHOLD).unwrap_or(0);
+        let first_q = scored
+            .iter()
+            .position(|s| s.score >= QUESTION_THRESHOLD)
+            .unwrap_or(0);
         let lead: Vec<&str> = scored[..first_q]
             .iter()
             .filter(|s| is_lead_in(&s.text) || words_of(&s.text).len() >= 4)
@@ -749,7 +1304,12 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
             .take(1)
             .collect();
         let mut parts: Vec<&str> = lead;
-        parts.extend(scored[first_q..].iter().filter(|s| !s.negative).map(|s| s.text.as_str()));
+        parts.extend(
+            scored[first_q..]
+                .iter()
+                .filter(|s| !s.negative)
+                .map(|s| s.text.as_str()),
+        );
         parts.join(" ")
     };
     let mut segment_ids = vec![seg.id.clone()];
@@ -763,7 +1323,10 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
     if let Some(prev) = prev_same {
         let gap = seg.start_time - prev.end_time;
         let prev_text = clean(&prev.text);
-        let prev_score = sentences(&prev_text).iter().map(|s| score_sentence(s).score).fold(0.0f32, f32::max);
+        let prev_score = sentences(&prev_text)
+            .iter()
+            .map(|s| score_sentence(s).score)
+            .fold(0.0f32, f32::max);
         if gap <= LEAD_IN_GAP_MS && is_lead_in(&prev_text) && confidence >= QUESTION_THRESHOLD {
             question = format!("{prev_text} {question}");
             segment_ids.insert(0, prev.id.clone());
@@ -776,7 +1339,10 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
         {
             // ASR split one question into two utterances ("So tell me" / "how you scaled it").
             let merged = format!("{prev_text} {text}");
-            let merged_score = sentences(&merged).iter().map(|s| score_sentence(s).score).fold(0.0f32, f32::max);
+            let merged_score = sentences(&merged)
+                .iter()
+                .map(|s| score_sentence(s).score)
+                .fold(0.0f32, f32::max);
             if merged_score > confidence && merged_score >= QUESTION_THRESHOLD {
                 confidence = merged_score;
                 question = merged;
@@ -816,7 +1382,11 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
     let question = clean(&question);
     let parts = if is_question {
         let p = split_parts(&question);
-        if p.is_empty() { vec![ensure_question_mark(&question)] } else { p }
+        if p.is_empty() {
+            vec![ensure_question_mark(&question)]
+        } else {
+            p
+        }
     } else {
         Vec::new()
     };

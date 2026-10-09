@@ -47,7 +47,10 @@ Output plain text only: short lines starting with \"- \", in chronological order
         ),
     ]);
 
-    let previous = truncate_to_tokens(sanitize(previous_summary.trim()).trim(), MAX_PREVIOUS_TOKENS);
+    let previous = truncate_to_tokens(
+        sanitize(previous_summary.trim()).trim(),
+        MAX_PREVIOUS_TOKENS,
+    );
     let previous_block = if previous.is_empty() {
         "There is no previous summary yet.".to_string()
     } else {
@@ -165,7 +168,13 @@ mod tests {
     #[test]
     fn huge_transcripts_are_bounded() {
         let lines: Vec<TranscriptLine> = (0..5000)
-            .map(|i| line("Speaker", &format!("sentence number {i} with some words"), i))
+            .map(|i| {
+                line(
+                    "Speaker",
+                    &format!("sentence number {i} with some words"),
+                    i,
+                )
+            })
             .collect();
         let p = build("", &lines, Mode::Interviewer);
         assert!(estimate_tokens(&p.user) < MAX_TRANSCRIPT_TOKENS + 400);

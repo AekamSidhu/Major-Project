@@ -124,10 +124,17 @@ fn table_questions() {
     for text in QUESTIONS {
         let r = remote(text);
         if !r.is_question {
-            failures.push(format!("{text:?} → conf {:.2} {:?}", r.confidence, r.signals));
+            failures.push(format!(
+                "{text:?} → conf {:.2} {:?}",
+                r.confidence, r.signals
+            ));
         }
     }
-    assert!(failures.is_empty(), "missed questions:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "missed questions:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]
@@ -136,10 +143,17 @@ fn table_not_questions() {
     for text in NOT_QUESTIONS {
         let r = remote(text);
         if r.is_question {
-            failures.push(format!("{text:?} → conf {:.2} {:?}", r.confidence, r.signals));
+            failures.push(format!(
+                "{text:?} → conf {:.2} {:?}",
+                r.confidence, r.signals
+            ));
         }
     }
-    assert!(failures.is_empty(), "false positives:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "false positives:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]
@@ -161,7 +175,14 @@ fn strong_questions_have_high_confidence() {
 
     let r = remote("Why did you choose Kafka for the event pipeline?");
     assert!(r.confidence >= 0.75);
-    assert!(matches!(r.category, QuestionCategory::Tradeoff | QuestionCategory::Architecture), "{:?}", r.category);
+    assert!(
+        matches!(
+            r.category,
+            QuestionCategory::Tradeoff | QuestionCategory::Architecture
+        ),
+        "{:?}",
+        r.category
+    );
 
     let r = remote("What database did you choose and why?");
     assert!(r.is_question);
@@ -169,7 +190,11 @@ fn strong_questions_have_high_confidence() {
 
 #[test]
 fn interviewer_own_questions_do_not_require_response() {
-    let r = run(Mode::Interviewer, SpeakerRole::User, "How would you design a rate limiter?");
+    let r = run(
+        Mode::Interviewer,
+        SpeakerRole::User,
+        "How would you design a rate limiter?",
+    );
     assert!(r.is_question && r.confidence >= 0.6, "{r:?}");
     assert!(!r.requires_response);
 }
@@ -181,7 +206,10 @@ fn speaker_role_table() {
     assert!(!run(Mode::Candidate, SpeakerRole::User, q).requires_response);
     let unknown = run(Mode::Candidate, SpeakerRole::Unknown, q);
     assert!(unknown.requires_response);
-    assert!(unknown.confidence < remote(q).confidence, "unknown speakers are discounted");
+    assert!(
+        unknown.confidence < remote(q).confidence,
+        "unknown speakers are discounted"
+    );
     assert!(run(Mode::Interviewer, SpeakerRole::Remote, q).requires_response);
     assert!(run(Mode::Interviewer, SpeakerRole::Unknown, q).requires_response);
     assert!(!run(Mode::Interviewer, SpeakerRole::User, q).requires_response);
@@ -195,27 +223,45 @@ fn deictic_references() {
     assert_eq!(r.category, QuestionCategory::Architecture);
     assert!(has_deictic_reference("What does the code above do?"));
     assert!(has_deictic_reference("explain that"));
-    assert!(has_deictic_reference("Why is there an arrow from the queue in the diagram?"));
-    assert!(!has_deictic_reference("Why did you choose that approach for caching in the billing service?"));
+    assert!(has_deictic_reference(
+        "Why is there an arrow from the queue in the diagram?"
+    ));
+    assert!(!has_deictic_reference(
+        "Why did you choose that approach for caching in the billing service?"
+    ));
     assert!(!has_deictic_reference("How did you scale the database?"));
 }
 
 #[test]
 fn multi_part_questions_are_split() {
     let r = remote("What database did you use, and why did you choose it?");
-    assert_eq!(r.parts, vec!["What database did you use?", "Why did you choose it?"]);
+    assert_eq!(
+        r.parts,
+        vec!["What database did you use?", "Why did you choose it?"]
+    );
     let r = remote("How long did the migration take and what went wrong?");
     assert_eq!(r.parts.len(), 2, "{:?}", r.parts);
     let r = remote("How did you scale reads? Did you add replicas?");
     assert_eq!(r.parts.len(), 2);
     let r = remote("Do you prefer Postgres or MySQL?");
-    assert_eq!(r.parts.len(), 1, "alternatives are one question: {:?}", r.parts);
+    assert_eq!(
+        r.parts.len(),
+        1,
+        "alternatives are one question: {:?}",
+        r.parts
+    );
 }
 
 #[test]
 fn lead_in_is_merged() {
     let lead = seg("a", SpeakerRole::Remote, 0, 1_500, "Next question.");
-    let q = seg("b", SpeakerRole::Remote, 2_500, 5_000, "How do you handle schema migrations?");
+    let q = seg(
+        "b",
+        SpeakerRole::Remote,
+        2_500,
+        5_000,
+        "How do you handle schema migrations?",
+    );
     let r = detect(&DetectionInput {
         segment: &q,
         recent: std::slice::from_ref(&lead),
@@ -228,8 +274,20 @@ fn lead_in_is_merged() {
     assert!(r.signals.iter().any(|s| s == "lead_in_merged"));
 
     // A lead-in from another speaker or long ago is not merged.
-    let far = seg("a", SpeakerRole::Remote, 0, 1_000, "Let's talk about databases.");
-    let q2 = seg("b", SpeakerRole::Remote, 9_000, 11_000, "How did you shard it?");
+    let far = seg(
+        "a",
+        SpeakerRole::Remote,
+        0,
+        1_000,
+        "Let's talk about databases.",
+    );
+    let q2 = seg(
+        "b",
+        SpeakerRole::Remote,
+        9_000,
+        11_000,
+        "How did you shard it?",
+    );
     let r = detect(&DetectionInput {
         segment: &q2,
         recent: std::slice::from_ref(&far),
@@ -242,7 +300,13 @@ fn lead_in_is_merged() {
 #[test]
 fn split_utterance_fragment_is_joined() {
     let frag = seg("a", SpeakerRole::Remote, 0, 1_000, "So tell me");
-    let rest = seg("b", SpeakerRole::Remote, 1_600, 3_500, "about the hardest outage you handled");
+    let rest = seg(
+        "b",
+        SpeakerRole::Remote,
+        1_600,
+        3_500,
+        "about the hardest outage you handled",
+    );
     let r = detect(&DetectionInput {
         segment: &rest,
         recent: std::slice::from_ref(&frag),
@@ -251,12 +315,21 @@ fn split_utterance_fragment_is_joined() {
     });
     assert!(r.is_question, "{r:?}");
     assert_eq!(r.segment_ids, vec!["a", "b"]);
-    assert_eq!(r.question, "So tell me about the hardest outage you handled");
+    assert_eq!(
+        r.question,
+        "So tell me about the hardest outage you handled"
+    );
 }
 
 #[test]
 fn continuation_supersedes_previous_question() {
-    let first = seg("a", SpeakerRole::Remote, 0, 2_000, "How did you scale reads?");
+    let first = seg(
+        "a",
+        SpeakerRole::Remote,
+        0,
+        2_000,
+        "How did you scale reads?",
+    );
     let last = DetectedQuestion {
         id: "q1".into(),
         meeting_id: "m".into(),
@@ -273,7 +346,13 @@ fn continuation_supersedes_previous_question() {
         supersedes: None,
         detected_at: 0,
     };
-    let second = seg("b", SpeakerRole::Remote, 3_000, 4_500, "And what about writes?");
+    let second = seg(
+        "b",
+        SpeakerRole::Remote,
+        3_000,
+        4_500,
+        "And what about writes?",
+    );
     let r = detect(&DetectionInput {
         segment: &second,
         recent: std::slice::from_ref(&first),
@@ -282,11 +361,20 @@ fn continuation_supersedes_previous_question() {
     });
     assert!(r.is_question);
     assert_eq!(r.supersedes.as_deref(), Some("q1"));
-    assert_eq!(r.question, "How did you scale reads? And what about writes?");
+    assert_eq!(
+        r.question,
+        "How did you scale reads? And what about writes?"
+    );
     assert_eq!(r.segment_ids, vec!["a", "b"]);
 
     // Too late or another speaker: a new question.
-    let late = seg("c", SpeakerRole::Remote, 10_000, 11_000, "And what about writes?");
+    let late = seg(
+        "c",
+        SpeakerRole::Remote,
+        10_000,
+        11_000,
+        "And what about writes?",
+    );
     let r = detect(&DetectionInput {
         segment: &late,
         recent: std::slice::from_ref(&first),
@@ -325,17 +413,47 @@ fn ambiguity_flag() {
 fn categories_cover_all_thirteen() {
     use QuestionCategory::*;
     let cases: &[(&str, QuestionCategory)] = &[
-        ("How does a hash index differ from a B-tree index in Postgres?", Technical),
-        ("Write a function that reverses a linked list in place. What's the time complexity?", Coding),
+        (
+            "How does a hash index differ from a B-tree index in Postgres?",
+            Technical,
+        ),
+        (
+            "Write a function that reverses a linked list in place. What's the time complexity?",
+            Coding,
+        ),
         ("How would you design a URL shortener?", SystemDesign),
-        ("Tell me about a time you had a conflict with a teammate.", Behavioral),
-        ("What's your experience with Kubernetes in your previous role?", Experience),
-        ("How would you prioritize features for the next release with limited engineering time?", Product),
-        ("How do you mentor junior engineers and grow your team?", Leadership),
-        ("Could you clarify what you mean by eventual consistency?", Clarification),
-        ("Can you explain how the microservices communicate in this architecture?", Architecture),
-        ("What are the pros and cons of using a queue here instead of direct calls?", Tradeoff),
-        ("Why do you want to work here, and what kind of team culture do you enjoy?", Culture),
+        (
+            "Tell me about a time you had a conflict with a teammate.",
+            Behavioral,
+        ),
+        (
+            "What's your experience with Kubernetes in your previous role?",
+            Experience,
+        ),
+        (
+            "How would you prioritize features for the next release with limited engineering time?",
+            Product,
+        ),
+        (
+            "How do you mentor junior engineers and grow your team?",
+            Leadership,
+        ),
+        (
+            "Could you clarify what you mean by eventual consistency?",
+            Clarification,
+        ),
+        (
+            "Can you explain how the microservices communicate in this architecture?",
+            Architecture,
+        ),
+        (
+            "What are the pros and cons of using a queue here instead of direct calls?",
+            Tradeoff,
+        ),
+        (
+            "Why do you want to work here, and what kind of team culture do you enjoy?",
+            Culture,
+        ),
         ("Is the weather nice where you are?", General),
         ("And why that?", FollowUp),
     ];
@@ -351,14 +469,19 @@ fn categories_cover_all_thirteen() {
 
 #[test]
 fn technologies_imply_technical() {
-    assert_eq!(classify_category("How do you use Redis?"), QuestionCategory::Technical);
+    assert_eq!(
+        classify_category("How do you use Redis?"),
+        QuestionCategory::Technical
+    );
 }
 
 #[test]
 fn detection_is_fast() {
     let start = std::time::Instant::now();
     for _ in 0..1000 {
-        let _ = remote("Okay, so walk me through how you would design a rate limiter for our public API, and what happens when Redis is down?");
+        let _ = remote(
+            "Okay, so walk me through how you would design a rate limiter for our public API, and what happens when Redis is down?",
+        );
     }
     let per_call = start.elapsed().as_secs_f64() * 1000.0 / 1000.0;
     // Generous bound for debug builds; release is ~10x faster.

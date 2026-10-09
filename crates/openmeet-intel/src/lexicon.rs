@@ -62,7 +62,11 @@ static TECHS: &[Tech] = &[
     ),
     t("Rust", Language, r"(?i)\brust\b"),
     t("C++", Language, r"(?i)(?:^|[^\w+])c\+\+(?:[^\w+]|$)"),
-    t("C#", Language, r"(?i)(?:^|[^\w#])c#(?:[^\w#]|$)|\bc sharp\b"),
+    t(
+        "C#",
+        Language,
+        r"(?i)(?:^|[^\w#])c#(?:[^\w#]|$)|\bc sharp\b",
+    ),
     t("Kotlin", Language, r"(?i)\bkotlin\b"),
     t("Swift", Language, r"\bSwift\b"),
     t("Scala", Language, r"(?i)\bscala\b"),
@@ -92,12 +96,24 @@ static TECHS: &[Tech] = &[
     t("Svelte", Framework, r"(?i)\bsvelte(?:kit)?\b"),
     t("Next.js", Framework, r"(?i)\bnext\.?js\b|\bnext js\b"),
     t("Nuxt", Framework, r"(?i)\bnuxt\b"),
-    t("Express", Framework, r"(?i:\bexpress(?:\.js|js)\b)|\bExpress\b"),
+    t(
+        "Express",
+        Framework,
+        r"(?i:\bexpress(?:\.js|js)\b)|\bExpress\b",
+    ),
     t("Django", Framework, r"(?i)\bdjango\b"),
     t("Flask", Framework, r"(?i)\bflask\b"),
     t("FastAPI", Framework, r"(?i)\bfast ?api\b"),
-    t("Ruby on Rails", Framework, r"(?i:\bruby on rails\b)|\bRails\b"),
-    t("Spring Boot", Framework, r"(?i)\bspring(?: boot| framework)\b"),
+    t(
+        "Ruby on Rails",
+        Framework,
+        r"(?i:\bruby on rails\b)|\bRails\b",
+    ),
+    t(
+        "Spring Boot",
+        Framework,
+        r"(?i)\bspring(?: boot| framework)\b",
+    ),
     t(
         ".NET",
         Framework,
@@ -112,9 +128,17 @@ static TECHS: &[Tech] = &[
     t("Tailwind CSS", Framework, r"(?i)\btailwind(?:css| css)?\b"),
     t("GraphQL", Protocol, r"(?i)\bgraph ?ql\b"),
     t("gRPC", Protocol, r"(?i)\bgrpc\b"),
-    t("REST", Protocol, r"\bREST(?:ful)?\b|(?i:\brest(?:ful)? apis?\b)"),
+    t(
+        "REST",
+        Protocol,
+        r"\bREST(?:ful)?\b|(?i:\brest(?:ful)? apis?\b)",
+    ),
     t("WebSockets", Protocol, r"(?i)\bweb ?sockets?\b"),
-    t("Protobuf", Protocol, r"(?i)\b(?:protobuf|protocol buffers)\b"),
+    t(
+        "Protobuf",
+        Protocol,
+        r"(?i)\b(?:protobuf|protocol buffers)\b",
+    ),
     t("OpenAPI", Tool, r"(?i)\bopen ?api\b|\bswagger\b"),
     // Databases & storage
     t("PostgreSQL", Database, r"(?i)\bpostgres(?:ql)?\b"),
@@ -152,14 +176,22 @@ static TECHS: &[Tech] = &[
     t("etcd", Infra, r"(?i)\betcd\b"),
     t("ZooKeeper", Infra, r"(?i)\bzoo ?keeper\b"),
     t("Consul", Infra, r"\bConsul\b"),
-    t("HashiCorp Vault", Security, r"(?i:\bhashicorp vault\b)|\bVault\b"),
+    t(
+        "HashiCorp Vault",
+        Security,
+        r"(?i:\bhashicorp vault\b)|\bVault\b",
+    ),
     t("S3", Database, r"(?i)\bs3\b"),
     t("MinIO", Database, r"(?i)\bmin ?io\b"),
     t("HDFS", DataPlatform, r"(?i)\bhdfs\b"),
     t("Parquet", DataPlatform, r"(?i)\bparquet\b"),
     t("Avro", DataPlatform, r"(?i)\bavro\b"),
     t("Delta Lake", DataPlatform, r"(?i)\bdelta lake\b"),
-    t("Apache Iceberg", DataPlatform, r"(?i:\bapache iceberg\b)|\bIceberg tables?\b"),
+    t(
+        "Apache Iceberg",
+        DataPlatform,
+        r"(?i:\bapache iceberg\b)|\bIceberg tables?\b",
+    ),
     t("pgvector", Database, r"(?i)\bpg ?vector\b"),
     t("Pinecone", Database, r"(?i)\bpinecone\b"),
     t("FAISS", Ml, r"(?i)\bfaiss\b"),
@@ -399,7 +431,10 @@ mod tests {
             vec!["PostgreSQL", "Kubernetes", "Kafka", "AWS"]
         );
         assert_eq!(names("C++ and C# and .NET"), vec!["C++", "C#", ".NET"]);
-        assert_eq!(names("built with node.js and Next.js"), vec!["Node.js", "Next.js"]);
+        assert_eq!(
+            names("built with node.js and Next.js"),
+            vec!["Node.js", "Next.js"]
+        );
     }
 
     #[test]

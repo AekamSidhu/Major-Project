@@ -8,14 +8,26 @@ use openmeet_core::types::VoiceCommand;
 
 const WAKE_PREFIXES: &[&str] = &["hey ", "ok ", "okay ", "hi "];
 const WAKE_WORDS: &[&str] = &[
-    "openmeet", "open meet", "open meat", "openmeat", "open mead", "open-meet", "open mete",
+    "openmeet",
+    "open meet",
+    "open meat",
+    "openmeat",
+    "open mead",
+    "open-meet",
+    "open mete",
 ];
 
 fn normalize(text: &str) -> String {
     text.to_lowercase()
         .replace(['’', '‘'], "'")
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '\'' || c == '-' { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '\'' || c == '-' {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -33,37 +45,96 @@ pub fn parse_voice_command(text: &str) -> Option<VoiceCommand> {
             break;
         }
     }
-    let wake = WAKE_WORDS.iter().find(|w| rest == **w || rest.starts_with(&format!("{w} ")))?;
+    let wake = WAKE_WORDS
+        .iter()
+        .find(|w| rest == **w || rest.starts_with(&format!("{w} ")))?;
     let command = rest[wake.len()..].trim();
     if command.is_empty() {
         return None;
     }
-    let command = command.strip_prefix("please ").unwrap_or(command).trim_end_matches(" please");
+    let command = command
+        .strip_prefix("please ")
+        .unwrap_or(command)
+        .trim_end_matches(" please");
     let is = |opts: &[&str]| opts.contains(&command);
     let starts = |opts: &[&str]| opts.iter().any(|o| command.starts_with(o));
 
-    if is(&["explain", "explain that", "explain this", "explain it", "what is that", "what's that", "what does that mean"]) {
+    if is(&[
+        "explain",
+        "explain that",
+        "explain this",
+        "explain it",
+        "what is that",
+        "what's that",
+        "what does that mean",
+    ]) {
         return Some(VoiceCommand::Explain);
     }
     if is(&[
-        "follow up", "follow-up", "give me a follow up", "give me a follow-up", "give me follow ups",
-        "give me follow-ups", "give me some follow ups", "give me some follow-ups", "suggest a follow up",
-        "suggest a follow-up", "suggest follow ups", "suggest follow-ups", "follow up question",
-        "follow-up question", "follow up questions", "follow-up questions", "next question",
-        "what should i ask", "what should i ask next",
+        "follow up",
+        "follow-up",
+        "give me a follow up",
+        "give me a follow-up",
+        "give me follow ups",
+        "give me follow-ups",
+        "give me some follow ups",
+        "give me some follow-ups",
+        "suggest a follow up",
+        "suggest a follow-up",
+        "suggest follow ups",
+        "suggest follow-ups",
+        "follow up question",
+        "follow-up question",
+        "follow up questions",
+        "follow-up questions",
+        "next question",
+        "what should i ask",
+        "what should i ask next",
     ]) {
         return Some(VoiceCommand::FollowUp);
     }
     if is(&[
-        "answer", "answer that", "answer this", "answer it", "suggest an answer", "help me answer",
-        "help me answer that", "what should i say", "how should i answer", "how do i answer that",
+        "answer",
+        "answer that",
+        "answer this",
+        "answer it",
+        "suggest an answer",
+        "help me answer",
+        "help me answer that",
+        "what should i say",
+        "how should i answer",
+        "how do i answer that",
     ]) {
         return Some(VoiceCommand::Answer);
     }
-    if starts(&["make that concise", "make it concise", "make that shorter", "make it shorter", "shorter", "be concise", "concise", "summarize that", "summarise that", "shorten", "tldr", "tl dr"]) {
+    if starts(&[
+        "make that concise",
+        "make it concise",
+        "make that shorter",
+        "make it shorter",
+        "shorter",
+        "be concise",
+        "concise",
+        "summarize that",
+        "summarise that",
+        "shorten",
+        "tldr",
+        "tl dr",
+    ]) {
         return Some(VoiceCommand::Concise);
     }
-    if starts(&["more detail", "more details", "longer", "make it longer", "make that longer", "elaborate", "expand", "go deeper", "more depth", "in more detail"]) {
+    if starts(&[
+        "more detail",
+        "more details",
+        "longer",
+        "make it longer",
+        "make that longer",
+        "elaborate",
+        "expand",
+        "go deeper",
+        "more depth",
+        "in more detail",
+    ]) {
         return Some(VoiceCommand::Detailed);
     }
     // Anything else is a free-form request, in the user's original words.
@@ -73,8 +144,15 @@ pub fn parse_voice_command(text: &str) -> Option<VoiceCommand> {
         .map(|(i, _)| i)
         .find(|&i| normalize(&original[i..]) == command)
         .unwrap_or(0);
-    let ask = original[start..].trim().trim_start_matches([',', ':', '-']).trim();
-    Some(VoiceCommand::Ask(if ask.is_empty() { command.to_string() } else { ask.to_string() }))
+    let ask = original[start..]
+        .trim()
+        .trim_start_matches([',', ':', '-'])
+        .trim();
+    Some(VoiceCommand::Ask(if ask.is_empty() {
+        command.to_string()
+    } else {
+        ask.to_string()
+    }))
 }
 
 #[cfg(test)]
@@ -91,12 +169,30 @@ mod tests {
 
     #[test]
     fn commands() {
-        assert_eq!(parse_voice_command("OpenMeet, explain that."), Some(VoiceCommand::Explain));
-        assert_eq!(parse_voice_command("Hey open meet, give me a follow-up"), Some(VoiceCommand::FollowUp));
-        assert_eq!(parse_voice_command("Open meat answer that"), Some(VoiceCommand::Answer));
-        assert_eq!(parse_voice_command("OpenMeet, make that concise please"), Some(VoiceCommand::Concise));
-        assert_eq!(parse_voice_command("Okay OpenMeet: more detail"), Some(VoiceCommand::Detailed));
-        assert_eq!(parse_voice_command("openmeat shorter"), Some(VoiceCommand::Concise));
+        assert_eq!(
+            parse_voice_command("OpenMeet, explain that."),
+            Some(VoiceCommand::Explain)
+        );
+        assert_eq!(
+            parse_voice_command("Hey open meet, give me a follow-up"),
+            Some(VoiceCommand::FollowUp)
+        );
+        assert_eq!(
+            parse_voice_command("Open meat answer that"),
+            Some(VoiceCommand::Answer)
+        );
+        assert_eq!(
+            parse_voice_command("OpenMeet, make that concise please"),
+            Some(VoiceCommand::Concise)
+        );
+        assert_eq!(
+            parse_voice_command("Okay OpenMeet: more detail"),
+            Some(VoiceCommand::Detailed)
+        );
+        assert_eq!(
+            parse_voice_command("openmeat shorter"),
+            Some(VoiceCommand::Concise)
+        );
     }
 
     #[test]
@@ -107,7 +203,9 @@ mod tests {
         );
         assert_eq!(
             parse_voice_command("Hey OpenMeet - Explain this architecture simply."),
-            Some(VoiceCommand::Ask("Explain this architecture simply.".into()))
+            Some(VoiceCommand::Ask(
+                "Explain this architecture simply.".into()
+            ))
         );
     }
 }

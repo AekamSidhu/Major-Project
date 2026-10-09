@@ -3,10 +3,8 @@
 
 use openmeet_core::providers::{VisionContext, VisionResult};
 
-use super::shared::{
-    DATA_RULE, assemble, block, one_line, question_line, sanitize, sanitize_line,
-};
 use super::PromptParts;
+use super::shared::{DATA_RULE, assemble, block, one_line, question_line, sanitize, sanitize_line};
 use crate::json::{first_json_object, get_str, get_str_list, strip_code_fences};
 use crate::text::{tail_to_tokens, truncate_to_tokens};
 
@@ -277,7 +275,9 @@ mod tests {
 
     #[test]
     fn parse_json_and_fallback() {
-        let r = parse("```json\n{\"description\": \"Architecture diagram: API → Queue → Workers → DB\", \"visible_text\": \"API\\nQueue\", \"content_type\": \"Architecture Diagram\", \"entities\": [\"API\", \"Queue\", \"api\"], \"application\": null}\n```");
+        let r = parse(
+            "```json\n{\"description\": \"Architecture diagram: API → Queue → Workers → DB\", \"visible_text\": \"API\\nQueue\", \"content_type\": \"Architecture Diagram\", \"entities\": [\"API\", \"Queue\", \"api\"], \"application\": null}\n```",
+        );
         assert_eq!(
             r.description,
             "Architecture diagram: API → Queue → Workers → DB"

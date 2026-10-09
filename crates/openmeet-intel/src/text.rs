@@ -62,36 +62,310 @@ pub fn normalize(text: &str) -> String {
 /// about", "how did you handle", "walk me through", …) so that paraphrases of
 /// the same question share the same content tokens.
 const STOP_WORDS: &[&str] = &[
-    "a", "about", "above", "across", "actually", "after", "again", "all", "almost", "already",
-    "also", "always", "am", "an", "and", "another", "any", "anybody", "anyone", "anything",
-    "approach", "are", "aren't", "around", "as", "ask", "asked", "at", "basically", "be",
-    "became", "because", "become", "becomes", "becoming", "been", "before", "being", "between",
-    "bit", "both", "but", "by", "can", "can't", "cannot", "could", "couldn't", "currently", "d",
-    "deal", "dealt", "describe", "did", "didn't", "do", "does", "doesn't", "doing", "don't",
-    "done", "during", "each", "either", "else", "even", "ever", "every", "everyone",
-    "everything", "exactly", "example", "examples", "explain", "few", "for", "from", "generally",
-    "get", "gets", "getting", "give", "given", "go", "goes", "going", "gone", "got", "gotten",
-    "guess", "had", "handle", "has", "hasn't", "have", "haven't", "having", "he", "her", "here",
-    "hers", "him", "his", "how", "however", "i", "if", "in", "into", "is", "isn't", "it", "its",
-    "itself", "just", "kind", "kinds", "know", "knew", "known", "let", "lets", "like", "ll",
-    "look", "looking", "lot", "lots", "m", "made", "make", "makes", "making", "many", "may",
-    "maybe", "me", "mean", "meant", "might", "mine", "more", "most", "much", "must", "my",
-    "myself", "need", "needs", "neither", "never", "no", "nor", "not", "now", "o", "of", "off",
-    "often", "ok", "okay", "on", "once", "one", "ones", "only", "onto", "or", "other", "others",
-    "our", "ours", "ourselves", "out", "over", "overall", "own", "particular", "perhaps",
-    "please", "pretty", "probably", "quite", "rather", "re", "really", "right", "s", "said",
-    "same", "say", "says", "see", "seen", "share", "she", "should", "shouldn't", "so", "some",
-    "somebody", "someone", "something", "sometimes", "sort", "specific", "specifically",
-    "still", "stuff", "such", "sure", "t", "tackle", "take", "talk", "tell", "than", "thank",
-    "thanks", "that", "the", "their", "theirs", "them", "themselves", "then", "there", "these",
-    "they", "thing", "things", "think", "this", "those", "though", "thought", "through", "time",
-    "times", "to", "too", "took", "tried", "try", "trying", "type", "types", "uh", "um", "under",
-    "up", "us", "use", "used", "uses", "using", "usually", "ve", "very", "via", "walk", "want",
-    "wanted", "was", "wasn't", "way", "ways", "we", "well", "went", "were", "weren't", "what",
-    "whatever", "when", "where", "whether", "which", "while", "who", "whom", "whose", "why",
-    "will", "with", "within", "without", "won't", "would", "wouldn't", "yeah", "yes", "yet",
-    "you", "your", "yours", "yourself", "yourselves", "question", "questions", "able",
-    "thinking", "happened", "explanation",
+    "a",
+    "about",
+    "above",
+    "across",
+    "actually",
+    "after",
+    "again",
+    "all",
+    "almost",
+    "already",
+    "also",
+    "always",
+    "am",
+    "an",
+    "and",
+    "another",
+    "any",
+    "anybody",
+    "anyone",
+    "anything",
+    "approach",
+    "are",
+    "aren't",
+    "around",
+    "as",
+    "ask",
+    "asked",
+    "at",
+    "basically",
+    "be",
+    "became",
+    "because",
+    "become",
+    "becomes",
+    "becoming",
+    "been",
+    "before",
+    "being",
+    "between",
+    "bit",
+    "both",
+    "but",
+    "by",
+    "can",
+    "can't",
+    "cannot",
+    "could",
+    "couldn't",
+    "currently",
+    "d",
+    "deal",
+    "dealt",
+    "describe",
+    "did",
+    "didn't",
+    "do",
+    "does",
+    "doesn't",
+    "doing",
+    "don't",
+    "done",
+    "during",
+    "each",
+    "either",
+    "else",
+    "even",
+    "ever",
+    "every",
+    "everyone",
+    "everything",
+    "exactly",
+    "example",
+    "examples",
+    "explain",
+    "few",
+    "for",
+    "from",
+    "generally",
+    "get",
+    "gets",
+    "getting",
+    "give",
+    "given",
+    "go",
+    "goes",
+    "going",
+    "gone",
+    "got",
+    "gotten",
+    "guess",
+    "had",
+    "handle",
+    "has",
+    "hasn't",
+    "have",
+    "haven't",
+    "having",
+    "he",
+    "her",
+    "here",
+    "hers",
+    "him",
+    "his",
+    "how",
+    "however",
+    "i",
+    "if",
+    "in",
+    "into",
+    "is",
+    "isn't",
+    "it",
+    "its",
+    "itself",
+    "just",
+    "kind",
+    "kinds",
+    "know",
+    "knew",
+    "known",
+    "let",
+    "lets",
+    "like",
+    "ll",
+    "look",
+    "looking",
+    "lot",
+    "lots",
+    "m",
+    "made",
+    "make",
+    "makes",
+    "making",
+    "many",
+    "may",
+    "maybe",
+    "me",
+    "mean",
+    "meant",
+    "might",
+    "mine",
+    "more",
+    "most",
+    "much",
+    "must",
+    "my",
+    "myself",
+    "need",
+    "needs",
+    "neither",
+    "never",
+    "no",
+    "nor",
+    "not",
+    "now",
+    "o",
+    "of",
+    "off",
+    "often",
+    "ok",
+    "okay",
+    "on",
+    "once",
+    "one",
+    "ones",
+    "only",
+    "onto",
+    "or",
+    "other",
+    "others",
+    "our",
+    "ours",
+    "ourselves",
+    "out",
+    "over",
+    "overall",
+    "own",
+    "particular",
+    "perhaps",
+    "please",
+    "pretty",
+    "probably",
+    "quite",
+    "rather",
+    "re",
+    "really",
+    "right",
+    "s",
+    "said",
+    "same",
+    "say",
+    "says",
+    "see",
+    "seen",
+    "share",
+    "she",
+    "should",
+    "shouldn't",
+    "so",
+    "some",
+    "somebody",
+    "someone",
+    "something",
+    "sometimes",
+    "sort",
+    "specific",
+    "specifically",
+    "still",
+    "stuff",
+    "such",
+    "sure",
+    "t",
+    "tackle",
+    "take",
+    "talk",
+    "tell",
+    "than",
+    "thank",
+    "thanks",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "themselves",
+    "then",
+    "there",
+    "these",
+    "they",
+    "thing",
+    "things",
+    "think",
+    "this",
+    "those",
+    "though",
+    "thought",
+    "through",
+    "time",
+    "times",
+    "to",
+    "too",
+    "took",
+    "tried",
+    "try",
+    "trying",
+    "type",
+    "types",
+    "uh",
+    "um",
+    "under",
+    "up",
+    "us",
+    "use",
+    "used",
+    "uses",
+    "using",
+    "usually",
+    "ve",
+    "very",
+    "via",
+    "walk",
+    "want",
+    "wanted",
+    "was",
+    "wasn't",
+    "way",
+    "ways",
+    "we",
+    "well",
+    "went",
+    "were",
+    "weren't",
+    "what",
+    "whatever",
+    "when",
+    "where",
+    "whether",
+    "which",
+    "while",
+    "who",
+    "whom",
+    "whose",
+    "why",
+    "will",
+    "with",
+    "within",
+    "without",
+    "won't",
+    "would",
+    "wouldn't",
+    "yeah",
+    "yes",
+    "yet",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+    "question",
+    "questions",
+    "able",
+    "thinking",
+    "happened",
+    "explanation",
 ];
 
 static STOP_SET: LazyLock<HashSet<&'static str>> =
@@ -250,7 +524,11 @@ fn is_vowel(c: u8) -> bool {
 
 fn strip_suffix_min<'a>(w: &'a str, suffix: &str, min_rest: usize) -> Option<&'a str> {
     let rest = w.strip_suffix(suffix)?;
-    if rest.len() >= min_rest { Some(rest) } else { None }
+    if rest.len() >= min_rest {
+        Some(rest)
+    } else {
+        None
+    }
 }
 
 /// Light English stemmer: inflectional suffixes first (`-s`, `-es`, `-ies`,
@@ -322,11 +600,7 @@ pub fn stem(word: &str) -> String {
             && !matches!(b[n - 1], b'l' | b's' | b'z')
         {
             w.truncate(n - 1);
-        } else if w.ends_with("at")
-            || w.ends_with("bl")
-            || w.ends_with("iz")
-            || w.ends_with("nc")
-        {
+        } else if w.ends_with("at") || w.ends_with("bl") || w.ends_with("iz") || w.ends_with("nc") {
             w.push('e');
         }
     }
@@ -455,7 +729,10 @@ pub fn content_tokens(text: &str) -> Vec<String> {
         if s.chars().count() < 2 && !s.chars().all(|c| c.is_ascii_digit()) {
             continue;
         }
-        let s = POST_STEM.get(s.as_str()).map(|c| c.to_string()).unwrap_or(s);
+        let s = POST_STEM
+            .get(s.as_str())
+            .map(|c| c.to_string())
+            .unwrap_or(s);
         out.push(s);
     }
     out
@@ -566,7 +843,11 @@ pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
 /// text.
 pub fn estimate_tokens(text: &str) -> usize {
     let chars = text.chars().count();
-    if chars == 0 { 0 } else { chars.div_ceil(4).max(1) }
+    if chars == 0 {
+        0
+    } else {
+        chars.div_ceil(4).max(1)
+    }
 }
 
 /// Keeps the start of `text` within `max_tokens`, cutting at a word boundary
@@ -625,7 +906,10 @@ fn is_abbreviation(chars: &[char], dot_index: usize) -> bool {
     while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '.') {
         start -= 1;
     }
-    let word: String = chars[start..dot_index].iter().collect::<String>().to_lowercase();
+    let word: String = chars[start..dot_index]
+        .iter()
+        .collect::<String>()
+        .to_lowercase();
     if word.is_empty() {
         return false;
     }
@@ -670,7 +954,10 @@ pub fn split_sentences(text: &str) -> Vec<String> {
             // Absorb runs of terminal punctuation and closing quotes/brackets.
             let mut j = i + 1;
             while j < chars.len()
-                && matches!(chars[j], '.' | '!' | '?' | '…' | '"' | '\'' | ')' | ']' | '”' | '’')
+                && matches!(
+                    chars[j],
+                    '.' | '!' | '?' | '…' | '"' | '\'' | ')' | ']' | '”' | '’'
+                )
             {
                 current.push(chars[j]);
                 j += 1;
@@ -950,7 +1237,13 @@ mod tests {
         for w in ["caching", "cached", "caches", "cache"] {
             assert_eq!(stem(w), "cach", "{w}");
         }
-        for w in ["migrated", "migration", "migrating", "migrate", "migrations"] {
+        for w in [
+            "migrated",
+            "migration",
+            "migrating",
+            "migrate",
+            "migrations",
+        ] {
             assert_eq!(stem(w), "migr", "{w}");
         }
         for w in ["latency", "latencies"] {
@@ -988,8 +1281,14 @@ mod tests {
 
     #[test]
     fn content_tokens_drop_scaffolding_and_unify_synonyms() {
-        assert_eq!(content_tokens("How did you scale the API?"), vec!["scal", "api"]);
-        assert_eq!(content_tokens("How did you handle API scaling?"), vec!["api", "scal"]);
+        assert_eq!(
+            content_tokens("How did you scale the API?"),
+            vec!["scal", "api"]
+        );
+        assert_eq!(
+            content_tokens("How did you handle API scaling?"),
+            vec!["api", "scal"]
+        );
         assert_eq!(
             content_tokens("Tell me about the DB you used"),
             vec!["databas"]
@@ -1020,10 +1319,7 @@ mod tests {
                 "What happens if Redis goes down?",
                 "How do you handle Redis failures?",
             ),
-            (
-                "Why did you choose Kafka?",
-                "What made you pick Kafka?",
-            ),
+            ("Why did you choose Kafka?", "What made you pick Kafka?"),
             (
                 "How do you monitor the pipeline?",
                 "What observability do you have for the pipeline?",
@@ -1101,7 +1397,11 @@ mod tests {
         assert_eq!(word_count(""), 0);
         assert_eq!(
             split_sentences("Latency dropped to 120 ms. I led it. Ms. Smith agreed."),
-            vec!["Latency dropped to 120 ms.", "I led it.", "Ms. Smith agreed."]
+            vec![
+                "Latency dropped to 120 ms.",
+                "I led it.",
+                "Ms. Smith agreed."
+            ]
         );
         assert_eq!(
             split_sentences("We use Redis. How do you scale it? Great!"),
@@ -1109,7 +1409,10 @@ mod tests {
         );
         assert_eq!(
             split_sentences("Latency went from 3.5 s to 1.2 s, e.g. on bit.ly links. Next"),
-            vec!["Latency went from 3.5 s to 1.2 s, e.g. on bit.ly links.", "Next"]
+            vec![
+                "Latency went from 3.5 s to 1.2 s, e.g. on bit.ly links.",
+                "Next"
+            ]
         );
         assert_eq!(
             split_sentences("so how would you design it"),
@@ -1119,7 +1422,10 @@ mod tests {
             split_sentences("Really?! Yes...\nNew line"),
             vec!["Really?!", "Yes...", "New line"]
         );
-        assert_eq!(split_sentences("Talk to Dr. Smith about it."), vec!["Talk to Dr. Smith about it."]);
+        assert_eq!(
+            split_sentences("Talk to Dr. Smith about it."),
+            vec!["Talk to Dr. Smith about it."]
+        );
         assert!(split_sentences("   ").is_empty());
     }
 
@@ -1166,7 +1472,10 @@ mod tests {
         assert!(idx.is_empty());
         idx.add("s1", "We store rate limit counters in Redis with a TTL.");
         idx.add("s2", "The frontend is written in React.");
-        idx.add("s3", "Redis replication lag caused stale counters during failover.");
+        idx.add(
+            "s3",
+            "Redis replication lag caused stale counters during failover.",
+        );
         assert_eq!(idx.len(), 3);
         let hits = idx.search("How are the Redis counters stored?", 5);
         assert!(!hits.is_empty());

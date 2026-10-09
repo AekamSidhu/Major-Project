@@ -132,10 +132,8 @@ pub fn build(
         .filter(|q| !q.is_empty())
         .unwrap_or_else(|| NO_QUESTION.to_string());
     let q_line = question_line(&question);
-    let reserved = estimate_tokens(&header)
-        + estimate_tokens(&previous_block)
-        + estimate_tokens(&q_line)
-        + 12;
+    let reserved =
+        estimate_tokens(&header) + estimate_tokens(&previous_block) + estimate_tokens(&q_line) + 12;
     let context = render_context(ctx, budget_tokens.saturating_sub(reserved));
     PromptParts {
         id: ID,
@@ -204,7 +202,11 @@ mod tests {
         );
         assert!(p.system.contains("[[BASIS]]"));
         assert!(p.system.contains("not step-by-step reasoning"));
-        assert!(extract_question(&p.user).unwrap().starts_with("(not recorded"));
+        assert!(
+            extract_question(&p.user)
+                .unwrap()
+                .starts_with("(not recorded")
+        );
     }
 
     #[test]

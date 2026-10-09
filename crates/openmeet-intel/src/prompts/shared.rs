@@ -434,9 +434,7 @@ pub(crate) fn extract_block(text: &str, tag: &str) -> Option<String> {
         let start = search + rel;
         let after = &text[start + open.len()..];
         // Must be followed by '>' or an attribute list.
-        let Some(first) = after.chars().next() else {
-            return None;
-        };
+        let first = after.chars().next()?;
         if first == '>' || first == ' ' {
             let gt = after.find('>')?;
             let body_start = start + open.len() + gt + 1;
@@ -477,18 +475,6 @@ pub(crate) fn extract_field(text: &str, label: &str) -> Option<String> {
 // ---------------------------------------------------------------------------
 // [[SECTION]] parsing
 // ---------------------------------------------------------------------------
-
-/// Known section markers.
-pub(crate) const SECTION_NAMES: &[&str] = &[
-    "STRUCTURE",
-    "ANSWER",
-    "KEY_POINTS",
-    "EXAMPLE",
-    "FOLLOW_UP",
-    "BASIS",
-    "CAVEAT",
-    "CLARIFY",
-];
 
 fn canonical_section(raw: &str) -> Option<&'static str> {
     let norm: String = raw

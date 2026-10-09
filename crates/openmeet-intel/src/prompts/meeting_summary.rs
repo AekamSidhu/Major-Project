@@ -7,9 +7,7 @@
 use std::sync::LazyLock;
 
 use openmeet_core::ids::now_ms;
-use openmeet_core::types::{
-    Claim, InterviewerSummary, MeetingSummary, Mode, Topic, TopicStatus,
-};
+use openmeet_core::types::{Claim, InterviewerSummary, MeetingSummary, Mode, Topic, TopicStatus};
 use regex::Regex;
 use serde_json::{Map, Value};
 
@@ -96,7 +94,10 @@ fn list_block(tag: &str, header: &str, items: &[String], cap_tokens: usize) -> S
     let mut lines: Vec<String> = Vec::new();
     let mut used = 0usize;
     for item in items {
-        let line = format!("- {}", truncate_to_tokens(&sanitize_line(item), ITEM_TOKENS));
+        let line = format!(
+            "- {}",
+            truncate_to_tokens(&sanitize_line(item), ITEM_TOKENS)
+        );
         if line.trim() == "-" {
             continue;
         }
@@ -225,7 +226,11 @@ pub fn build(input: &SummaryInput, budget_tokens: usize) -> PromptParts {
             "meeting",
             &format!(
                 "Title: {}\n{}",
-                if title.is_empty() { "Untitled meeting" } else { &title },
+                if title.is_empty() {
+                    "Untitled meeting"
+                } else {
+                    &title
+                },
                 mode_line(mode)
             )
         )
@@ -236,7 +241,10 @@ pub fn build(input: &SummaryInput, budget_tokens: usize) -> PromptParts {
     } else {
         format!(
             "Summary of the early part of the meeting:\n{}",
-            block("summary", &truncate_to_tokens(summary_text.trim(), budget / 6))
+            block(
+                "summary",
+                &truncate_to_tokens(summary_text.trim(), budget / 6)
+            )
         )
     };
     let small = budget / 10;
@@ -365,9 +373,7 @@ pub fn parse(
     }
     let overview = match get(&obj, &["overview", "summary"]) {
         Some(Value::String(s)) => strip_evaluative_sentences(&one_line(s)),
-        Some(v @ Value::Array(_)) => {
-            strip_evaluative_sentences(&value_to_str_list(v).join(" "))
-        }
+        Some(v @ Value::Array(_)) => strip_evaluative_sentences(&value_to_str_list(v).join(" ")),
         _ => String::new(),
     };
     let interviewer = match mode {
@@ -400,7 +406,12 @@ pub fn parse(
         technical_topics: list(&obj, &["technicalTopics", "technologies"]),
         follow_up_suggestions: list(
             &obj,
-            &["followUpSuggestions", "followUps", "followups", "suggestions"],
+            &[
+                "followUpSuggestions",
+                "followUps",
+                "followups",
+                "suggestions",
+            ],
         ),
         interviewer,
         markdown: String::new(),
@@ -571,7 +582,11 @@ mod tests {
                 .unwrap()
                 .contains("[00:05] Candidate: I'd use Redis")
         );
-        assert!(extract_block(&p.user, "meeting").unwrap().contains("Backend interview"));
+        assert!(
+            extract_block(&p.user, "meeting")
+                .unwrap()
+                .contains("Backend interview")
+        );
         assert!(extract_question(&p.user).is_some());
         let cand = build(&input(Mode::Candidate, &t, &q, &c), 9000);
         assert!(!cand.system.contains("claimsToVerify"));
@@ -580,10 +595,20 @@ mod tests {
     #[test]
     fn long_transcripts_keep_head_and_tail_within_budget() {
         let t: Vec<TranscriptLine> = (0..3000)
-            .map(|i| line("Speaker", &format!("statement number {i} about the system"), i * 1000))
+            .map(|i| {
+                line(
+                    "Speaker",
+                    &format!("statement number {i} about the system"),
+                    i * 1000,
+                )
+            })
             .collect();
         let p = build(&input(Mode::Candidate, &t, &[], &[]), 4000);
-        assert!(estimate_tokens(&p.user) <= 4200, "{}", estimate_tokens(&p.user));
+        assert!(
+            estimate_tokens(&p.user) <= 4200,
+            "{}",
+            estimate_tokens(&p.user)
+        );
         assert!(p.user.contains("statement number 0 "));
         assert!(p.user.contains("statement number 2999"));
         assert!(p.user.contains("lines omitted"));

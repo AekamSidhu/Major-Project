@@ -79,7 +79,10 @@ pub fn build(ctx: &PromptContext, user_prompt: &str, budget_tokens: usize) -> Pr
         rules(ctx.mode),
         format_rules(),
     ]);
-    let header = format!("{}\nRequest: direct question to OpenMeet", mode_line(ctx.mode));
+    let header = format!(
+        "{}\nRequest: direct question to OpenMeet",
+        mode_line(ctx.mode)
+    );
     let q_line = question_line(&request);
     let reserved = estimate_tokens(&header) + estimate_tokens(&q_line) + 8;
     let context = render_context(ctx, budget_tokens.saturating_sub(reserved));

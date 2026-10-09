@@ -21,15 +21,15 @@
 #![forbid(unsafe_code)]
 
 pub mod claims;
-// pub mod demo;
+pub mod demo;
 pub mod detect;
-// pub mod export;
-// pub mod mock;
+pub mod export;
+pub mod mock;
 pub mod prompts;
 pub mod text;
-// pub mod topics;
+pub mod topics;
 pub mod vad;
-// pub mod vision;
+pub mod vision;
 
 mod json;
 mod lexicon;

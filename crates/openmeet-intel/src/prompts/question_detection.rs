@@ -175,7 +175,11 @@ mod tests {
             text: "Next question.".into(),
             at_ms: 61_000,
         }];
-        let p = build("how would you shard the users table", &recent, Mode::Candidate);
+        let p = build(
+            "how would you shard the users table",
+            &recent,
+            Mode::Candidate,
+        );
         assert_eq!(p.id, ID);
         assert!(p.system.contains("is_question"));
         assert!(p.system.contains("reported speech"));
