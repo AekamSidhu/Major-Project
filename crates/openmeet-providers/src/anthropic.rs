@@ -101,13 +101,21 @@ impl ModelRules {
             "opus" => ModelRules {
                 sampling: below((4, 7)),
                 effort: at_least((4, 6)),
-                thinking_headroom: if at_least((5, 0)) { THINKING_HEADROOM_TOKENS } else { 0 },
+                thinking_headroom: if at_least((5, 0)) {
+                    THINKING_HEADROOM_TOKENS
+                } else {
+                    0
+                },
                 refusal_fallbacks: major_is(5),
             },
             "sonnet" => ModelRules {
                 sampling: below((5, 0)),
                 effort: at_least((4, 6)),
-                thinking_headroom: if at_least((5, 0)) { THINKING_HEADROOM_TOKENS } else { 0 },
+                thinking_headroom: if at_least((5, 0)) {
+                    THINKING_HEADROOM_TOKENS
+                } else {
+                    0
+                },
                 refusal_fallbacks: version == Some((5, 5)),
             },
             "haiku" => ModelRules {
@@ -119,7 +127,11 @@ impl ModelRules {
             _ => ModelRules {
                 sampling: below((4, 7)),
                 effort: false,
-                thinking_headroom: if at_least((5, 0)) { THINKING_HEADROOM_TOKENS } else { 0 },
+                thinking_headroom: if at_least((5, 0)) {
+                    THINKING_HEADROOM_TOKENS
+                } else {
+                    0
+                },
                 refusal_fallbacks: false,
             },
         }
@@ -143,12 +155,18 @@ fn parse_model_id(model: &str) -> Option<ModelId> {
         .split(['-', '@', ':', '[', ']'])
         .filter(|t| !t.is_empty())
         .collect();
-    let small_number = |t: &&str| t.len() <= 2 && t.chars().all(|c| c.is_ascii_digit());
-    let first = tokens.first()?;
-    if small_number(first) {
-        let major: u32 = first.parse().ok()?;
-        let (minor, family_at) = match tokens.get(1).filter(small_number) {
-            Some(m) => (m.parse().ok()?, 2),
+    // Version components are 1–2 digits; longer numbers are dates.
+    let number_at = |i: usize| -> Option<u32> {
+        tokens
+            .get(i)
+            .copied()
+            .filter(|t| !t.is_empty() && t.len() <= 2 && t.chars().all(|c| c.is_ascii_digit()))
+            .and_then(|t| t.parse().ok())
+    };
+    let first = *tokens.first()?;
+    if let Some(major) = number_at(0) {
+        let (minor, family_at) = match number_at(1) {
+            Some(minor) => (minor, 2),
             None => (0, 1),
         };
         let family = tokens.get(family_at)?.to_string();
@@ -157,20 +175,11 @@ fn parse_model_id(model: &str) -> Option<ModelId> {
             version: Some((major, minor)),
         });
     }
-    let family = first.to_string();
-    let version = match tokens.get(1).filter(small_number) {
-        Some(major) => {
-            let major: u32 = major.parse().ok()?;
-            let minor = tokens
-                .get(2)
-                .filter(small_number)
-                .and_then(|m| m.parse().ok())
-                .unwrap_or(0);
-            Some((major, minor))
-        }
-        None => None,
-    };
-    Some(ModelId { family, version })
+    let version = number_at(1).map(|major| (major, number_at(2).unwrap_or(0)));
+    Some(ModelId {
+        family: first.to_string(),
+        version,
+    })
 }
 
 /// Parameters of one request attempt.
@@ -315,13 +324,15 @@ impl AnthropicLlm {
             quirks.no_temperature = true;
             return Some(next);
         }
-        if params.effort.is_some() && (message.contains("output_config") || message.contains("effort"))
+        if params.effort.is_some()
+            && (message.contains("output_config") || message.contains("effort"))
         {
             next.effort = None;
             quirks.no_effort = true;
             return Some(next);
         }
-        if params.fallbacks && (message.contains("fallback") || message.contains("anthropic-beta")) {
+        if params.fallbacks && (message.contains("fallback") || message.contains("anthropic-beta"))
+        {
             next.fallbacks = false;
             quirks.no_fallbacks = true;
             return Some(next);
@@ -386,7 +397,11 @@ fn render_messages(request: &LlmRequest) -> Vec<Value> {
                 }
                 images.extend(message.images.iter().cloned());
             }
-            _ => merged.push((message.role, message.content.clone(), message.images.clone())),
+            _ => merged.push((
+                message.role,
+                message.content.clone(),
+                message.images.clone(),
+            )),
         }
     }
     merged
@@ -530,12 +545,11 @@ impl AnthropicDecoder {
     }
 
     fn finish_ok(&mut self, out: &mut ChunkQueue) {
-        let usage = (self.input_tokens.is_some() || self.output_tokens.is_some()).then(|| {
-            TokenUsage {
+        let usage =
+            (self.input_tokens.is_some() || self.output_tokens.is_some()).then(|| TokenUsage {
                 input_tokens: self.input_tokens.unwrap_or(0),
                 output_tokens: self.output_tokens.unwrap_or(0),
-            }
-        });
+            });
         out.push_back(Ok(LlmChunk::Done {
             stop_reason: self.stop_reason.clone(),
             usage,
@@ -565,7 +579,11 @@ impl AnthropicDecoder {
                     }
                 }
                 if let Some(served) = message.and_then(|m| m.get("model")).and_then(Value::as_str) {
-                    tracing::debug!(provider = PROVIDER_ID, served_model = served, "message started");
+                    tracing::debug!(
+                        provider = PROVIDER_ID,
+                        served_model = served,
+                        "message started"
+                    );
                 }
             }
             "content_block_start" => {
@@ -608,7 +626,11 @@ impl AnthropicDecoder {
                             .and_then(|s| s.get("category"))
                             .and_then(Value::as_str)
                             .unwrap_or("none");
-                        tracing::debug!(provider = PROVIDER_ID, category, "model declined the request");
+                        tracing::debug!(
+                            provider = PROVIDER_ID,
+                            category,
+                            "model declined the request"
+                        );
                     }
                 }
                 if let Some(usage) = value.get("usage") {
@@ -696,7 +718,22 @@ impl LlmProvider for AnthropicLlm {
         cancel: CancellationToken,
     ) -> Result<LlmStream, ProviderError> {
         if request.messages.is_empty() {
-            return Err(ProviderError::Other("the request contains no messages".to_string()));
+            return Err(ProviderError::Other(
+                "the request contains no messages".to_string(),
+            ));
+        }
+        // Messages must start with `user`; a trailing assistant turn would be
+        // a prefill, which current Claude models reject.
+        if request.messages.first().map(|m| m.role) != Some(ChatRole::User) {
+            return Err(ProviderError::Other(
+                "the conversation must start with a user message".to_string(),
+            ));
+        }
+        if request.messages.last().map(|m| m.role) == Some(ChatRole::Assistant) {
+            return Err(ProviderError::Unsupported(
+                "assistant prefill is not supported; the conversation must end with a user message"
+                    .to_string(),
+            ));
         }
         let started = Instant::now();
         let images: usize = request.messages.iter().map(|m| m.images.len()).sum();
@@ -775,9 +812,11 @@ impl LlmProvider for AnthropicLlm {
         if response.status().is_success() {
             return Ok(());
         }
-        Err(HttpFailure::read(response, &cancel, self.api_key.as_deref(), &self.host)
-            .await
-            .into_error())
+        Err(
+            HttpFailure::read(response, &cancel, self.api_key.as_deref(), &self.host)
+                .await
+                .into_error(),
+        )
     }
 
     async fn list_models(&self) -> Result<Vec<String>, ProviderError> {
@@ -793,22 +832,42 @@ impl LlmProvider for AnthropicLlm {
             let builder = self.request(Method::GET, &path)?;
             let response = send(builder, &cancel, self.timeouts.health, &self.host).await?;
             if !response.status().is_success() {
-                return Err(HttpFailure::read(response, &cancel, self.api_key.as_deref(), &self.host)
-                    .await
-                    .into_error());
+                return Err(HttpFailure::read(
+                    response,
+                    &cancel,
+                    self.api_key.as_deref(),
+                    &self.host,
+                )
+                .await
+                .into_error());
             }
-            let page: Value =
-                read_json(response, "model list", &cancel, self.timeouts.health, &self.host).await?;
+            let page: Value = read_json(
+                response,
+                "model list",
+                &cancel,
+                self.timeouts.health,
+                &self.host,
+            )
+            .await?;
             let data = page.get("data").and_then(Value::as_array).ok_or_else(|| {
                 ProviderError::InvalidResponse("the model list has no `data` array".to_string())
             })?;
-            for id in data.iter().filter_map(|m| m.get("id").and_then(Value::as_str)) {
+            for id in data
+                .iter()
+                .filter_map(|m| m.get("id").and_then(Value::as_str))
+            {
                 if !ids.iter().any(|existing| existing == id) {
                     ids.push(id.to_string());
                 }
             }
-            let has_more = page.get("has_more").and_then(Value::as_bool).unwrap_or(false);
-            after = page.get("last_id").and_then(Value::as_str).map(str::to_string);
+            let has_more = page
+                .get("has_more")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            after = page
+                .get("last_id")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             if !has_more || after.is_none() {
                 break;
             }
@@ -828,13 +887,31 @@ mod tests {
         let p = |m: &str| parse_model_id(m).map(|id| (id.family, id.version));
         assert_eq!(p("claude-opus-5-5"), Some(("opus".into(), Some((5, 5)))));
         assert_eq!(p("claude-opus-5"), Some(("opus".into(), Some((5, 0)))));
-        assert_eq!(p("claude-sonnet-4-5-20250929"), Some(("sonnet".into(), Some((4, 5)))));
-        assert_eq!(p("claude-opus-4-20250514"), Some(("opus".into(), Some((4, 0)))));
-        assert_eq!(p("claude-3-7-sonnet-latest"), Some(("sonnet".into(), Some((3, 7)))));
-        assert_eq!(p("claude-3-haiku-20240307"), Some(("haiku".into(), Some((3, 0)))));
+        assert_eq!(
+            p("claude-sonnet-4-5-20250929"),
+            Some(("sonnet".into(), Some((4, 5))))
+        );
+        assert_eq!(
+            p("claude-opus-4-20250514"),
+            Some(("opus".into(), Some((4, 0))))
+        );
+        assert_eq!(
+            p("claude-3-7-sonnet-latest"),
+            Some(("sonnet".into(), Some((3, 7))))
+        );
+        assert_eq!(
+            p("claude-3-haiku-20240307"),
+            Some(("haiku".into(), Some((3, 0))))
+        );
         assert_eq!(p("claude-mythos-preview"), Some(("mythos".into(), None)));
-        assert_eq!(p("anthropic/claude-haiku-4-5"), Some(("haiku".into(), Some((4, 5)))));
-        assert_eq!(p("claude-opus-4-5@20251101"), Some(("opus".into(), Some((4, 5)))));
+        assert_eq!(
+            p("anthropic/claude-haiku-4-5"),
+            Some(("haiku".into(), Some((4, 5))))
+        );
+        assert_eq!(
+            p("claude-opus-4-5@20251101"),
+            Some(("opus".into(), Some((4, 5))))
+        );
         assert_eq!(p("gpt-4o"), None);
     }
 
@@ -879,23 +956,50 @@ mod tests {
         ] {
             assert!(ModelRules::for_model(m).effort, "{m}");
         }
-        for m in ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5", "claude-3-7-sonnet-latest"] {
+        for m in [
+            "claude-haiku-4-5",
+            "claude-sonnet-4-5",
+            "claude-opus-4-5",
+            "claude-3-7-sonnet-latest",
+        ] {
             assert!(!ModelRules::for_model(m).effort, "{m}");
         }
     }
 
     #[test]
     fn headroom_and_fallback_rules() {
-        for m in ["claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-sonnet-5", "claude-fable-5-1", "claude-mythos-5-1"] {
-            assert_eq!(ModelRules::for_model(m).thinking_headroom, THINKING_HEADROOM_TOKENS, "{m}");
+        for m in [
+            "claude-opus-5",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-sonnet-5",
+            "claude-fable-5-1",
+            "claude-mythos-5-1",
+        ] {
+            assert_eq!(
+                ModelRules::for_model(m).thinking_headroom,
+                THINKING_HEADROOM_TOKENS,
+                "{m}"
+            );
         }
         for m in ["claude-opus-4-8", "claude-opus-4-6", "claude-haiku-4-5"] {
             assert_eq!(ModelRules::for_model(m).thinking_headroom, 0, "{m}");
         }
-        for m in ["claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-sonnet-5-5"] {
+        for m in [
+            "claude-opus-5",
+            "claude-opus-5-5",
+            "claude-fable-5",
+            "claude-fable-5-1",
+            "claude-sonnet-5-5",
+        ] {
             assert!(ModelRules::for_model(m).refusal_fallbacks, "{m}");
         }
-        for m in ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5", "claude-mythos-5-1"] {
+        for m in [
+            "claude-sonnet-5",
+            "claude-opus-4-8",
+            "claude-haiku-4-5",
+            "claude-mythos-5-1",
+        ] {
             assert!(!ModelRules::for_model(m).refusal_fallbacks, "{m}");
         }
     }
@@ -920,7 +1024,15 @@ mod tests {
     fn params_and_body() {
         let opus = llm("claude-opus-5-5");
         let p = opus.params_for(&request(true));
-        assert_eq!(p, Params { max_tokens: 5000, temperature: None, effort: Some("low"), fallbacks: true });
+        assert_eq!(
+            p,
+            Params {
+                max_tokens: 5000,
+                temperature: None,
+                effort: Some("low"),
+                fallbacks: true
+            }
+        );
         let body = request_body("claude-opus-5-5", &request(true), &p);
         assert_eq!(body["fallbacks"], "default");
         assert_eq!(body["output_config"]["effort"], "low");
@@ -930,7 +1042,15 @@ mod tests {
 
         let haiku = llm("claude-haiku-4-5").with_reasoning_effort(ReasoningEffort::High);
         let p = haiku.params_for(&request(false));
-        assert_eq!(p, Params { max_tokens: 1000, temperature: Some(1.0), effort: None, fallbacks: false });
+        assert_eq!(
+            p,
+            Params {
+                max_tokens: 1000,
+                temperature: Some(1.0),
+                effort: None,
+                fallbacks: false
+            }
+        );
 
         let sonnet46 = llm("claude-sonnet-4-6").with_reasoning_effort(ReasoningEffort::Medium);
         let p = sonnet46.params_for(&request(false));
@@ -964,16 +1084,26 @@ mod tests {
     fn downgrades() {
         let l = llm("claude-opus-5-5");
         let p = l.params_for(&request(true));
-        let next = l.downgrade(&p, "fallbacks: extra inputs are not permitted").unwrap();
+        let next = l
+            .downgrade(&p, "fallbacks: extra inputs are not permitted")
+            .unwrap();
         assert!(!next.fallbacks);
         assert!(!l.params_for(&request(true)).fallbacks);
-        let next = l.downgrade(&next, "output_config.effort: unexpected value").unwrap();
+        let next = l
+            .downgrade(&next, "output_config.effort: unexpected value")
+            .unwrap();
         assert_eq!(next.effort, None);
         let next = l
-            .downgrade(&next, "max_tokens: 5000 > 4096, which is the maximum allowed number of output tokens")
+            .downgrade(
+                &next,
+                "max_tokens: 5000 > 4096, which is the maximum allowed number of output tokens",
+            )
             .unwrap();
         assert_eq!(next.max_tokens, 4096);
-        assert!(l.downgrade(&next, "messages: roles must alternate").is_none());
+        assert!(
+            l.downgrade(&next, "messages: roles must alternate")
+                .is_none()
+        );
     }
 
     #[test]

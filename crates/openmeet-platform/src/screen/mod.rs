@@ -36,8 +36,8 @@ use openmeet_core::types::{PrivacyRule, ScreenFrame};
 use openmeet_core::{new_id, now_ms};
 
 use self::capture::{
-    AppNameCache, CaptureOutcome, Captured, Capturer, MonitorGeometry, ensure_screen_permission, find_monitor,
-    parse_window_id, request_screen_permission_once, snapshot_windows, xcap_error,
+    AppNameCache, CaptureOutcome, Captured, Capturer, MonitorGeometry, ensure_screen_permission,
+    find_monitor, parse_window_id, request_screen_permission_once, snapshot_windows, xcap_error,
 };
 use self::diff::ChangeDetector;
 use self::rules::{excluded_by, normalize_app};
@@ -61,7 +61,9 @@ pub fn list_sources(rules: &[PrivacyRule]) -> Result<Vec<ScreenSourceInfo>, Plat
         let mut displays = Vec::with_capacity(monitors.len());
         for monitor in &monitors {
             let Ok(id) = monitor.id() else { continue };
-            let Ok(geo) = MonitorGeometry::of(monitor) else { continue };
+            let Ok(geo) = MonitorGeometry::of(monitor) else {
+                continue;
+            };
             let (width, height) = geo.pixel_size();
             displays.push(ScreenSourceInfo {
                 kind: ScreenSourceKind::Display,
@@ -213,7 +215,9 @@ impl ScreenSampler {
         let thread = std::thread::Builder::new()
             .name("openmeet-screen".to_string())
             .spawn(move || run_sampler(config, rx, on_frame, on_status))
-            .map_err(|e| PlatformError::Other(format!("could not start the screen sampler thread: {e}")))?;
+            .map_err(|e| {
+                PlatformError::Other(format!("could not start the screen sampler thread: {e}"))
+            })?;
         tracing::info!("screen sampler started");
         Ok(ScreenSampler {
             tx,
@@ -268,7 +272,9 @@ pub fn capture_once(
             CaptureOutcome::Frame(captured) => {
                 let mut detector = ChangeDetector::new(0.0);
                 let frame = finish_frame(captured, max_width, &mut detector, true, captured_at)?
-                    .ok_or_else(|| PlatformError::Other("manual capture produced no frame".into()))?;
+                    .ok_or_else(|| {
+                        PlatformError::Other("manual capture produced no frame".into())
+                    })?;
                 log_frame(&frame, started);
                 Ok(frame)
             }
@@ -286,12 +292,16 @@ fn preflight(spec: &ScreenSourceSpec, own_pid: u32) -> Result<(), PlatformError>
         #[cfg(windows)]
         let _dpi = crate::win::DpiAwareGuard::new();
         match spec.kind {
-            ScreenSourceKind::Display | ScreenSourceKind::Region => find_monitor(&spec.id).map(|_| ()),
+            ScreenSourceKind::Display | ScreenSourceKind::Region => {
+                find_monitor(&spec.id).map(|_| ())
+            }
             ScreenSourceKind::Window => {
                 let id = parse_window_id(&spec.id)?;
                 let windows = snapshot_windows(&mut AppNameCache::default())?;
                 match windows.iter().find(|w| w.meta.id == id) {
-                    None => Err(PlatformError::DeviceNotFound("The selected window is no longer open".into())),
+                    None => Err(PlatformError::DeviceNotFound(
+                        "The selected window is no longer open".into(),
+                    )),
                     Some(w) if w.meta.pid == own_pid => Err(PlatformError::Unsupported(
                         "OpenMeet's own windows cannot be used as a screen source".into(),
                     )),
@@ -308,7 +318,10 @@ fn preflight(spec: &ScreenSourceSpec, own_pid: u32) -> Result<(), PlatformError>
                 {
                     Ok(())
                 } else {
-                    Err(PlatformError::DeviceNotFound(format!("{} has no open windows", spec.id.trim())))
+                    Err(PlatformError::DeviceNotFound(format!(
+                        "{} has no open windows",
+                        spec.id.trim()
+                    )))
                 }
             }
         }

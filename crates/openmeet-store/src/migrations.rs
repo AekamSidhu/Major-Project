@@ -103,10 +103,7 @@ pub(crate) fn run_migrations(
                 ))
             })?;
         tx.commit().map_err(|e| {
-            StoreError::Migration(format!(
-                "cannot commit migration {}: {e}",
-                next.version
-            ))
+            StoreError::Migration(format!("cannot commit migration {}: {e}", next.version))
         })?;
         info!(
             version = next.version,

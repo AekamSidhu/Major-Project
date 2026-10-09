@@ -980,6 +980,36 @@ impl Engine {
         }
     }
 
+    /// Full record of the current (or just finished) meeting held in memory.
+    /// Used for history/export of meetings that are not persisted (retention
+    /// "do not retain", demo meetings).
+    pub fn current_record(&self, meeting_id: &str) -> Option<MeetingRecord> {
+        let st = self.inner.state.lock();
+        st.runtime
+            .as_ref()
+            .filter(|r| r.meeting.id == meeting_id)
+            .map(|r| r.to_record())
+    }
+
+    /// The in-memory meeting when it is not persisted to the database.
+    pub fn unpersisted_meeting(&self) -> Option<MeetingListItem> {
+        let st = self.inner.state.lock();
+        st.runtime
+            .as_ref()
+            .filter(|r| !r.meeting.persisted)
+            .map(|r| MeetingListItem {
+                id: r.meeting.id.clone(),
+                title: r.meeting.title.clone(),
+                mode: r.meeting.mode,
+                state: r.state(),
+                started_at: r.meeting.started_at,
+                ended_at: r.meeting.ended_at,
+                segment_count: r.segments.len() as u32,
+                question_count: r.questions.len() as u32,
+                has_summary: r.summary.is_some(),
+            })
+    }
+
     /// Generates a summary for a stored meeting (history view) and saves it.
     pub async fn summarize_record(&self, record: MeetingRecord) -> Result<MeetingSummary, CoreError> {
         let summary = crate::assist::summarize_record(self, &record).await;

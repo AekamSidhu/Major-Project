@@ -299,11 +299,12 @@ def create_app(
             "transcribed %.1fs audio in %.0f ms (%d chars)",
             len(audio) / 16000,
             (time.perf_counter() - started) * 1000,
-            len(result.text),
+            len(result.text.strip()),
         )
+        text = " ".join(result.text.split())
         if response_format == "text":
-            return JSONResponse(content=result.text)
-        body: dict[str, Any] = {"text": result.text}
+            return JSONResponse(content=text)
+        body: dict[str, Any] = {"text": text}
         if response_format == "verbose_json":
             body.update({"language": result.language, "duration": result.duration})
         if result.confidence is not None:

@@ -132,7 +132,10 @@ impl fmt::Debug for Endpoint {
 /// For loopback endpoints ([`ProviderLocation::Local`]) proxies are disabled
 /// (an `HTTP_PROXY` would otherwise route local traffic off the device) and
 /// host names must resolve to loopback addresses.
-pub fn client_builder(location: ProviderLocation, connect_timeout: Duration) -> reqwest::ClientBuilder {
+pub fn client_builder(
+    location: ProviderLocation,
+    connect_timeout: Duration,
+) -> reqwest::ClientBuilder {
     let builder = reqwest::Client::builder()
         .user_agent(USER_AGENT)
         .connect_timeout(connect_timeout)
@@ -192,7 +195,9 @@ impl reqwest::dns::Resolve for LoopbackOnlyResolver {
 /// Marks a header value as sensitive (excluded from debug output).
 pub(crate) fn sensitive_header(value: &str) -> Result<HeaderValue, ProviderError> {
     let mut v = HeaderValue::from_str(value).map_err(|_| {
-        ProviderError::NotConfigured("the API key contains characters that are not allowed".to_string())
+        ProviderError::NotConfigured(
+            "the API key contains characters that are not allowed".to_string(),
+        )
     })?;
     v.set_sensitive(true);
     Ok(v)
@@ -246,7 +251,9 @@ fn ends_with_version_segment(url: &str) -> bool {
 /// Error messages never echo the URL itself.
 pub fn validate_endpoint_url(url: &str, what: &str) -> Result<(), ProviderError> {
     if url.trim().is_empty() {
-        return Err(ProviderError::NotConfigured(format!("{what} base URL is not set")));
+        return Err(ProviderError::NotConfigured(format!(
+            "{what} base URL is not set"
+        )));
     }
     let parsed = reqwest::Url::parse(url)
         .map_err(|_| ProviderError::NotConfigured(format!("{what} base URL is not a valid URL")))?;
@@ -256,7 +263,9 @@ pub fn validate_endpoint_url(url: &str, what: &str) -> Result<(), ProviderError>
         )));
     }
     if parsed.host_str().is_none_or(str::is_empty) {
-        return Err(ProviderError::NotConfigured(format!("{what} base URL is missing a host")));
+        return Err(ProviderError::NotConfigured(format!(
+            "{what} base URL is missing a host"
+        )));
     }
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(ProviderError::NotConfigured(format!(
@@ -340,7 +349,10 @@ pub(crate) async fn read_body(
 }
 
 /// Parses JSON without ever echoing body content in the error.
-pub(crate) fn parse_json<T: DeserializeOwned>(bytes: &[u8], what: &str) -> Result<T, ProviderError> {
+pub(crate) fn parse_json<T: DeserializeOwned>(
+    bytes: &[u8],
+    what: &str,
+) -> Result<T, ProviderError> {
     serde_json::from_slice(bytes).map_err(|e| {
         ProviderError::InvalidResponse(format!(
             "could not parse the {what} response ({:?} error at line {}, column {})",
@@ -359,7 +371,15 @@ pub(crate) async fn read_json<T: DeserializeOwned>(
     timeout: Duration,
     host: &str,
 ) -> Result<T, ProviderError> {
-    let body = read_body(&mut response, MAX_JSON_BODY_BYTES, false, cancel, timeout, host).await?;
+    let body = read_body(
+        &mut response,
+        MAX_JSON_BODY_BYTES,
+        false,
+        cancel,
+        timeout,
+        host,
+    )
+    .await?;
     parse_json(&body, what)
 }
 
@@ -428,7 +448,9 @@ impl HttpFailure {
         match code {
             401 => ProviderError::Unauthorized(format!(
                 "401 {}",
-                self.message.as_deref().unwrap_or("invalid or missing API key")
+                self.message
+                    .as_deref()
+                    .unwrap_or("invalid or missing API key")
             )),
             403 => ProviderError::Unauthorized(format!(
                 "403 {}",
@@ -610,14 +632,12 @@ fn looks_like_secret(token: &str) -> bool {
         return true;
     }
     // Long random-looking runs (letters and digits, no separators).
-    token
-        .split(['-', '_', '.'])
-        .any(|run| {
-            run.len() >= 20
-                && run.chars().all(|c| c.is_ascii_alphanumeric())
-                && run.chars().any(|c| c.is_ascii_digit())
-                && run.chars().any(|c| c.is_ascii_alphabetic())
-        })
+    token.split(['-', '_', '.']).any(|run| {
+        run.len() >= 20
+            && run.chars().all(|c| c.is_ascii_alphanumeric())
+            && run.chars().any(|c| c.is_ascii_digit())
+            && run.chars().any(|c| c.is_ascii_alphabetic())
+    })
 }
 
 /// Truncates to `max` characters (on a char boundary), appending "…".
@@ -631,7 +651,12 @@ pub(crate) fn truncate_chars(s: &str, max: usize) -> String {
 /// Seconds to wait from `retry-after-ms` (OpenAI) or `Retry-After`
 /// (delta-seconds or an IMF-fixdate HTTP date).
 pub fn parse_retry_after(headers: &HeaderMap, now: SystemTime) -> Option<u64> {
-    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).map(str::trim);
+    let header = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(str::trim)
+    };
     if let Some(ms) = header("retry-after-ms").and_then(|v| v.parse::<f64>().ok()) {
         if ms.is_finite() && ms >= 0.0 {
             return Some((ms / 1000.0).ceil() as u64);
@@ -700,7 +725,12 @@ fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
 
 /// [`ProviderInfo`] for an endpoint; the location is derived from the actual
 /// base URL (a LAN host is `Remote`).
-pub(crate) fn provider_info(id: &str, display_name: &str, model: &str, base_url: &str) -> ProviderInfo {
+pub(crate) fn provider_info(
+    id: &str,
+    display_name: &str,
+    model: &str,
+    base_url: &str,
+) -> ProviderInfo {
     ProviderInfo {
         id: id.to_string(),
         display_name: display_name.to_string(),
@@ -761,12 +791,27 @@ mod tests {
     #[test]
     fn url_normalization() {
         assert_eq!(normalize_base_url(" http://h:1/ "), "http://h:1");
-        assert_eq!(root_url("http://localhost:1234/v1"), "http://localhost:1234");
-        assert_eq!(root_url("http://localhost:1234/v1/"), "http://localhost:1234");
+        assert_eq!(
+            root_url("http://localhost:1234/v1"),
+            "http://localhost:1234"
+        );
+        assert_eq!(
+            root_url("http://localhost:1234/v1/"),
+            "http://localhost:1234"
+        );
         assert_eq!(root_url("http://localhost:1234"), "http://localhost:1234");
-        assert_eq!(root_url("https://api.anthropic.com/V1"), "https://api.anthropic.com");
-        assert_eq!(openai_api_base("http://localhost:1234"), "http://localhost:1234/v1");
-        assert_eq!(openai_api_base("http://localhost:1234/v1/"), "http://localhost:1234/v1");
+        assert_eq!(
+            root_url("https://api.anthropic.com/V1"),
+            "https://api.anthropic.com"
+        );
+        assert_eq!(
+            openai_api_base("http://localhost:1234"),
+            "http://localhost:1234/v1"
+        );
+        assert_eq!(
+            openai_api_base("http://localhost:1234/v1/"),
+            "http://localhost:1234/v1"
+        );
         assert_eq!(
             openai_api_base("https://openrouter.ai/api/v1"),
             "https://openrouter.ai/api/v1"
@@ -806,13 +851,20 @@ mod tests {
         let dbg = format!("{e:?}");
         assert!(!dbg.contains("sk-test"), "{dbg}");
         assert!(dbg.contains("api.openai.com"));
-        assert_eq!(Endpoint::new("x").with_api_key(Some("  ".into())).api_key, None);
+        assert_eq!(
+            Endpoint::new("x").with_api_key(Some("  ".into())).api_key,
+            None
+        );
     }
 
     #[test]
     fn error_message_extraction() {
-        let openai = br#"{"error":{"message":"Incorrect API key provided","type":"invalid_request_error"}}"#;
-        assert_eq!(extract_error_message(openai).as_deref(), Some("Incorrect API key provided"));
+        let openai =
+            br#"{"error":{"message":"Incorrect API key provided","type":"invalid_request_error"}}"#;
+        assert_eq!(
+            extract_error_message(openai).as_deref(),
+            Some("Incorrect API key provided")
+        );
         let ollama = br#"{"error":"model \"llama3.2\" not found, try pulling it first"}"#;
         assert_eq!(
             extract_error_message(ollama).as_deref(),
@@ -822,9 +874,15 @@ mod tests {
         assert_eq!(extract_error_message(vllm).as_deref(), Some("bad thing"));
         let fastapi = br#"{"detail":[{"loc":["body","max_completion_tokens"],"msg":"Extra inputs are not permitted","input":"SECRET CONTENT"}]}"#;
         let m = extract_error_message(fastapi).unwrap();
-        assert_eq!(m, "body.max_completion_tokens: Extra inputs are not permitted");
+        assert_eq!(
+            m,
+            "body.max_completion_tokens: Extra inputs are not permitted"
+        );
         assert!(!m.contains("SECRET"));
-        assert_eq!(extract_error_message(br#"{"detail":"Not Found"}"#).as_deref(), Some("Not Found"));
+        assert_eq!(
+            extract_error_message(br#"{"detail":"Not Found"}"#).as_deref(),
+            Some("Not Found")
+        );
         assert_eq!(extract_error_message(b"<html>bad gateway</html>"), None);
         assert_eq!(extract_error_message(b""), None);
     }
@@ -861,7 +919,10 @@ mod tests {
         assert_eq!(parse_retry_after(&h, now), Some(7));
         h.insert(RETRY_AFTER, HeaderValue::from_static("1.5"));
         assert_eq!(parse_retry_after(&h, now), Some(2));
-        h.insert(RETRY_AFTER, HeaderValue::from_static("Sun, 06 Nov 1994 08:49:37 GMT"));
+        h.insert(
+            RETRY_AFTER,
+            HeaderValue::from_static("Sun, 06 Nov 1994 08:49:37 GMT"),
+        );
         assert_eq!(parse_retry_after(&h, now), Some(77));
         h.insert("retry-after-ms", HeaderValue::from_static("2500"));
         assert_eq!(parse_retry_after(&h, now), Some(3));
@@ -872,9 +933,15 @@ mod tests {
 
     #[test]
     fn http_dates() {
-        assert_eq!(parse_http_date("Sun, 06 Nov 1994 08:49:37 GMT"), Some(784_111_777));
+        assert_eq!(
+            parse_http_date("Sun, 06 Nov 1994 08:49:37 GMT"),
+            Some(784_111_777)
+        );
         assert_eq!(parse_http_date("Thu, 01 Jan 1970 00:00:00 GMT"), Some(0));
-        assert_eq!(parse_http_date("Tue, 29 Feb 2028 12:00:00 GMT"), Some(1_835_438_400));
+        assert_eq!(
+            parse_http_date("Tue, 29 Feb 2028 12:00:00 GMT"),
+            Some(1_835_438_400)
+        );
         assert_eq!(parse_http_date("Sun, 06 Foo 1994 08:49:37 GMT"), None);
         assert_eq!(parse_http_date("Sun, 06 Nov 1994 08:49:37 PST"), None);
         assert_eq!(parse_http_date("garbage"), None);
@@ -882,21 +949,28 @@ mod tests {
 
     #[test]
     fn status_mapping() {
-        let f = |status: u16, message: Option<&str>, retry: Option<u64>| HttpFailure {
-            status: StatusCode::from_u16(status).unwrap(),
-            message: message.map(str::to_string),
-            retry_after_secs: retry,
-        }
-        .into_error();
+        let f = |status: u16, message: Option<&str>, retry: Option<u64>| {
+            HttpFailure {
+                status: StatusCode::from_u16(status).unwrap(),
+                message: message.map(str::to_string),
+                retry_after_secs: retry,
+            }
+            .into_error()
+        };
         assert!(matches!(f(401, None, None), ProviderError::Unauthorized(_)));
-        assert!(matches!(f(403, Some("no access"), None), ProviderError::Unauthorized(m) if m == "403 no access"));
+        assert!(
+            matches!(f(403, Some("no access"), None), ProviderError::Unauthorized(m) if m == "403 no access")
+        );
         assert_eq!(
             f(429, Some("slow down"), Some(12)),
             ProviderError::RateLimited("429 slow down (retry after 12 s)".into())
         );
         assert_eq!(f(408, None, None), ProviderError::Timeout);
         assert_eq!(f(504, None, None), ProviderError::Timeout);
-        assert_eq!(f(500, None, None), ProviderError::Http("500 Internal Server Error".into()));
+        assert_eq!(
+            f(500, None, None),
+            ProviderError::Http("500 Internal Server Error".into())
+        );
         assert_eq!(
             f(404, Some("model not found"), None),
             ProviderError::Http("404 model not found".into())

@@ -28,7 +28,7 @@ use openmeet_core::providers::{
     Transcriber, TranscriptionOutput, TranscriptionRequest,
 };
 use openmeet_core::settings::ReasoningEffort;
-use openmeet_core::types::{ProviderInfo, ProviderLocation};
+use openmeet_core::types::ProviderInfo;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::multipart::{Form, Part};
 use reqwest::{Method, RequestBuilder, Response};
@@ -56,6 +56,13 @@ pub const MAX_TRANSCRIPTION_PROMPT_CHARS: usize = 1000;
 pub const EMBEDDING_BATCH_SIZE: usize = 64;
 /// Attempts per chat request, including parameter-adjusting retries.
 const MAX_ATTEMPTS: usize = 4;
+/// Display name of the sidecar's transcription service.
+pub const LOCAL_AI_TRANSCRIPTION_NAME: &str = "Local AI (faster-whisper)";
+/// Display name of the sidecar's embedding service.
+pub const LOCAL_AI_EMBEDDINGS_NAME: &str = "Local AI (fastembed)";
+/// Model reported in [`ProviderInfo`] when the sidecar's default embedding
+/// model is used.
+const LOCAL_AI_DEFAULT_MODEL_LABEL: &str = "default";
 
 /// Flavour of an OpenAI-style endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -141,21 +148,56 @@ fn model_supports_images(flavor: OpenAiFlavor, model: &str) -> bool {
     let m = base_model(model);
     if flavor == OpenAiFlavor::OpenAi {
         const TEXT_ONLY: [&str; 8] = [
-            "gpt-3.5", "o1-mini", "o1-preview", "o3-mini", "gpt-oss", "davinci", "babbage",
+            "gpt-3.5",
+            "o1-mini",
+            "o1-preview",
+            "o3-mini",
+            "gpt-oss",
+            "davinci",
+            "babbage",
             "gpt-4-32k",
         ];
-        let text_only = TEXT_ONLY.iter().any(|p| m.starts_with(p))
-            || m == "gpt-4"
-            || m.starts_with("gpt-4-0");
+        let text_only =
+            TEXT_ONLY.iter().any(|p| m.starts_with(p)) || m == "gpt-4" || m.starts_with("gpt-4-0");
         return !text_only;
     }
     const VISION_MARKERS: [&str; 28] = [
-        "vision", "-vl", "vl-", "_vl", "llava", "pixtral", "gemma-3", "gemma3", "minicpm-v",
-        "moondream", "internvl", "gpt-4o", "gpt-4.1", "gpt-5", "claude", "gemini", "llama-4",
-        "llama4", "mistral-small-3", "multimodal", "molmo", "idefics", "smolvlm", "glm-4v",
-        "glm-4.5v", "qwen2.5-omni", "qwen3-omni", "kimi-vl",
+        "vision",
+        "-vl",
+        "vl-",
+        "_vl",
+        "llava",
+        "pixtral",
+        "gemma-3",
+        "gemma3",
+        "minicpm-v",
+        "moondream",
+        "internvl",
+        "gpt-4o",
+        "gpt-4.1",
+        "gpt-5",
+        "claude",
+        "gemini",
+        "llama-4",
+        "llama4",
+        "mistral-small-3",
+        "multimodal",
+        "molmo",
+        "idefics",
+        "smolvlm",
+        "glm-4v",
+        "glm-4.5v",
+        "qwen2.5-omni",
+        "qwen3-omni",
+        "kimi-vl",
     ];
     VISION_MARKERS.iter().any(|marker| m.contains(marker))
+}
+
+/// Best-effort guess whether a model served by an OpenAI-compatible server
+/// accepts images, from its name.
+pub fn name_suggests_images(model: &str) -> bool {
+    model_supports_images(OpenAiFlavor::Compatible, model)
 }
 
 /// Chat-capable model ids from the OpenAI model list (embeddings, speech,
@@ -187,11 +229,11 @@ fn is_chat_model_id(id: &str) -> bool {
 
 struct Base {
     flavor: OpenAiFlavor,
+    display_name: &'static str,
     base_url: String,
     api_base: String,
     root: String,
     host: String,
-    location: ProviderLocation,
     api_key: Option<String>,
     timeouts: Timeouts,
     client: reqwest::Client,
@@ -203,14 +245,13 @@ impl Base {
         if let Some(key) = &endpoint.api_key {
             sensitive_header(&format!("Bearer {key}"))?;
         }
-        let location = endpoint.location();
-        let client = build_client(location, endpoint.timeouts.connect)?;
+        let client = build_client(endpoint.location(), endpoint.timeouts.connect)?;
         Ok(Base {
             flavor,
+            display_name: flavor.display_name(),
             api_base: openai_api_base(&endpoint.base_url),
             root: root_url(&endpoint.base_url),
             host: endpoint.host(),
-            location,
             base_url: endpoint.base_url,
             api_key: endpoint.api_key,
             timeouts: endpoint.timeouts,
@@ -219,7 +260,9 @@ impl Base {
     }
 
     fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ProviderError> {
-        let mut builder = self.client.request(method, format!("{}{}", self.api_base, path));
+        let mut builder = self
+            .client
+            .request(method, format!("{}{}", self.api_base, path));
         if let Some(key) = &self.api_key {
             builder = builder.header(AUTHORIZATION, sensitive_header(&format!("Bearer {key}"))?);
         }
@@ -229,7 +272,7 @@ impl Base {
     fn info(&self, model: &str) -> ProviderInfo {
         provider_info(
             self.flavor.provider_id(),
-            self.flavor.display_name(),
+            self.display_name,
             model,
             &self.base_url,
         )
@@ -243,12 +286,20 @@ impl Base {
     async fn model_ids(&self, cancel: &CancellationToken) -> Result<Vec<String>, ProviderError> {
         let response = self.get_models_response(cancel).await?;
         if !response.status().is_success() {
-            return Err(HttpFailure::read(response, cancel, self.secret(), &self.host)
-                .await
-                .into_error());
+            return Err(
+                HttpFailure::read(response, cancel, self.secret(), &self.host)
+                    .await
+                    .into_error(),
+            );
         }
-        let v: Value =
-            read_json(response, "model list", cancel, self.timeouts.health, &self.host).await?;
+        let v: Value = read_json(
+            response,
+            "model list",
+            cancel,
+            self.timeouts.health,
+            &self.host,
+        )
+        .await?;
         let mut ids: Vec<String> = v
             .get("data")
             .or_else(|| v.get("models"))
@@ -269,7 +320,10 @@ impl Base {
         Ok(ids)
     }
 
-    async fn get_models_response(&self, cancel: &CancellationToken) -> Result<Response, ProviderError> {
+    async fn get_models_response(
+        &self,
+        cancel: &CancellationToken,
+    ) -> Result<Response, ProviderError> {
         let builder = self.request(Method::GET, "/models")?;
         send(builder, cancel, self.timeouts.health, &self.host).await
     }
@@ -285,9 +339,11 @@ impl Base {
         {
             return Ok(());
         }
-        Err(HttpFailure::read(response, &cancel, self.secret(), &self.host)
-            .await
-            .into_error())
+        Err(
+            HttpFailure::read(response, &cancel, self.secret(), &self.host)
+                .await
+                .into_error(),
+        )
     }
 }
 
@@ -342,7 +398,9 @@ impl OpenAiLlm {
     ) -> Result<Self, ProviderError> {
         let model = model.into().trim().to_string();
         if model.is_empty() {
-            return Err(ProviderError::NotConfigured("LLM model is not set".to_string()));
+            return Err(ProviderError::NotConfigured(
+                "LLM model is not set".to_string(),
+            ));
         }
         let base = Base::new(flavor, endpoint, "LLM")?;
         Ok(OpenAiLlm {
@@ -399,11 +457,17 @@ impl OpenAiLlm {
         let temperature = if reasoning || quirks.no_temperature {
             None
         } else {
-            request.temperature.filter(|t| t.is_finite()).map(|t| t.clamp(0.0, 2.0))
+            request
+                .temperature
+                .filter(|t| t.is_finite())
+                .map(|t| t.clamp(0.0, 2.0))
         };
         let reasoning_effort = if reasoning && !quirks.omit_effort {
-            let effort =
-                reasoning_effort_for(&self.model, request.latency_sensitive, self.reasoning_effort);
+            let effort = reasoning_effort_for(
+                &self.model,
+                request.latency_sensitive,
+                self.reasoning_effort,
+            );
             Some(match (effort, quirks.minimal_effort_replacement) {
                 ("minimal", Some(replacement)) => replacement,
                 _ => effort,
@@ -468,9 +532,16 @@ impl OpenAiLlm {
             quirks.token_field = Some(next.token_field);
             return Some(next);
         }
-        let rejected = ["unsupported", "unrecognized", "unknown", "not permitted", "not allowed", "extra"]
-            .iter()
-            .any(|w| message.contains(w));
+        let rejected = [
+            "unsupported",
+            "unrecognized",
+            "unknown",
+            "not permitted",
+            "not allowed",
+            "extra",
+        ]
+        .iter()
+        .any(|w| message.contains(w));
         if params.token_field == TokenField::MaxCompletionTokens
             && message.contains("max_completion_tokens")
             && rejected
@@ -631,7 +702,10 @@ fn completion_items(value: &Value, filter_think: bool) -> Vec<Result<LlmChunk, P
     if let Some(error) = value.get("error") {
         return vec![Err(embedded_error(error))];
     }
-    let Some(choice) = value.get("choices").and_then(Value::as_array).and_then(|c| c.first())
+    let Some(choice) = value
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|c| c.first())
     else {
         return vec![Err(ProviderError::InvalidResponse(
             "the chat completion has no choices".to_string(),
@@ -743,11 +817,14 @@ impl OpenAiDecoder {
             self.done = true;
             return;
         }
-        let choice = value.get("choices").and_then(Value::as_array).and_then(|choices| {
-            choices
-                .iter()
-                .find(|c| c.get("index").and_then(Value::as_u64).unwrap_or(0) == 0)
-        });
+        let choice = value
+            .get("choices")
+            .and_then(Value::as_array)
+            .and_then(|choices| {
+                choices
+                    .iter()
+                    .find(|c| c.get("index").and_then(Value::as_u64).unwrap_or(0) == 0)
+            });
         if let Some(choice) = choice {
             if let Some(delta) = choice.get("delta") {
                 // Only `content` is visible text; `reasoning_content` /
@@ -791,7 +868,10 @@ impl ChunkDecoder for OpenAiDecoder {
             self.handle(&event.data, out);
         }
         if self.skipped_events > 0 {
-            tracing::debug!(count = self.skipped_events, "skipped non-JSON stream events");
+            tracing::debug!(
+                count = self.skipped_events,
+                "skipped non-JSON stream events"
+            );
         }
         // Some servers close without `[DONE]`; a finish reason or usage
         // block still proves the reply is complete.
@@ -817,7 +897,9 @@ impl LlmProvider for OpenAiLlm {
         cancel: CancellationToken,
     ) -> Result<LlmStream, ProviderError> {
         if request.messages.is_empty() {
-            return Err(ProviderError::Other("the request contains no messages".to_string()));
+            return Err(ProviderError::Other(
+                "the request contains no messages".to_string(),
+            ));
         }
         let started = Instant::now();
         let provider = self.base.flavor.provider_id();
@@ -844,7 +926,14 @@ impl LlmProvider for OpenAiLlm {
                 .header(CONTENT_TYPE, "application/json")
                 .header(ACCEPT, "text/event-stream")
                 .body(body);
-            let response = match send(builder, &cancel, self.base.timeouts.response, &self.base.host).await {
+            let response = match send(
+                builder,
+                &cancel,
+                self.base.timeouts.response,
+                &self.base.host,
+            )
+            .await
+            {
                 Ok(r) => r,
                 Err(e) => {
                     log_failure(provider, &request.request_id, &e);
@@ -906,7 +995,12 @@ fn log_failure(provider: &'static str, request_id: &str, error: &ProviderError) 
     if matches!(error, ProviderError::Cancelled) {
         tracing::debug!(provider, request_id, "request cancelled");
     } else {
-        tracing::warn!(provider, request_id, error_kind = error_kind(error), "request failed");
+        tracing::warn!(
+            provider,
+            request_id,
+            error_kind = error_kind(error),
+            "request failed"
+        );
     }
 }
 
@@ -933,10 +1027,11 @@ impl OpenAiTranscriber {
                 "transcription model is not set".to_string(),
             ));
         }
-        Ok(OpenAiTranscriber {
-            base: Base::new(flavor, endpoint, "transcription")?,
-            model,
-        })
+        let mut base = Base::new(flavor, endpoint, "transcription")?;
+        if flavor == OpenAiFlavor::LocalAi {
+            base.display_name = LOCAL_AI_TRANSCRIPTION_NAME;
+        }
+        Ok(OpenAiTranscriber { base, model })
     }
 
     /// Configured model.
@@ -995,7 +1090,12 @@ impl Transcriber for OpenAiTranscriber {
         {
             form = form.text("language", language.to_ascii_lowercase());
         }
-        if let Some(prompt) = request.prompt.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        if let Some(prompt) = request
+            .prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
             form = form.text("prompt", tail_chars(prompt, MAX_TRANSCRIPTION_PROMPT_CHARS));
         }
         let started = Instant::now();
@@ -1026,8 +1126,14 @@ impl Transcriber for OpenAiTranscriber {
         let remaining = deadline
             .saturating_sub(started.elapsed())
             .max(Duration::from_secs(1));
-        let value: Value =
-            read_json(response, "transcription", &cancel, remaining, &self.base.host).await?;
+        let value: Value = read_json(
+            response,
+            "transcription",
+            &cancel,
+            remaining,
+            &self.base.host,
+        )
+        .await?;
         let text = value
             .get("text")
             .and_then(Value::as_str)
@@ -1074,7 +1180,9 @@ impl Transcriber for OpenAiTranscriber {
             return if health.ok {
                 Ok(())
             } else {
-                Err(ProviderError::Other("the local AI service is not ready".to_string()))
+                Err(ProviderError::Other(
+                    "the local AI service is not ready".to_string(),
+                ))
             };
         }
         self.base.health().await
@@ -1092,27 +1200,38 @@ pub struct OpenAiEmbeddings {
 }
 
 impl OpenAiEmbeddings {
-    /// Creates the adapter. Fails for an invalid base URL or an empty model.
+    /// Creates the adapter. Fails for an invalid base URL or an empty model;
+    /// the local AI sidecar accepts an empty model (it then uses the model it
+    /// was started with, and `model` is omitted from requests).
     pub fn new(
         flavor: OpenAiFlavor,
         endpoint: Endpoint,
         model: impl Into<String>,
     ) -> Result<Self, ProviderError> {
         let model = model.into().trim().to_string();
-        if model.is_empty() {
+        if model.is_empty() && flavor != OpenAiFlavor::LocalAi {
             return Err(ProviderError::NotConfigured(
                 "embedding model is not set".to_string(),
             ));
         }
-        Ok(OpenAiEmbeddings {
-            base: Base::new(flavor, endpoint, "embeddings")?,
-            model,
-        })
+        let mut base = Base::new(flavor, endpoint, "embeddings")?;
+        if flavor == OpenAiFlavor::LocalAi {
+            base.display_name = LOCAL_AI_EMBEDDINGS_NAME;
+        }
+        Ok(OpenAiEmbeddings { base, model })
     }
 
-    /// Configured model.
+    /// Configured model (empty = the sidecar's default).
     pub fn model(&self) -> &str {
         &self.model
+    }
+
+    fn body(&self, input: &[&str]) -> Value {
+        if self.model.is_empty() {
+            json!({"input": input})
+        } else {
+            json!({"model": self.model, "input": input})
+        }
     }
 
     async fn embed_batch(
@@ -1125,7 +1244,7 @@ impl OpenAiEmbeddings {
             .iter()
             .map(|t| if t.trim().is_empty() { " " } else { t.as_str() })
             .collect();
-        let body = serde_json::to_vec(&json!({"model": self.model, "input": input}))
+        let body = serde_json::to_vec(&self.body(&input))
             .map_err(|_| ProviderError::Other("could not encode the request".to_string()))?;
         let builder = self
             .base
@@ -1136,9 +1255,11 @@ impl OpenAiEmbeddings {
         let deadline = self.base.timeouts.request;
         let response = send(builder, cancel, deadline, &self.base.host).await?;
         if !response.status().is_success() {
-            return Err(HttpFailure::read(response, cancel, self.base.secret(), &self.base.host)
-                .await
-                .into_error());
+            return Err(
+                HttpFailure::read(response, cancel, self.base.secret(), &self.base.host)
+                    .await
+                    .into_error(),
+            );
         }
         let remaining = deadline
             .saturating_sub(started.elapsed())
@@ -1146,7 +1267,9 @@ impl OpenAiEmbeddings {
         let value: Value =
             read_json(response, "embeddings", cancel, remaining, &self.base.host).await?;
         let items = value.get("data").and_then(Value::as_array).ok_or_else(|| {
-            ProviderError::InvalidResponse("the embeddings response has no `data` array".to_string())
+            ProviderError::InvalidResponse(
+                "the embeddings response has no `data` array".to_string(),
+            )
         })?;
         let mut indexed: Vec<(usize, Vec<f32>)> = Vec::with_capacity(items.len());
         for (position, item) in items.iter().enumerate() {
@@ -1159,13 +1282,18 @@ impl OpenAiEmbeddings {
                 .get("embedding")
                 .and_then(decode_embedding)
                 .ok_or_else(|| {
-                    ProviderError::InvalidResponse("an embedding in the response is malformed".to_string())
+                    ProviderError::InvalidResponse(
+                        "an embedding in the response is malformed".to_string(),
+                    )
                 })?;
             indexed.push((index, vector));
         }
         indexed.sort_by_key(|(i, _)| *i);
         if indexed.len() != batch.len()
-            || indexed.iter().enumerate().any(|(expected, (i, _))| *i != expected)
+            || indexed
+                .iter()
+                .enumerate()
+                .any(|(expected, (i, _))| *i != expected)
         {
             return Err(ProviderError::InvalidResponse(format!(
                 "expected {} embeddings, received {}",
@@ -1214,7 +1342,11 @@ pub(crate) fn check_dimensions(vectors: &[Vec<f32>]) -> Result<(), ProviderError
 #[async_trait]
 impl EmbeddingProvider for OpenAiEmbeddings {
     fn info(&self) -> ProviderInfo {
-        self.base.info(&self.model)
+        if self.model.is_empty() {
+            self.base.info(LOCAL_AI_DEFAULT_MODEL_LABEL)
+        } else {
+            self.base.info(&self.model)
+        }
     }
 
     async fn embed(
@@ -1228,17 +1360,14 @@ impl EmbeddingProvider for OpenAiEmbeddings {
         let started = Instant::now();
         let mut vectors = Vec::with_capacity(texts.len());
         for batch in texts.chunks(EMBEDDING_BATCH_SIZE) {
-            let batch_vectors = self
-                .embed_batch(batch, &cancel)
-                .await
-                .inspect_err(|e| {
-                    tracing::warn!(
-                        provider = self.base.flavor.provider_id(),
-                        texts = texts.len(),
-                        error_kind = error_kind(e),
-                        "embedding request failed"
-                    )
-                })?;
+            let batch_vectors = self.embed_batch(batch, &cancel).await.inspect_err(|e| {
+                tracing::warn!(
+                    provider = self.base.flavor.provider_id(),
+                    texts = texts.len(),
+                    error_kind = error_kind(e),
+                    "embedding request failed"
+                )
+            })?;
             vectors.extend(batch_vectors);
         }
         check_dimensions(&vectors)?;
@@ -1273,15 +1402,38 @@ mod tests {
 
     #[test]
     fn reasoning_model_detection() {
-        for m in ["gpt-5", "gpt-5-mini", "GPT-5.1", "o1", "o3-mini", "o4-mini", "openai/gpt-5-nano"] {
+        for m in [
+            "gpt-5",
+            "gpt-5-mini",
+            "GPT-5.1",
+            "o1",
+            "o3-mini",
+            "o4-mini",
+            "openai/gpt-5-nano",
+        ] {
             assert!(is_reasoning_model(m), "{m}");
         }
-        for m in ["gpt-4o", "gpt-4.1-mini", "llama3.2", "qwen2.5:7b", "gpt-oss-20b"] {
+        for m in [
+            "gpt-4o",
+            "gpt-4.1-mini",
+            "llama3.2",
+            "qwen2.5:7b",
+            "gpt-oss-20b",
+        ] {
             assert!(!is_reasoning_model(m), "{m}");
         }
-        assert_eq!(reasoning_effort_for("gpt-5-mini", true, ReasoningEffort::High), "minimal");
-        assert_eq!(reasoning_effort_for("o3", true, ReasoningEffort::High), "low");
-        assert_eq!(reasoning_effort_for("gpt-5", false, ReasoningEffort::Medium), "medium");
+        assert_eq!(
+            reasoning_effort_for("gpt-5-mini", true, ReasoningEffort::High),
+            "minimal"
+        );
+        assert_eq!(
+            reasoning_effort_for("o3", true, ReasoningEffort::High),
+            "low"
+        );
+        assert_eq!(
+            reasoning_effort_for("gpt-5", false, ReasoningEffort::Medium),
+            "medium"
+        );
     }
 
     #[test]
@@ -1293,14 +1445,25 @@ mod tests {
         assert_eq!(p.temperature, None);
         assert_eq!(p.reasoning_effort, Some("minimal"));
 
-        let classic = llm(OpenAiFlavor::OpenAi, "https://api.openai.com/v1", "gpt-4o-mini");
+        let classic = llm(
+            OpenAiFlavor::OpenAi,
+            "https://api.openai.com/v1",
+            "gpt-4o-mini",
+        );
         let p = classic.params_for(&request(true));
         assert_eq!(p.max_tokens, 1000);
         assert_eq!(p.temperature, Some(0.3));
         assert_eq!(p.reasoning_effort, None);
 
-        let compat = llm(OpenAiFlavor::Compatible, "http://localhost:1234/v1", "qwen2.5-7b");
-        assert_eq!(compat.params_for(&request(true)).token_field, TokenField::MaxTokens);
+        let compat = llm(
+            OpenAiFlavor::Compatible,
+            "http://localhost:1234/v1",
+            "qwen2.5-7b",
+        );
+        assert_eq!(
+            compat.params_for(&request(true)).token_field,
+            TokenField::MaxTokens
+        );
         // A compatible flavour pointed at the OpenAI host still gets the
         // OpenAI field.
         let compat_openai = llm(OpenAiFlavor::Compatible, "https://api.openai.com", "gpt-4o");
@@ -1310,7 +1473,10 @@ mod tests {
         );
         let effort = llm(OpenAiFlavor::OpenAi, "https://api.openai.com", "o3")
             .with_reasoning_effort(ReasoningEffort::High);
-        assert_eq!(effort.params_for(&request(false)).reasoning_effort, Some("high"));
+        assert_eq!(
+            effort.params_for(&request(false)).reasoning_effort,
+            Some("high")
+        );
     }
 
     #[test]
@@ -1326,13 +1492,17 @@ mod tests {
 
         let t = llm(OpenAiFlavor::Compatible, "http://localhost:1/v1", "m");
         let p = t.params_for(&request(true));
-        let next = t.downgrade(&p, "unsupported parameter: 'temperature'").unwrap();
+        let next = t
+            .downgrade(&p, "unsupported parameter: 'temperature'")
+            .unwrap();
         assert_eq!(next.temperature, None);
         assert_eq!(t.params_for(&request(true)).temperature, None);
 
         let s = llm(OpenAiFlavor::Compatible, "http://localhost:1/v1", "m");
         let p = s.params_for(&request(true));
-        let next = s.downgrade(&p, "body.stream_options: extra inputs are not permitted").unwrap();
+        let next = s
+            .downgrade(&p, "body.stream_options: extra inputs are not permitted")
+            .unwrap();
         assert!(!next.stream_options);
 
         let m = llm(OpenAiFlavor::Compatible, "http://localhost:1/v1", "m");
@@ -1358,12 +1528,10 @@ mod tests {
     fn body_shape() {
         let l = llm(OpenAiFlavor::OpenAi, "https://api.openai.com", "gpt-4o");
         let mut r = request(true);
-        r.messages = vec![
-            ChatMessage::user("look").with_image(ImageInput {
-                mime_type: "image/png".into(),
-                data_base64: "AAAA".into(),
-            }),
-        ];
+        r.messages = vec![ChatMessage::user("look").with_image(ImageInput {
+            mime_type: "image/png".into(),
+            data_base64: "AAAA".into(),
+        })];
         let body = chat_body("gpt-4o", &r, &l.params_for(&r));
         assert_eq!(body["stream"], true);
         assert_eq!(body["stream_options"]["include_usage"], true);
@@ -1381,11 +1549,23 @@ mod tests {
     fn image_support_guess() {
         assert!(model_supports_images(OpenAiFlavor::OpenAi, "gpt-4o-mini"));
         assert!(model_supports_images(OpenAiFlavor::OpenAi, "gpt-5"));
-        assert!(!model_supports_images(OpenAiFlavor::OpenAi, "gpt-3.5-turbo"));
+        assert!(!model_supports_images(
+            OpenAiFlavor::OpenAi,
+            "gpt-3.5-turbo"
+        ));
         assert!(!model_supports_images(OpenAiFlavor::OpenAi, "o3-mini"));
-        assert!(model_supports_images(OpenAiFlavor::Compatible, "Qwen2.5-VL-7B-Instruct"));
-        assert!(model_supports_images(OpenAiFlavor::Compatible, "llava-v1.6"));
-        assert!(!model_supports_images(OpenAiFlavor::Compatible, "qwen2.5-7b-instruct"));
+        assert!(model_supports_images(
+            OpenAiFlavor::Compatible,
+            "Qwen2.5-VL-7B-Instruct"
+        ));
+        assert!(model_supports_images(
+            OpenAiFlavor::Compatible,
+            "llava-v1.6"
+        ));
+        assert!(!model_supports_images(
+            OpenAiFlavor::Compatible,
+            "qwen2.5-7b-instruct"
+        ));
     }
 
     #[test]
@@ -1420,7 +1600,10 @@ mod tests {
                 LlmChunk::Delta("Hi".into()),
                 LlmChunk::Done {
                     stop_reason: Some("stop".into()),
-                    usage: Some(TokenUsage { input_tokens: 3, output_tokens: 2 }),
+                    usage: Some(TokenUsage {
+                        input_tokens: 3,
+                        output_tokens: 2
+                    }),
                 }
             ]
         );
@@ -1434,7 +1617,10 @@ mod tests {
         d.finish(&mut q);
         assert_eq!(
             q.pop_back().unwrap().unwrap(),
-            LlmChunk::Done { stop_reason: Some("refusal".into()), usage: None }
+            LlmChunk::Done {
+                stop_reason: Some("refusal".into()),
+                usage: None
+            }
         );
     }
 
@@ -1444,7 +1630,10 @@ mod tests {
             r#"{"choices":[{"message":{"content":"<think>x</think>Answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}"#,
         )
         .unwrap();
-        let items: Vec<_> = completion_items(&v, true).into_iter().map(Result::unwrap).collect();
+        let items: Vec<_> = completion_items(&v, true)
+            .into_iter()
+            .map(Result::unwrap)
+            .collect();
         assert_eq!(items[0], LlmChunk::Delta("Answer".into()));
         assert!(matches!(items[1], LlmChunk::Done { .. }));
     }

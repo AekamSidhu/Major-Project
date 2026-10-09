@@ -220,7 +220,10 @@ fn sorted(ids: &[&str]) -> Vec<String> {
 #[test]
 fn retention_forever_keeps_everything() {
     let (db, meetings) = retention_fixture();
-    assert_eq!(db.apply_retention(RetentionPolicy::Forever, NOW).unwrap(), 0);
+    assert_eq!(
+        db.apply_retention(RetentionPolicy::Forever, NOW).unwrap(),
+        0
+    );
     assert_eq!(remaining(&db).len(), meetings.len());
 }
 
@@ -228,7 +231,8 @@ fn retention_forever_keeps_everything() {
 fn retention_thirty_days_cutoff() {
     let (db, _) = retention_fixture();
     assert_eq!(
-        db.apply_retention(RetentionPolicy::ThirtyDays, NOW).unwrap(),
+        db.apply_retention(RetentionPolicy::ThirtyDays, NOW)
+            .unwrap(),
         2
     );
     assert_eq!(
@@ -284,11 +288,13 @@ fn retention_none_deletes_everything_but_settings_and_rules() {
 fn retention_handles_extreme_clocks() {
     let (db, meetings) = retention_fixture();
     assert_eq!(
-        db.apply_retention(RetentionPolicy::SevenDays, i64::MIN).unwrap(),
+        db.apply_retention(RetentionPolicy::SevenDays, i64::MIN)
+            .unwrap(),
         0
     );
     assert_eq!(
-        db.apply_retention(RetentionPolicy::SevenDays, i64::MAX).unwrap() as usize,
+        db.apply_retention(RetentionPolicy::SevenDays, i64::MAX)
+            .unwrap() as usize,
         meetings.len()
     );
 }
@@ -345,8 +351,14 @@ fn embeddings_upsert_per_item_kind_and_model() {
     db.save_embedding(&embedding("m1", "s1", "hash-384", vec![3.0], NOW + 5))
         .unwrap();
     // Another model or kind: kept separately.
-    db.save_embedding(&embedding("m1", "s1", "text-embedding-3-small", vec![4.0], NOW + 6))
-        .unwrap();
+    db.save_embedding(&embedding(
+        "m1",
+        "s1",
+        "text-embedding-3-small",
+        vec![4.0],
+        NOW + 6,
+    ))
+    .unwrap();
     let mut as_question = embedding("m1", "s1", "hash-384", vec![5.0], NOW + 7);
     as_question.kind = "question".into();
     db.save_embedding(&as_question).unwrap();
@@ -360,7 +372,12 @@ fn embeddings_upsert_per_item_kind_and_model() {
         summary,
         vec![
             ("segment".into(), "hash-384".into(), vec![3.0], NOW + 5),
-            ("segment".into(), "text-embedding-3-small".into(), vec![4.0], NOW + 6),
+            (
+                "segment".into(),
+                "text-embedding-3-small".into(),
+                vec![4.0],
+                NOW + 6
+            ),
             ("question".into(), "hash-384".into(), vec![5.0], NOW + 7),
         ]
     );
@@ -384,11 +401,13 @@ fn crash_recovery_completes_meetings_left_in_progress() {
         db.save_meeting(&m).unwrap();
     }
     // active: last activity is the end of its last segment (relative time).
-    db.save_segment(&segment("active", "a-s1", 60_000, "x")).unwrap(); // ends at +62.5 s
+    db.save_segment(&segment("active", "a-s1", 60_000, "x"))
+        .unwrap(); // ends at +62.5 s
     db.save_question(&question("active", "a-q1", NOW - HOUR + 30_000))
         .unwrap();
     // paused: last activity is an observation captured after the segments.
-    db.save_segment(&segment("paused", "p-s1", 1_000, "x")).unwrap();
+    db.save_segment(&segment("paused", "p-s1", 1_000, "x"))
+        .unwrap();
     db.save_observation(&observation(Some("paused"), "p-o1", NOW - HOUR + 600_000))
         .unwrap();
     // stopping: the engine already recorded when the meeting ended.
@@ -404,7 +423,8 @@ fn crash_recovery_completes_meetings_left_in_progress() {
     completed.state = MeetingState::Completed;
     completed.ended_at = Some(NOW - HOUR + 1);
     db.save_meeting(&completed).unwrap();
-    db.save_answer(&answer("completed", "c-a1", NOW - 5)).unwrap();
+    db.save_answer(&answer("completed", "c-a1", NOW - 5))
+        .unwrap();
 
     assert_eq!(db.recover_interrupted_meetings(NOW).unwrap(), 5);
 

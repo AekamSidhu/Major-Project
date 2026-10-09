@@ -81,9 +81,7 @@ mod tests {
             StoreError::NotFound("missing".into())
         );
 
-        let err = conn
-            .execute("INSERT INTO nope VALUES (1)", [])
-            .unwrap_err();
+        let err = conn.execute("INSERT INTO nope VALUES (1)", []).unwrap_err();
         assert!(!is_foreign_key_violation(&err));
         assert!(matches!(
             meeting_write_error(err, "m"),

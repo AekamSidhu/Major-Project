@@ -10,9 +10,8 @@ use openmeet_core::StoreError;
 use openmeet_core::now_ms;
 use openmeet_core::store::{EmbeddingRecord, MeetingStore};
 use openmeet_core::types::{
-    ActionItem, AnswerRecord, Claim, DetectedQuestion, InterviewerSummary, Meeting,
-    MeetingRecord, MeetingSummary, Participant, ScreenObservation, Suggestion, Topic,
-    TranscriptSegment,
+    ActionItem, AnswerRecord, Claim, DetectedQuestion, InterviewerSummary, Meeting, MeetingRecord,
+    MeetingSummary, Participant, ScreenObservation, Suggestion, Topic, TranscriptSegment,
 };
 use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
 use tracing::debug;
@@ -596,9 +595,8 @@ impl MeetingStore for Database {
     /// Keyed by (meeting, item, kind, model): re-embedding an item with the
     /// same model replaces its vector; other models keep their own rows.
     fn save_embedding(&self, embedding: &EmbeddingRecord) -> Result<(), StoreError> {
-        let dims = i64::try_from(embedding.vector.len()).map_err(|_| {
-            StoreError::Serialization("embedding vector is too large".to_string())
-        })?;
+        let dims = i64::try_from(embedding.vector.len())
+            .map_err(|_| StoreError::Serialization("embedding vector is too large".to_string()))?;
         let blob = vector_to_blob(&embedding.vector);
         let conn = self.lock();
         conn.prepare_cached(UPSERT_EMBEDDING)
@@ -633,7 +631,8 @@ impl MeetingStore for Database {
         else {
             return Err(StoreError::NotFound(meeting_id.to_string()));
         };
-        meeting.participants = query_list(&tx, SELECT_PARTICIPANTS, meeting_id, participant_from_row)?;
+        meeting.participants =
+            query_list(&tx, SELECT_PARTICIPANTS, meeting_id, participant_from_row)?;
         let record = MeetingRecord {
             segments: query_list(&tx, SELECT_SEGMENTS, meeting_id, segment_from_row)?,
             questions: query_list(&tx, SELECT_QUESTIONS, meeting_id, question_from_row)?,
@@ -749,9 +748,7 @@ fn suggestion_from_row(row: &Row<'_>) -> rusqlite::Result<Suggestion> {
         kind: row.get::<_, SqlEnum<_>>("kind")?.0,
         question_id: row.get("question_id")?,
         question_text: row.get("question_text")?,
-        category: row
-            .get::<_, Option<SqlEnum<_>>>("category")?
-            .map(|c| c.0),
+        category: row.get::<_, Option<SqlEnum<_>>>("category")?.map(|c| c.0),
         style: row.get::<_, Option<SqlEnum<_>>>("style")?.map(|s| s.0),
         parent_id: row.get("parent_id")?,
         prompt_id: row.get("prompt_id")?,

@@ -20,6 +20,23 @@
 //!
 //! All methods are blocking; call them from a background thread (for example
 //! the engine's persistence worker or `tokio::task::spawn_blocking`).
+//!
+//! ```
+//! use std::sync::Arc;
+//!
+//! use openmeet_core::store::MeetingStore;
+//! use openmeet_store::{Database, SCHEMA_VERSION};
+//!
+//! let db = Arc::new(Database::open_in_memory()?);
+//! assert_eq!(db.schema_version()?, SCHEMA_VERSION);
+//! // The engine only sees the persistence contract.
+//! let store: Arc<dyn MeetingStore> = db.clone();
+//! assert!(store.load_meeting("unknown").is_err());
+//! assert!(db.list_meetings(50, 0)?.is_empty());
+//! # Ok::<(), openmeet_core::StoreError>(())
+//! ```
+
+#![warn(missing_docs)]
 
 mod codec;
 mod database;

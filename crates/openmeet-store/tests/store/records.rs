@@ -63,7 +63,13 @@ fn save_meeting_inserts_then_updates_including_participants() {
 
     m.participants.clear();
     db.save_meeting(&m).unwrap();
-    assert!(db.load_meeting("m1").unwrap().meeting.participants.is_empty());
+    assert!(
+        db.load_meeting("m1")
+            .unwrap()
+            .meeting
+            .participants
+            .is_empty()
+    );
 }
 
 #[test]
@@ -277,7 +283,10 @@ fn action_items_upsert_atomically() {
     item.text = secret("Schedule the second round");
     db.save_action_items(std::slice::from_ref(&item)).unwrap();
     assert_eq!(
-        db.save_action_items(&[action_item("m1", "ai2", NOW), action_item("ghost", "ai3", NOW)]),
+        db.save_action_items(&[
+            action_item("m1", "ai2", NOW),
+            action_item("ghost", "ai3", NOW)
+        ]),
         Err(StoreError::NotFound("ghost".into()))
     );
     assert_eq!(db.load_meeting("m1").unwrap().action_items, vec![item]);
@@ -376,31 +385,59 @@ fn lists_are_returned_in_chronological_order() {
     let record = db.load_meeting("m1").unwrap();
     let ids = |v: Vec<&str>| v.into_iter().map(String::from).collect::<Vec<_>>();
     assert_eq!(
-        record.segments.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+        record
+            .segments
+            .iter()
+            .map(|s| s.id.clone())
+            .collect::<Vec<_>>(),
         ids(vec!["s1", "s0-long", "s2", "s3"])
     );
     assert_eq!(
-        record.questions.iter().map(|q| q.id.clone()).collect::<Vec<_>>(),
+        record
+            .questions
+            .iter()
+            .map(|q| q.id.clone())
+            .collect::<Vec<_>>(),
         ids(vec!["q1", "q2", "q3"])
     );
     assert_eq!(
-        record.answers.iter().map(|a| a.id.clone()).collect::<Vec<_>>(),
+        record
+            .answers
+            .iter()
+            .map(|a| a.id.clone())
+            .collect::<Vec<_>>(),
         ids(vec!["a1", "a2", "a3"])
     );
     assert_eq!(
-        record.suggestions.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+        record
+            .suggestions
+            .iter()
+            .map(|s| s.id.clone())
+            .collect::<Vec<_>>(),
         ids(vec!["r1", "r2", "r3"])
     );
     assert_eq!(
-        record.claims.iter().map(|c| c.id.clone()).collect::<Vec<_>>(),
+        record
+            .claims
+            .iter()
+            .map(|c| c.id.clone())
+            .collect::<Vec<_>>(),
         ids(vec!["c1", "c2", "c3"])
     );
     assert_eq!(
-        record.observations.iter().map(|o| o.id.clone()).collect::<Vec<_>>(),
+        record
+            .observations
+            .iter()
+            .map(|o| o.id.clone())
+            .collect::<Vec<_>>(),
         ids(vec!["o1", "o2", "o3"])
     );
     assert_eq!(
-        record.action_items.iter().map(|a| a.id.clone()).collect::<Vec<_>>(),
+        record
+            .action_items
+            .iter()
+            .map(|a| a.id.clone())
+            .collect::<Vec<_>>(),
         ids(vec!["ai1", "ai2", "ai3"])
     );
 }

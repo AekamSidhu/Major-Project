@@ -106,7 +106,9 @@ impl<T: Serialize> ToSql for Json<T> {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
         serde_json::to_string(&self.0)
             .map(ToSqlOutput::from)
-            .map_err(|_| rusqlite::Error::ToSqlConversionFailure(Box::new(CodecError::JsonEncoding)))
+            .map_err(|_| {
+                rusqlite::Error::ToSqlConversionFailure(Box::new(CodecError::JsonEncoding))
+            })
     }
 }
 
@@ -134,9 +136,7 @@ pub(crate) fn vector_to_blob(vector: &[f32]) -> Vec<u8> {
 
 /// Decodes a little-endian f32 BLOB holding exactly `dims` values.
 pub(crate) fn blob_to_vector(bytes: &[u8], dims: i64) -> Result<Vec<f32>, CodecError> {
-    let expected = usize::try_from(dims)
-        .ok()
-        .and_then(|d| d.checked_mul(4));
+    let expected = usize::try_from(dims).ok().and_then(|d| d.checked_mul(4));
     if expected != Some(bytes.len()) {
         return Err(CodecError::InvalidVector {
             bytes: bytes.len(),
@@ -152,7 +152,11 @@ pub(crate) fn blob_to_vector(bytes: &[u8], dims: i64) -> Result<Vec<f32>, CodecE
 /// SQLite stores NaN as NULL, which a NOT NULL REAL column rejects; a NaN
 /// score is meaningless anyway, so it is persisted as 0.
 pub(crate) fn finite_or_zero(value: f32) -> f64 {
-    if value.is_nan() { 0.0 } else { f64::from(value) }
+    if value.is_nan() {
+        0.0
+    } else {
+        f64::from(value)
+    }
 }
 
 #[cfg(test)]
@@ -172,7 +176,10 @@ mod tests {
         );
         assert_eq!(enum_name(&QuestionCategory::FollowUp).unwrap(), "follow_up");
         assert_eq!(enum_name(&AnswerStyle::StepByStep).unwrap(), "step_by_step");
-        assert_eq!(enum_name(&MeetingState::Summarizing).unwrap(), "summarizing");
+        assert_eq!(
+            enum_name(&MeetingState::Summarizing).unwrap(),
+            "summarizing"
+        );
     }
 
     #[test]

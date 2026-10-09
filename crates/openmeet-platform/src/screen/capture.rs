@@ -13,7 +13,9 @@ use super::rules::{apply_region_masks, excluded_by, fill_black, normalize_app};
 use crate::PlatformError;
 
 /// User-facing message for a missing macOS screen-recording permission.
-pub(crate) const SCREEN_PERMISSION_MESSAGE: &str = "Screen permission required. Open System Settings → Privacy & Security → Screen Recording.";
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) const SCREEN_PERMISSION_MESSAGE: &str =
+    "Screen permission required. Open System Settings → Privacy & Security → Screen Recording.";
 
 /// Minimum share of the captured area a window must cover to be considered
 /// the "front" window when the focused window is not on that area.
@@ -88,7 +90,8 @@ pub(crate) fn snapshot_windows(cache: &mut AppNameCache) -> Result<Vec<WinInfo>,
     let mut out = Vec::with_capacity(count);
     for (index, handle) in windows.into_iter().enumerate() {
         let Ok(id) = handle.id() else { continue };
-        let (Ok(x), Ok(y), Ok(w), Ok(h)) = (handle.x(), handle.y(), handle.width(), handle.height())
+        let (Ok(x), Ok(y), Ok(w), Ok(h)) =
+            (handle.x(), handle.y(), handle.width(), handle.height())
         else {
             continue;
         };
@@ -130,7 +133,9 @@ pub(crate) fn snapshot_windows(cache: &mut AppNameCache) -> Result<Vec<WinInfo>,
 fn window_is_opaque(id: u32) -> bool {
     use windows::Win32::UI::WindowsAndMessaging::{WS_EX_LAYERED, WS_EX_TRANSPARENT};
     match crate::win::hwnd_from_id(&id.to_string()) {
-        Some(hwnd) => crate::win::window_ex_style(hwnd) & (WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) == 0,
+        Some(hwnd) => {
+            crate::win::window_ex_style(hwnd) & (WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) == 0
+        }
         None => false,
     }
 }
@@ -183,7 +188,11 @@ pub(crate) fn evaluate_area_privacy(
         .find(|&i| windows[i].focused)
         .or_else(|| {
             candidates.iter().copied().find(|&i| {
-                let covered = windows[i].rect.intersect(&area).map(|r| r.area()).unwrap_or(0);
+                let covered = windows[i]
+                    .rect
+                    .intersect(&area)
+                    .map(|r| r.area())
+                    .unwrap_or(0);
                 covered as f64 / area_size >= FRONT_MIN_COVERAGE
             })
         });
@@ -206,7 +215,9 @@ pub(crate) fn evaluate_area_privacy(
         if w.excluded(rules).is_none() {
             continue;
         }
-        let Some(target) = w.rect.intersect(&area) else { continue };
+        let Some(target) = w.rect.intersect(&area) else {
+            continue;
+        };
         let occluders: Vec<IRect> = candidates[..pos]
             .iter()
             .map(|&j| &windows[j])
@@ -220,14 +231,19 @@ pub(crate) fn evaluate_area_privacy(
 
 /// Whether any rule can exclude a window (application / window / domain).
 pub(crate) fn has_window_rules(rules: &[PrivacyRule]) -> bool {
-    rules.iter().any(|r| {
-        r.rule_type != PrivacyRuleType::Region && !r.value.trim().is_empty()
-    })
+    rules
+        .iter()
+        .any(|r| r.rule_type != PrivacyRuleType::Region && !r.value.trim().is_empty())
 }
 
 /// Blacks out global-coordinate rectangles on an image whose top-left corner
 /// is at `origin` and whose pixels per global unit are `scale`.
-pub(crate) fn apply_global_masks(img: &mut RgbaImage, masks: &[IRect], origin: (i64, i64), scale: (f64, f64)) {
+pub(crate) fn apply_global_masks(
+    img: &mut RgbaImage,
+    masks: &[IRect],
+    origin: (i64, i64),
+    scale: (f64, f64),
+) {
     for m in masks {
         let x0 = ((m.x0 - origin.0) as f64 * scale.0).floor();
         let y0 = ((m.y0 - origin.1) as f64 * scale.1).floor();
@@ -275,14 +291,20 @@ impl Capturer {
         let _dpi = crate::win::DpiAwareGuard::new();
         ensure_screen_permission()?;
         match spec.kind {
-            ScreenSourceKind::Display | ScreenSourceKind::Region => self.capture_display(spec, rules, own_pid),
+            ScreenSourceKind::Display | ScreenSourceKind::Region => {
+                self.capture_display(spec, rules, own_pid)
+            }
             ScreenSourceKind::Window => {
                 let id = parse_window_id(&spec.id)?;
                 let windows = snapshot_windows(&mut self.apps)?;
                 let info = windows
                     .into_iter()
                     .find(|w| w.meta.id == id)
-                    .ok_or_else(|| PlatformError::DeviceNotFound("The selected window is no longer open".into()))?;
+                    .ok_or_else(|| {
+                        PlatformError::DeviceNotFound(
+                            "The selected window is no longer open".into(),
+                        )
+                    })?;
                 capture_window(info, spec, rules, own_pid)
             }
             ScreenSourceKind::Application => {
@@ -301,7 +323,11 @@ impl Capturer {
     ) -> Result<CaptureOutcome, PlatformError> {
         let monitor = find_monitor(&spec.id)?;
         let geo = MonitorGeometry::of(&monitor)?;
-        let region = if spec.kind == ScreenSourceKind::Region { spec.region } else { None };
+        let region = if spec.kind == ScreenSourceKind::Region {
+            spec.region
+        } else {
+            None
+        };
         let area = match region {
             Some(r) => {
                 let est = geo.estimated_scale.max(f64::EPSILON);
@@ -312,7 +338,9 @@ impl Capturer {
                     (f64::from(r.height) / est).ceil() as i64,
                 )
                 .intersect(&geo.rect())
-                .ok_or_else(|| PlatformError::Capture("The selected region is outside the display".into()))?
+                .ok_or_else(|| {
+                    PlatformError::Capture("The selected region is outside the display".into())
+                })?
             }
             None => geo.rect(),
         };
@@ -343,7 +371,9 @@ impl Capturer {
             // Re-check after capturing: focus or titles may have changed while
             // the frame was grabbed (e.g. a password manager came to front).
             let after = snapshot_windows(&mut self.apps).map_err(|e| {
-                PlatformError::Capture(format!("cannot verify privacy rules, frame discarded ({e})"))
+                PlatformError::Capture(format!(
+                    "cannot verify privacy rules, frame discarded ({e})"
+                ))
             })?;
             let after_meta: Vec<WinMeta> = after.iter().map(|w| w.meta.clone()).collect();
             let post = evaluate_area_privacy(&after_meta, area, own_pid, rules);
@@ -367,7 +397,9 @@ impl Capturer {
             let w = r.width.min(iw - x);
             let h = r.height.min(ih - y);
             if w == 0 || h == 0 {
-                return Err(PlatformError::Capture("The selected region is outside the display".into()));
+                return Err(PlatformError::Capture(
+                    "The selected region is outside the display".into(),
+                ));
             }
             image = image::imageops::crop_imm(&image, x, y, w, h).to_image();
         }
@@ -428,17 +460,25 @@ fn capture_window(
 }
 
 /// The front-most non-minimized window of an application (by name).
-fn pick_application_window(windows: Vec<WinInfo>, app: &str, own_pid: u32) -> Result<WinInfo, PlatformError> {
+fn pick_application_window(
+    windows: Vec<WinInfo>,
+    app: &str,
+    own_pid: u32,
+) -> Result<WinInfo, PlatformError> {
     let wanted = normalize_app(app);
     if wanted.is_empty() {
-        return Err(PlatformError::DeviceNotFound("No application selected".into()));
+        return Err(PlatformError::DeviceNotFound(
+            "No application selected".into(),
+        ));
     }
     let mut matching: Vec<WinInfo> = windows
         .into_iter()
         .filter(|w| w.meta.pid != own_pid && normalize_app(&w.meta.app) == wanted)
         .collect();
     if matching.is_empty() {
-        return Err(PlatformError::DeviceNotFound(format!("{app} has no open windows")));
+        return Err(PlatformError::DeviceNotFound(format!(
+            "{app} has no open windows"
+        )));
     }
     // `windows` is sorted front-most first; prefer a visible window.
     match matching.iter().position(|w| !w.meta.minimized) {
@@ -448,7 +488,11 @@ fn pick_application_window(windows: Vec<WinInfo>, app: &str, own_pid: u32) -> Re
 }
 
 fn label_or(spec: &ScreenSourceSpec, fallback: impl FnOnce() -> String) -> String {
-    if spec.label.trim().is_empty() { fallback() } else { spec.label.clone() }
+    if spec.label.trim().is_empty() {
+        fallback()
+    } else {
+        spec.label.clone()
+    }
 }
 
 pub(crate) fn parse_window_id(id: &str) -> Result<u32, PlatformError> {
@@ -472,10 +516,18 @@ pub(crate) struct MonitorGeometry {
 
 impl MonitorGeometry {
     pub fn of(monitor: &xcap::Monitor) -> Result<MonitorGeometry, PlatformError> {
-        let x = monitor.x().map_err(|e| xcap_error("reading display geometry", e))?;
-        let y = monitor.y().map_err(|e| xcap_error("reading display geometry", e))?;
-        let width = monitor.width().map_err(|e| xcap_error("reading display geometry", e))?;
-        let height = monitor.height().map_err(|e| xcap_error("reading display geometry", e))?;
+        let x = monitor
+            .x()
+            .map_err(|e| xcap_error("reading display geometry", e))?;
+        let y = monitor
+            .y()
+            .map_err(|e| xcap_error("reading display geometry", e))?;
+        let width = monitor
+            .width()
+            .map_err(|e| xcap_error("reading display geometry", e))?;
+        let height = monitor
+            .height()
+            .map_err(|e| xcap_error("reading display geometry", e))?;
         let estimated_scale = if cfg!(target_os = "macos") {
             f64::from(monitor.scale_factor().unwrap_or(1.0)).max(1.0)
         } else {
@@ -533,7 +585,9 @@ fn display_label(monitor: &xcap::Monitor) -> String {
 pub(crate) fn find_monitor(id: &str) -> Result<xcap::Monitor, PlatformError> {
     let monitors = xcap::Monitor::all().map_err(|e| xcap_error("listing displays", e))?;
     if monitors.is_empty() {
-        return Err(PlatformError::DeviceNotFound("No display is available".into()));
+        return Err(PlatformError::DeviceNotFound(
+            "No display is available".into(),
+        ));
     }
     let wanted = id.trim();
     if wanted.is_empty() || wanted.eq_ignore_ascii_case("primary") {
@@ -555,7 +609,8 @@ pub(crate) fn find_monitor(id: &str) -> Result<xcap::Monitor, PlatformError> {
         .into_iter()
         .find(|m| {
             m.name().is_ok_and(|n| n.eq_ignore_ascii_case(wanted))
-                || m.friendly_name().is_ok_and(|n| n.eq_ignore_ascii_case(wanted))
+                || m.friendly_name()
+                    .is_ok_and(|n| n.eq_ignore_ascii_case(wanted))
         })
         .ok_or_else(|| {
             PlatformError::DeviceNotFound("The selected display is no longer connected".into())
@@ -574,7 +629,9 @@ pub(crate) fn ensure_screen_permission() -> Result<(), PlatformError> {
     #[cfg(target_os = "macos")]
     {
         if !objc2_core_graphics::CGPreflightScreenCaptureAccess() {
-            return Err(PlatformError::PermissionDenied(SCREEN_PERMISSION_MESSAGE.to_string()));
+            return Err(PlatformError::PermissionDenied(
+                SCREEN_PERMISSION_MESSAGE.to_string(),
+            ));
         }
     }
     Ok(())
@@ -600,7 +657,14 @@ mod tests {
 
     const OWN: u32 = 999;
 
-    fn win(id: u32, pid: u32, app: &str, title: &str, rect: (i64, i64, i64, i64), z: i64) -> WinMeta {
+    fn win(
+        id: u32,
+        pid: u32,
+        app: &str,
+        title: &str,
+        rect: (i64, i64, i64, i64),
+        z: i64,
+    ) -> WinMeta {
         WinMeta {
             id,
             pid,
@@ -636,7 +700,10 @@ mod tests {
         let rules = [rule(PrivacyRuleType::Application, "1Password")];
         let p = evaluate_area_privacy(&windows, display(), OWN, &rules);
         assert_eq!(p.front, Some(0));
-        assert_eq!(p.skip_reason.as_deref(), Some("application rule \"1Password\""));
+        assert_eq!(
+            p.skip_reason.as_deref(),
+            Some("application rule \"1Password\"")
+        );
     }
 
     #[test]
@@ -668,7 +735,14 @@ mod tests {
 
     #[test]
     fn transparent_windows_do_not_hide_sensitive_content() {
-        let mut overlay = win(1, 20, "GeForce Overlay", "NVIDIA GeForce Overlay", (0, 0, 1920, 1080), 9);
+        let mut overlay = win(
+            1,
+            20,
+            "GeForce Overlay",
+            "NVIDIA GeForce Overlay",
+            (0, 0, 1920, 1080),
+            9,
+        );
         overlay.opaque = false;
         let mut code = win(2, 11, "Code", "main.rs", (0, 0, 1000, 1080), 5);
         code.focused = true;
@@ -697,11 +771,21 @@ mod tests {
     #[test]
     fn small_topmost_windows_do_not_become_front() {
         let taskbar = win(1, 30, "Windows Explorer", "", (0, 1040, 1920, 40), 9);
-        let bank = win(2, 31, "Google Chrome", "Example Bank - Google Chrome", (0, 0, 1920, 1040), 5);
+        let bank = win(
+            2,
+            31,
+            "Google Chrome",
+            "Example Bank - Google Chrome",
+            (0, 0, 1920, 1040),
+            5,
+        );
         let rules = [rule(PrivacyRuleType::Domain, "examplebank.com")];
         let p = evaluate_area_privacy(&[taskbar, bank], display(), OWN, &rules);
         assert_eq!(p.front, Some(1));
-        assert_eq!(p.skip_reason.as_deref(), Some("domain rule \"examplebank.com\""));
+        assert_eq!(
+            p.skip_reason.as_deref(),
+            Some("domain rule \"examplebank.com\"")
+        );
     }
 
     #[test]
@@ -757,6 +841,9 @@ mod tests {
     #[test]
     fn window_id_parsing() {
         assert_eq!(parse_window_id(" 42 ").unwrap(), 42);
-        assert!(matches!(parse_window_id("abc"), Err(PlatformError::DeviceNotFound(_))));
+        assert!(matches!(
+            parse_window_id("abc"),
+            Err(PlatformError::DeviceNotFound(_))
+        ));
     }
 }

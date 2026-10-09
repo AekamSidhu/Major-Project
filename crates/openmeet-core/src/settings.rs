@@ -634,7 +634,8 @@ impl ShortcutAction {
                     "CommandOrControl+Shift+Escape"
                 }
             }
-            ShortcutAction::ExpandHud => "CommandOrControl+Shift+E",
+            // Ctrl+Shift+E is Microsoft Teams' "share screen"; avoid it.
+            ShortcutAction::ExpandHud => "CommandOrControl+Shift+Period",
             ShortcutAction::CycleStyle => "CommandOrControl+Shift+Y",
         }
     }

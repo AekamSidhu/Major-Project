@@ -68,7 +68,11 @@ const SECOND_LEVEL_SUFFIXES: &[&str] = &["co", "com", "net", "org", "gov", "ac",
 ///   for browsers / unknown apps – the site name ("bank.example.com" matches
 ///   "Example Bank – Sign in - Google Chrome").
 /// * Region rules never exclude a window (see [`apply_region_masks`]).
-pub fn excluded_by(app: Option<&str>, title: Option<&str>, rules: &[PrivacyRule]) -> Option<String> {
+pub fn excluded_by(
+    app: Option<&str>,
+    title: Option<&str>,
+    rules: &[PrivacyRule],
+) -> Option<String> {
     let app = app.map(str::trim).filter(|a| !a.is_empty());
     let title = title.map(str::trim).filter(|t| !t.is_empty());
     for rule in rules {
@@ -87,7 +91,11 @@ pub fn excluded_by(app: Option<&str>, title: Option<&str>, rules: &[PrivacyRule]
             PrivacyRuleType::Region => false,
         };
         if matched {
-            return Some(format!("{} rule \"{}\"", rule_kind_label(rule.rule_type), value));
+            return Some(format!(
+                "{} rule \"{}\"",
+                rule_kind_label(rule.rule_type),
+                value
+            ));
         }
     }
     None
@@ -98,7 +106,11 @@ pub fn excluded_by(app: Option<&str>, title: Option<&str>, rules: &[PrivacyRule]
 /// at source resolution). Invalid rules are ignored; rectangles are clipped to
 /// the image and rounded outwards so a scaled mask never under-covers.
 pub fn apply_region_masks(img: &mut RgbaImage, rules: &[PrivacyRule], scale: f32) {
-    let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
     for rule in rules {
         if rule.rule_type != PrivacyRuleType::Region {
             continue;
@@ -242,7 +254,10 @@ fn contains_word_sequence(haystack: &str, needle: &str) -> bool {
 /// leading "www.", lowercase.
 fn normalize_domain(value: &str) -> String {
     let v = value.trim().to_lowercase();
-    let v = v.split_once("://").map(|(_, rest)| rest.to_string()).unwrap_or(v);
+    let v = v
+        .split_once("://")
+        .map(|(_, rest)| rest.to_string())
+        .unwrap_or(v);
     let host = v.split(['/', '?', '#']).next().unwrap_or("");
     let host = host.rsplit('@').next().unwrap_or("");
     let host = host.split(':').next().unwrap_or("");
@@ -259,14 +274,12 @@ fn site_label(domain: &str) -> Option<String> {
         return None;
     }
     let n = labels.len();
-    let registrable_first = if n >= 3
-        && labels[n - 1].len() == 2
-        && SECOND_LEVEL_SUFFIXES.contains(&labels[n - 2])
-    {
-        n - 3
-    } else {
-        n - 2
-    };
+    let registrable_first =
+        if n >= 3 && labels[n - 1].len() == 2 && SECOND_LEVEL_SUFFIXES.contains(&labels[n - 2]) {
+            n - 3
+        } else {
+            n - 2
+        };
     let label = labels[registrable_first];
     (label.chars().count() >= 3).then(|| label.to_string())
 }
@@ -277,7 +290,10 @@ fn strip_browser_suffix(title: &str) -> String {
     for sep in [" - ", " — ", " – "] {
         if let Some(idx) = lower.rfind(sep) {
             let tail = lower[idx + sep.len()..].trim();
-            if BROWSER_TITLE_MARKERS.iter().any(|m| tail == *m || tail.ends_with(m)) {
+            if BROWSER_TITLE_MARKERS
+                .iter()
+                .any(|m| tail == *m || tail.ends_with(m))
+            {
                 return lower[..idx].to_string();
             }
         }
@@ -361,16 +377,28 @@ mod tests {
 
     #[test]
     fn domain_rules() {
-        let rules = [rule(PrivacyRuleType::Domain, "https://www.bank.example.com/login")];
+        let rules = [rule(
+            PrivacyRuleType::Domain,
+            "https://www.bank.example.com/login",
+        )];
         // Full domain in the title.
-        assert!(excluded_by(Some("Firefox"), Some("bank.example.com/accounts — Mozilla Firefox"), &rules).is_some());
+        assert!(
+            excluded_by(
+                Some("Firefox"),
+                Some("bank.example.com/accounts — Mozilla Firefox"),
+                &rules
+            )
+            .is_some()
+        );
         // Site name in a browser page title.
-        assert!(excluded_by(
-            Some("Google Chrome"),
-            Some("Example Bank – Sign in - Google Chrome"),
-            &rules
-        )
-        .is_some());
+        assert!(
+            excluded_by(
+                Some("Google Chrome"),
+                Some("Example Bank – Sign in - Google Chrome"),
+                &rules
+            )
+            .is_some()
+        );
         // Unknown app: treated like a browser.
         assert!(excluded_by(None, Some("Example Bank"), &rules).is_some());
         // Non-browser apps only match the full domain.
@@ -385,20 +413,39 @@ mod tests {
     #[test]
     fn domain_rule_ignores_browser_name_suffix() {
         let rules = [rule(PrivacyRuleType::Domain, "google.com")];
-        assert!(excluded_by(Some("Google Chrome"), Some("Weather - Google Chrome"), &rules).is_none());
-        assert!(excluded_by(Some("Google Chrome"), Some("Google Docs - Google Chrome"), &rules).is_some());
+        assert!(
+            excluded_by(
+                Some("Google Chrome"),
+                Some("Weather - Google Chrome"),
+                &rules
+            )
+            .is_none()
+        );
+        assert!(
+            excluded_by(
+                Some("Google Chrome"),
+                Some("Google Docs - Google Chrome"),
+                &rules
+            )
+            .is_some()
+        );
         let edge = [rule(PrivacyRuleType::Domain, "microsoft.com")];
-        assert!(excluded_by(
-            Some("Microsoft Edge"),
-            Some("Weather - Personal - Microsoft\u{200b} Edge"),
-            &edge
-        )
-        .is_none());
+        assert!(
+            excluded_by(
+                Some("Microsoft Edge"),
+                Some("Weather - Personal - Microsoft\u{200b} Edge"),
+                &edge
+            )
+            .is_none()
+        );
     }
 
     #[test]
     fn domain_helpers() {
-        assert_eq!(normalize_domain("HTTPS://user:pw@WWW.Example.COM:8443/a?b"), "example.com");
+        assert_eq!(
+            normalize_domain("HTTPS://user:pw@WWW.Example.COM:8443/a?b"),
+            "example.com"
+        );
         assert_eq!(normalize_domain("bank.example.co.uk"), "bank.example.co.uk");
         assert_eq!(site_label("bank.example.com").as_deref(), Some("example"));
         assert_eq!(site_label("shop.example.co.uk").as_deref(), Some("example"));

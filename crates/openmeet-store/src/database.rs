@@ -56,9 +56,8 @@ impl Database {
                 StoreError::Database(format!("cannot create the database directory: {e}"))
             })?;
         }
-        private_fs::create_file(path).map_err(|e| {
-            StoreError::Database(format!("cannot create the database file: {e}"))
-        })?;
+        private_fs::create_file(path)
+            .map_err(|e| StoreError::Database(format!("cannot create the database file: {e}")))?;
         let conn = Connection::open(path).db()?;
         let db = Self::initialize(conn, true)?;
         info!(
@@ -145,9 +144,7 @@ fn configure(conn: &Connection, file_backed: bool) -> Result<(), StoreError> {
     }
 
     if file_backed {
-        let mode: String = conn
-            .pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get(0))
-            .db()?;
+        let mode = enable_wal(conn, BUSY_TIMEOUT)?;
         if mode.eq_ignore_ascii_case("wal") {
             // NORMAL is durable against application crashes in WAL mode and
             // avoids an fsync per transaction.
@@ -161,6 +158,55 @@ fn configure(conn: &Connection, file_backed: bool) -> Result<(), StoreError> {
         }
     }
     Ok(())
+}
+
+/// Switches the file to WAL journaling and returns the journal mode SQLite
+/// reports.
+///
+/// Switching a fresh (rollback-journal) file to WAL needs an exclusive lock,
+/// which the statement has to upgrade to from the read lock it already
+/// holds. SQLite reports `SQLITE_BUSY` immediately in that situation instead
+/// of invoking the busy handler, so when several connections open a new file
+/// at the same moment the switch is retried here with a short backoff, for
+/// at most `max_wait`. On a file already in WAL mode it is a no-op.
+fn enable_wal(conn: &Connection, max_wait: Duration) -> Result<String, StoreError> {
+    let deadline = Instant::now() + max_wait;
+    let mut delay = Duration::from_millis(1);
+    let mut retries = 0u32;
+    loop {
+        match conn
+            .pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get::<_, String>(0))
+        {
+            Ok(mode) => {
+                if retries > 0 {
+                    debug!(retries, "enabled write-ahead logging after lock contention");
+                }
+                return Ok(mode);
+            }
+            Err(e) if is_busy(&e) && Instant::now() + delay < deadline => {
+                retries += 1;
+                std::thread::sleep(delay);
+                delay = (delay * 2).min(Duration::from_millis(50));
+            }
+            Err(e) => {
+                return Err(StoreError::Database(format!(
+                    "cannot enable write-ahead logging: {e}"
+                )));
+            }
+        }
+    }
+}
+
+/// True for `SQLITE_BUSY` / `SQLITE_LOCKED` (and their extended codes).
+fn is_busy(err: &rusqlite::Error) -> bool {
+    matches!(
+        err,
+        rusqlite::Error::SqliteFailure(e, _)
+            if matches!(
+                e.code,
+                rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+            )
+    )
 }
 
 /// Copies the write-ahead log into the database file and truncates it to
@@ -293,12 +339,50 @@ mod tests {
             .execute_batch("PRAGMA foreign_keys = OFF;")
             .unwrap();
         assert!(matches!(db.health_check(), Err(StoreError::Database(_))));
-        db.lock().execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        db.lock()
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .unwrap();
         db.health_check().unwrap();
         db.lock()
             .pragma_update(None, "user_version", SCHEMA_VERSION + 5)
             .unwrap();
         assert!(matches!(db.health_check(), Err(StoreError::Migration(_))));
+    }
+
+    #[test]
+    fn busy_errors_are_recognized_and_wal_switch_reports_failures() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("locked.db");
+        let holder = Connection::open(&path).unwrap();
+        holder
+            .execute_batch("CREATE TABLE t (x INTEGER); BEGIN EXCLUSIVE;")
+            .unwrap();
+
+        let other = Connection::open(&path).unwrap();
+        other.busy_timeout(Duration::ZERO).unwrap();
+        let err = other
+            .query_row("SELECT COUNT(*) FROM t", [], |r| r.get::<_, i64>(0))
+            .unwrap_err();
+        assert!(is_busy(&err), "{err:?}");
+        assert!(!is_busy(&rusqlite::Error::InvalidQuery));
+
+        // While another connection holds the file exclusively the switch
+        // keeps retrying until `max_wait`, then fails with a typed,
+        // descriptive error.
+        let max_wait = Duration::from_millis(150);
+        let started = Instant::now();
+        let err = enable_wal(&other, max_wait).unwrap_err();
+        assert!(started.elapsed() >= max_wait / 2, "{:?}", started.elapsed());
+        assert!(
+            matches!(&err, StoreError::Database(m) if m.contains("write-ahead logging")),
+            "{err:?}"
+        );
+
+        holder.execute_batch("COMMIT;").unwrap();
+        assert_eq!(
+            enable_wal(&other, max_wait).unwrap().to_ascii_lowercase(),
+            "wal"
+        );
     }
 
     #[test]

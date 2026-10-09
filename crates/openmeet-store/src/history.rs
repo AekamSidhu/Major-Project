@@ -90,7 +90,11 @@ impl Database {
     /// Meetings for the history view, newest first (by start time), with
     /// the number of stored transcript segments and questions and whether a
     /// summary exists.
-    pub fn list_meetings(&self, limit: u32, offset: u32) -> Result<Vec<MeetingListItem>, StoreError> {
+    pub fn list_meetings(
+        &self,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<MeetingListItem>, StoreError> {
         let conn = self.lock();
         let mut stmt = conn.prepare_cached(LIST_MEETINGS).db()?;
         let rows = stmt
@@ -191,17 +195,26 @@ impl Database {
         for (id, started_at, ended_at) in &interrupted {
             let ended_at = match ended_at {
                 Some(ended_at) => *ended_at,
-                None => last_activity(&tx, id, *started_at)?
-                    .clamp(*started_at, now_ms.max(*started_at)),
+                None => {
+                    last_activity(&tx, id, *started_at)?.clamp(*started_at, now_ms.max(*started_at))
+                }
             };
             tx.prepare_cached(COMPLETE_MEETING)
                 .db()?
-                .execute(params![id, SqlEnum(MeetingState::Completed), ended_at, now_ms])
+                .execute(params![
+                    id,
+                    SqlEnum(MeetingState::Completed),
+                    ended_at,
+                    now_ms
+                ])
                 .db()?;
         }
         tx.commit().db()?;
         if !interrupted.is_empty() {
-            info!(meetings = interrupted.len(), "recovered interrupted meetings");
+            info!(
+                meetings = interrupted.len(),
+                "recovered interrupted meetings"
+            );
         }
         Ok(count_u32(interrupted.len()))
     }

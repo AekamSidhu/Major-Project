@@ -133,7 +133,10 @@ mod tests {
 
     #[test]
     fn strips_leading_think_block() {
-        all_splits("<think>\nreasoning… über</think>\n\nThe answer.", "The answer.");
+        all_splits(
+            "<think>\nreasoning… über</think>\n\nThe answer.",
+            "The answer.",
+        );
         all_splits("  <think>x</think>Answer", "Answer");
     }
 

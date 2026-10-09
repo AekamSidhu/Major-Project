@@ -173,13 +173,12 @@ impl SseParser {
                 self.data.push_str(&String::from_utf8_lossy(value));
                 self.data.push('\n');
             }
-            b"id" => {
-                if !value.contains(&0) {
-                    self.last_event_id = String::from_utf8_lossy(value).into_owned();
-                }
+            // An id containing NUL is ignored per spec.
+            b"id" if !value.contains(&0) => {
+                self.last_event_id = String::from_utf8_lossy(value).into_owned();
             }
             // `retry` only matters for reconnecting clients; unknown fields
-            // are ignored per spec.
+            // (and NUL-containing ids) are ignored per spec.
             _ => {}
         }
     }
@@ -235,7 +234,8 @@ mod tests {
 
     #[test]
     fn basic_events_any_split() {
-        let input = b"event: message_start\ndata: {\"a\":1}\n\nevent: ping\ndata: {}\n\ndata: [DONE]\n\n";
+        let input =
+            b"event: message_start\ndata: {\"a\":1}\n\nevent: ping\ndata: {}\n\ndata: [DONE]\n\n";
         assert_all_splits(
             input,
             &[
@@ -249,12 +249,16 @@ mod tests {
     #[test]
     fn crlf_and_cr_line_endings() {
         let input = b"data: one\r\n\r\ndata: two\r\rdata: three\n\n";
-        assert_all_splits(input, &[ev(None, "one"), ev(None, "two"), ev(None, "three")]);
+        assert_all_splits(
+            input,
+            &[ev(None, "one"), ev(None, "two"), ev(None, "three")],
+        );
     }
 
     #[test]
     fn multiline_data_comments_and_fields() {
-        let input = b": keep-alive comment\ndata: line1\ndata:line2\ndata\nretry: 100\nunknown: x\n\n";
+        let input =
+            b": keep-alive comment\ndata: line1\ndata:line2\ndata\nretry: 100\nunknown: x\n\n";
         assert_all_splits(input, &[ev(None, "line1\nline2\n")]);
     }
 

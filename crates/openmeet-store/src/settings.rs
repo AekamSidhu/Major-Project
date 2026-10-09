@@ -219,7 +219,10 @@ mod tests {
         assert_eq!(decoded.ai.llm.model, "my-model");
         assert_eq!(decoded.general, defaults.general);
         assert_eq!(decoded.profile.background, "kept");
-        assert_eq!(decoded.shortcuts.accelerator(ShortcutAction::AskAi), "Ctrl+K");
+        assert_eq!(
+            decoded.shortcuts.accelerator(ShortcutAction::AskAi),
+            "Ctrl+K"
+        );
         assert_eq!(
             decoded.shortcuts.accelerator(ShortcutAction::ToggleOverlay),
             ShortcutAction::ToggleOverlay.default_accelerator()

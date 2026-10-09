@@ -58,18 +58,38 @@ impl IRect {
         let mut out = Vec::with_capacity(4);
         // Top band.
         if c.y0 > self.y0 {
-            out.push(IRect { x0: self.x0, y0: self.y0, x1: self.x1, y1: c.y0 });
+            out.push(IRect {
+                x0: self.x0,
+                y0: self.y0,
+                x1: self.x1,
+                y1: c.y0,
+            });
         }
         // Bottom band.
         if c.y1 < self.y1 {
-            out.push(IRect { x0: self.x0, y0: c.y1, x1: self.x1, y1: self.y1 });
+            out.push(IRect {
+                x0: self.x0,
+                y0: c.y1,
+                x1: self.x1,
+                y1: self.y1,
+            });
         }
         // Left and right parts of the middle band.
         if c.x0 > self.x0 {
-            out.push(IRect { x0: self.x0, y0: c.y0, x1: c.x0, y1: c.y1 });
+            out.push(IRect {
+                x0: self.x0,
+                y0: c.y0,
+                x1: c.x0,
+                y1: c.y1,
+            });
         }
         if c.x1 < self.x1 {
-            out.push(IRect { x0: c.x1, y0: c.y0, x1: self.x1, y1: c.y1 });
+            out.push(IRect {
+                x0: c.x1,
+                y0: c.y0,
+                x1: self.x1,
+                y1: c.y1,
+            });
         }
         out
     }
@@ -77,7 +97,11 @@ impl IRect {
 
 /// Parts of `target` not covered by any of `occluders` (disjoint rectangles).
 pub(crate) fn visible_parts(target: IRect, occluders: &[IRect]) -> Vec<IRect> {
-    let mut parts = if target.is_empty() { Vec::new() } else { vec![target] };
+    let mut parts = if target.is_empty() {
+        Vec::new()
+    } else {
+        vec![target]
+    };
     for occ in occluders {
         if parts.is_empty() {
             break;

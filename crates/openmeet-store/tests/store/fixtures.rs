@@ -26,7 +26,8 @@ pub fn open_file_db(dir: &Path) -> Database {
 
 pub fn raw_connection(dir: &Path) -> rusqlite::Connection {
     let conn = rusqlite::Connection::open(dir.join("openmeet.db")).expect("raw connection");
-    conn.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
     conn
 }
 
@@ -230,7 +231,12 @@ pub fn embedding(
     }
 }
 
-pub fn privacy_rule(id: &str, rule_type: PrivacyRuleType, value: &str, created_at: i64) -> PrivacyRule {
+pub fn privacy_rule(
+    id: &str,
+    rule_type: PrivacyRuleType,
+    value: &str,
+    created_at: i64,
+) -> PrivacyRule {
     PrivacyRule {
         id: id.to_string(),
         rule_type,
@@ -248,7 +254,12 @@ pub fn populate(db: &Database, meeting_id: &str, started_at: i64) -> MeetingReco
     db.save_meeting(&m).unwrap();
 
     let segments = vec![
-        segment(meeting_id, &p("s1"), 1_000, "How would you design a rate limiter?"),
+        segment(
+            meeting_id,
+            &p("s1"),
+            1_000,
+            "How would you design a rate limiter?",
+        ),
         segment(meeting_id, &p("s2"), 5_000, "I'd probably use Redis."),
     ];
     for s in &segments {
@@ -261,8 +272,18 @@ pub fn populate(db: &Database, meeting_id: &str, started_at: i64) -> MeetingReco
     let suggestions = vec![suggestion(Some(meeting_id), &p("r1"), started_at + 9_000)];
     db.save_suggestion(&suggestions[0]).unwrap();
     let topics = vec![
-        topic(meeting_id, "system-design", TopicStatus::Covered, started_at + 4_000),
-        topic(meeting_id, "observability", TopicStatus::Pending, started_at + 4_500),
+        topic(
+            meeting_id,
+            "system-design",
+            TopicStatus::Covered,
+            started_at + 4_000,
+        ),
+        topic(
+            meeting_id,
+            "observability",
+            TopicStatus::Pending,
+            started_at + 4_500,
+        ),
     ];
     db.save_topics(meeting_id, &topics).unwrap();
     let claims = vec![claim(meeting_id, &p("c1"), started_at + 8_500)];

@@ -68,7 +68,11 @@ mod tests {
             let mut lines = s.push(&input[..split]);
             lines.extend(s.push(&input[split..]));
             lines.extend(s.finish());
-            assert_eq!(lines, vec!["{\"a\":\"é\"}", "", "{\"b\":2}", "{\"c\":3}"], "split {split}");
+            assert_eq!(
+                lines,
+                vec!["{\"a\":\"é\"}", "", "{\"b\":2}", "{\"c\":3}"],
+                "split {split}"
+            );
         }
     }
 

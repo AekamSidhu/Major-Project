@@ -34,6 +34,8 @@ tauri-plugin-clipboard-manager = "2.4.1"
 tauri-plugin-autostart = "2.7.0"
 tauri-plugin-single-instance = "2.5.2"
 tauri-plugin-opener = "2.7.0"
+tauri-plugin-notification = "2.5.1"
+keyring = "4.2"
 
 serde.workspace = true
 serde_json.workspace = true

@@ -348,7 +348,14 @@ mod tests {
         fill(&mut edited, 40, 40 + 5 * 24, 800, 12, [250, 250, 250, 255]);
         for i in 0..100u32 {
             if i % 2 == 0 {
-                fill(&mut edited, 40 + i * 8, 40 + 5 * 24, 6, 12, [30, 30, 30, 255]);
+                fill(
+                    &mut edited,
+                    40 + i * 8,
+                    40 + 5 * 24,
+                    6,
+                    12,
+                    [30, 30, 30, 255],
+                );
             }
         }
         let (changed, score, _) = d.evaluate(&edited);
