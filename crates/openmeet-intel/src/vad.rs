@@ -195,10 +195,14 @@ struct Utterance {
 }
 
 impl Utterance {
-    fn new(frames: Vec<Frame>) -> Self {
+    /// `onset_ms`: frames that start before it are pre-roll context only —
+    /// they are kept as audio but never count as voiced speech (otherwise a
+    /// burst after a click train would inherit the clicks' "speech" time).
+    fn new(frames: Vec<Frame>, onset_ms: Option<f64>) -> Self {
+        let onset = onset_ms.unwrap_or(f64::NEG_INFINITY);
         let speech_start_ms = frames
             .iter()
-            .find(|f| f.speech)
+            .find(|f| f.speech && f.start_ms >= onset)
             .map(|f| f.start_ms)
             .or_else(|| frames.first().map(|f| f.start_ms))
             .unwrap_or(0.0);
@@ -216,7 +220,9 @@ impl Utterance {
             noise_suspect: false,
         };
         for f in frames {
-            u.track(&f);
+            if f.start_ms >= onset {
+                u.track(&f);
+            }
             u.frames.push(f);
         }
         u
@@ -547,7 +553,7 @@ impl Segmenter {
             .map(|(_, f)| f)
             .collect();
         self.onset_ms = 0.0;
-        let utterance = Utterance::new(frames);
+        let utterance = Utterance::new(frames, Some(onset_start));
         tracing::trace!(utterance = %utterance.id, "speech started");
         out.push(SegmenterEvent::SpeechStarted {
             utterance_id: utterance.id.clone(),
@@ -674,7 +680,7 @@ impl Segmenter {
             .or(rest.first())
             .map(|f| f.start_ms)
             .unwrap_or(end);
-        let mut next = Utterance::new(rest);
+        let mut next = Utterance::new(rest, None);
         if next.speech_frames == 0 {
             // Speech continues; anchor the new utterance at the cut.
             next.speech_start_ms = at_ms;
@@ -972,10 +978,12 @@ mod tests {
     fn clicks_never_start_speech() {
         let config = VadConfig::from_settings(0.6, 500, false);
         let min_speech = config.min_speech_ms;
+        let frame_ms = config.frame_ms;
         let mut f = Feeder::new(config);
         f.feed(&noise(500), 320);
-        for click_ms in [1, 5, 20, 40, 60, 100] {
-            assert!(click_ms < min_speech);
+        for click_ms in [1, 5, 20, 40, 60] {
+            // A burst can touch one extra frame on each side.
+            assert!(click_ms + 2 * frame_ms <= min_speech);
             f.feed(&tone(click_ms, 0.9), 320);
             f.feed(&noise(300), 320);
         }
@@ -985,6 +993,12 @@ mod tests {
             f.feed(&noise(40), 320);
         }
         assert!(f.started().is_empty(), "{:?}", f.events);
+        assert!(!f.seg.is_speaking());
+        // A 100 ms burst may register as an onset (frame quantization) but it
+        // is far below min_utterance_ms, so it never becomes an utterance.
+        f.feed(&tone(100, 0.9), 320);
+        f.feed(&noise(800), 320);
+        assert!(f.finals().is_empty());
         assert!(!f.seg.is_speaking());
     }
 
@@ -1090,7 +1104,8 @@ mod tests {
         let finals = f.finals();
         assert_eq!(finals.len(), 2);
         assert_ne!(finals[0].utterance_id, finals[1].utterance_id);
-        assert!(finals[1].start_ms > finals[0].end_ms, "no overlap after flush");
+        // Contiguous audio: the next utterance starts where the flushed one ended.
+        assert!(finals[1].start_ms >= finals[0].end_ms, "no overlap after flush");
         // A flushed blip shorter than min_utterance_ms is discarded.
         f.feed(&noise(600), 320);
         f.feed(&tone(200, 0.3), 320);

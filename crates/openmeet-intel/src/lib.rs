@@ -20,9 +20,9 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
-// pub mod claims;
+pub mod claims;
 // pub mod demo;
-// pub mod detect;
+pub mod detect;
 // pub mod export;
 // pub mod mock;
 pub mod prompts;

@@ -630,6 +630,12 @@ fn is_abbreviation(chars: &[char], dot_index: usize) -> bool {
         return false;
     }
     if ABBREVIATIONS.contains(&word.as_str()) {
+        // Titles ("Ms.", "Dr.", "St.") are capitalized; lowercase "ms." after a
+        // number is a unit ("120 ms.") and ends the sentence.
+        const TITLES: &[&str] = &["ms", "mr", "mrs", "dr", "st", "sr", "jr", "prof"];
+        if TITLES.contains(&word.as_str()) && chars[start].is_lowercase() {
+            return false;
+        }
         return true;
     }
     // Single-letter initials ("J. Smith").
@@ -1091,8 +1097,12 @@ mod tests {
 
     #[test]
     fn words_and_sentences() {
-        assert_eq!(word_count("  Hello there,  general - Kenobi! "), 3);
+        assert_eq!(word_count("  Hello there,  general - Kenobi! "), 4);
         assert_eq!(word_count(""), 0);
+        assert_eq!(
+            split_sentences("Latency dropped to 120 ms. I led it. Ms. Smith agreed."),
+            vec!["Latency dropped to 120 ms.", "I led it.", "Ms. Smith agreed."]
+        );
         assert_eq!(
             split_sentences("We use Redis. How do you scale it? Great!"),
             vec!["We use Redis.", "How do you scale it?", "Great!"]
