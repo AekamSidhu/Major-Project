@@ -201,7 +201,7 @@ fn list_windows() -> Vec<WindowEntry> {
             },
         ));
     }
-    out.sort_by(|a, b| b.0.cmp(&a.0));
+    out.sort_by_key(|(z, _)| std::cmp::Reverse(*z));
     out.into_iter().map(|(_, w)| w).collect()
 }
 

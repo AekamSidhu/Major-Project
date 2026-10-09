@@ -771,8 +771,7 @@ fn stream_config(
         .filter(|r| !r.sample_format().is_dsd())
         .max_by(|a, b| a.cmp_default_heuristics(b))
         .map(|r| {
-            r.clone()
-                .try_with_standard_sample_rate()
+            r.try_with_standard_sample_rate()
                 .unwrap_or_else(|| r.with_max_sample_rate())
         })
         .ok_or_else(|| {

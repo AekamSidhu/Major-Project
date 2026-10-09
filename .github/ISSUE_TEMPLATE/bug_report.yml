@@ -1,0 +1,51 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste real meeting transcripts, screenshots of real meetings, or API keys.**
+        Reproduce with demo mode or synthetic input where possible.
+        Security or privacy vulnerabilities: use private reporting (see SECURITY.md), not this form.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a demo meeting "rate-limiter-interviewer"
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows 11, Windows 10, macOS, Linux (X11), Linux (Wayland), Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OpenMeet version
+      placeholder: "0.1.0 (Settings → General / Diagnostics)"
+    validations:
+      required: true
+  - type: textarea
+    id: providers
+    attributes:
+      label: Providers
+      description: Which transcription / LLM / vision / embedding providers are configured (no keys or private URLs)?
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Component status and latency from the Diagnostics page (contains no meeting content).
+      render: text

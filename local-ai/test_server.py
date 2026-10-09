@@ -138,3 +138,48 @@ def test_decode_audio_float_range():
     audio = server.decode_audio(wav_bytes(0.1))
     assert audio.dtype == np.float32
     assert float(np.max(np.abs(audio))) <= 1.0
+
+
+def test_gpu_runtime_errors_are_recognized():
+    assert server.is_gpu_runtime_error(RuntimeError("Library cublas64_12.dll is not found or cannot be loaded"))
+    assert server.is_gpu_runtime_error(RuntimeError("Could not load library cudnn_ops64_9.dll"))
+    assert not server.is_gpu_runtime_error(ValueError("invalid audio"))
+
+
+def test_whisper_falls_back_to_cpu_on_missing_cuda_runtime(monkeypatch):
+    """A machine with an NVIDIA driver but no cuBLAS must still transcribe."""
+    loads: list[str] = []
+
+    class FakeSegment:
+        text = " hello "
+        avg_logprob = -0.1
+
+    class FakeModel:
+        def __init__(self, device: str) -> None:
+            self.device = device
+
+        def transcribe(self, audio, **kwargs):  # type: ignore[no-untyped-def]
+            def gen():
+                if self.device != "cpu":
+                    raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+                yield FakeSegment()
+
+            class Info:
+                language = "en"
+                duration = 1.0
+
+            return gen(), Info()
+
+    t = server.WhisperTranscriber("base.en", device="auto")
+
+    def fake_load(name: str, device: str):  # type: ignore[no-untyped-def]
+        loads.append(device)
+        return FakeModel(device)
+
+    monkeypatch.setattr(t, "_load", fake_load)
+    result = t.transcribe(np.zeros(16000, dtype=np.float32), "base.en", "en", None)
+    assert result.text == "hello"
+    assert loads == ["auto", "cpu"]
+    # Subsequent calls stay on the CPU without retrying the GPU.
+    t.transcribe(np.zeros(16000, dtype=np.float32), "base.en", "en", None)
+    assert loads == ["auto", "cpu"]

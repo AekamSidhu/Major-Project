@@ -90,37 +90,65 @@ class Embedder(Protocol):
     def loaded_model(self) -> str | None: ...
 
 
-class WhisperTranscriber:
-    """faster-whisper (CTranslate2) speech recognition, loaded lazily."""
+def is_gpu_runtime_error(exc: BaseException) -> bool:
+    """True for errors caused by a missing / unusable CUDA runtime (cuBLAS,
+    cuDNN, driver), which warrant falling back to the CPU."""
+    msg = str(exc).lower()
+    return any(k in msg for k in ("cublas", "cudnn", "cuda", "libcudart", "nvrtc"))
 
-    def __init__(self, default_model: str, device: str = "auto", compute_type: str = "int8") -> None:
+
+class WhisperTranscriber:
+    """faster-whisper (CTranslate2) speech recognition, loaded lazily.
+
+    `device` is "auto" (GPU when CUDA is usable, otherwise CPU), "cpu" or
+    "cuda" (OPENMEET_WHISPER_DEVICE). With "auto", a machine that has an NVIDIA
+    driver but no CUDA runtime libraries (cuBLAS/cuDNN) transparently falls
+    back to the CPU instead of failing every request.
+    """
+
+    def __init__(self, default_model: str, device: str | None = None, compute_type: str | None = None) -> None:
         self.default_model = default_model
-        self.device = device
-        self.compute_type = compute_type
+        self.device = (device or os.environ.get("OPENMEET_WHISPER_DEVICE", "auto")).lower()
+        self.compute_type = compute_type or os.environ.get("OPENMEET_WHISPER_COMPUTE", "int8")
         self._models: dict[str, Any] = {}
         self._lock = threading.Lock()
         self._last: str | None = None
+        self._force_cpu = self.device == "cpu"
+
+    def _load(self, name: str, device: str) -> Any:
+        from faster_whisper import WhisperModel  # heavy import, lazy
+
+        started = time.perf_counter()
+        model = WhisperModel(
+            name,
+            device=device,
+            compute_type=self.compute_type,
+            download_root=str(MODEL_DIR / "whisper"),
+        )
+        LOG.info("loaded whisper model %s on %s in %.1fs", name, device, time.perf_counter() - started)
+        return model
 
     def _get(self, name: str) -> Any:
         with self._lock:
             if name not in self._models:
-                from faster_whisper import WhisperModel  # heavy import, lazy
-
-                started = time.perf_counter()
-                self._models[name] = WhisperModel(
-                    name,
-                    device=self.device,
-                    compute_type=self.compute_type,
-                    download_root=str(MODEL_DIR / "whisper"),
-                )
-                LOG.info("loaded whisper model %s in %.1fs", name, time.perf_counter() - started)
+                device = "cpu" if self._force_cpu else self.device
+                try:
+                    self._models[name] = self._load(name, device)
+                except Exception as exc:  # noqa: BLE001 - fall back only for GPU runtime problems
+                    if device == "cpu" or self.device == "cuda" or not is_gpu_runtime_error(exc):
+                        raise
+                    LOG.warning("GPU unavailable for whisper (%s); using the CPU", type(exc).__name__)
+                    self._force_cpu = True
+                    self._models[name] = self._load(name, "cpu")
             self._last = name
             return self._models[name]
 
-    def transcribe(
-        self, audio: np.ndarray, model: str, language: str | None, prompt: str | None
-    ) -> TranscriptionResult:
-        whisper = self._get(model)
+    def _fall_back_to_cpu(self) -> None:
+        with self._lock:
+            self._force_cpu = True
+            self._models.clear()
+
+    def _run(self, whisper: Any, audio: np.ndarray, language: str | None, prompt: str | None) -> tuple[list[Any], Any]:
         segments, info = whisper.transcribe(
             audio,
             language=language,
@@ -130,6 +158,22 @@ class WhisperTranscriber:
             condition_on_previous_text=False,
             without_timestamps=True,
         )
+        # The segment generator decodes lazily: consume it here so runtime
+        # errors (e.g. missing cuBLAS) surface inside the fallback guard.
+        return list(segments), info
+
+    def transcribe(
+        self, audio: np.ndarray, model: str, language: str | None, prompt: str | None
+    ) -> TranscriptionResult:
+        whisper = self._get(model)
+        try:
+            segments, info = self._run(whisper, audio, language, prompt)
+        except Exception as exc:  # noqa: BLE001
+            if self._force_cpu or self.device == "cuda" or not is_gpu_runtime_error(exc):
+                raise
+            LOG.warning("GPU transcription failed (%s); switching to the CPU", type(exc).__name__)
+            self._fall_back_to_cpu()
+            segments, info = self._run(self._get(model), audio, language, prompt)
         texts: list[str] = []
         logprobs: list[float] = []
         for seg in segments:
@@ -353,6 +397,9 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    # HTTP client libraries log full request URLs at INFO (model downloads); keep them quiet.
+    for noisy in ("httpx", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     if not is_loopback(args.host) and not args.allow_remote:
         parser.error("refusing to bind to a non-loopback address without --allow-remote")
 

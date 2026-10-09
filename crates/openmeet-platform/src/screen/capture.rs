@@ -123,7 +123,7 @@ pub(crate) fn snapshot_windows(cache: &mut AppNameCache) -> Result<Vec<WinInfo>,
             handle,
         });
     }
-    out.sort_by(|a, b| b.meta.z.cmp(&a.meta.z));
+    out.sort_by_key(|w| std::cmp::Reverse(w.meta.z));
     let live: HashSet<u32> = out.iter().map(|w| w.meta.pid).collect();
     cache.retain(&live);
     Ok(out)

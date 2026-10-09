@@ -43,7 +43,14 @@ pub async fn delete_meeting(state: AppStateRef<'_>, meeting_id: String) -> CmdRe
         return Err(CoreError::InvalidState("End the meeting before deleting it.".into()));
     }
     let db = state.db.clone();
-    blocking(move || db.delete_meeting(&meeting_id).map_err(CoreError::from)).await
+    let shots = state.screenshots.clone();
+    blocking(move || {
+        db.delete_meeting(&meeting_id).map_err(CoreError::from)?;
+        shots
+            .delete_meeting(&meeting_id)
+            .map_err(|e| CoreError::Platform(format!("Could not delete kept screenshots: {e}")))
+    })
+    .await
 }
 
 /// Deletes every stored meeting, transcript, summary and embedding.
@@ -54,7 +61,14 @@ pub async fn delete_all_data(state: AppStateRef<'_>) -> CmdResult<()> {
     }
     state.engine.flush_persistence().await;
     let db = state.db.clone();
-    blocking(move || db.delete_all_meeting_data().map_err(CoreError::from)).await?;
+    let shots = state.screenshots.clone();
+    blocking(move || {
+        db.delete_all_meeting_data().map_err(CoreError::from)?;
+        shots
+            .delete_all()
+            .map_err(|e| CoreError::Platform(format!("Could not delete kept screenshots: {e}")))
+    })
+    .await?;
     tracing::info!("all meeting data deleted by the user");
     Ok(())
 }

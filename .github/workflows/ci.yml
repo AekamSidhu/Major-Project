@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    name: Frontend (typecheck, lint, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc -p tsconfig.json --noEmit
+      - run: npx tsc -p tsconfig.node.json --noEmit
+      - run: npx eslint .
+      - run: npx vitest run
+      - run: npx vite build
+      - name: npm audit
+        run: npm audit --audit-level=high --omit=dev
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libasound2-dev libpulse-dev libxdo-dev libssl-dev libdbus-1-dev pkg-config \
+            libxcb1-dev libxrandr-dev libpipewire-0.3-dev libgbm-dev libegl1-mesa-dev clang
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # tauri::generate_context! embeds the frontend build.
+      - run: npm ci && npx vite build
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: TypeScript bindings are up to date
+        if: runner.os == 'Linux'
+        run: |
+          cargo test -p openmeet-core export_bindings
+          node scripts/gen-bindings-index.mjs
+          git diff --exit-code -- src/bindings
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  local-ai:
+    name: Local AI sidecar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m venv local-ai/.venv && local-ai/.venv/bin/pip install -r local-ai/requirements-dev.txt
+      - run: cd local-ai && .venv/bin/python -m pytest -q

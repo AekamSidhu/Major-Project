@@ -25,10 +25,10 @@
 // pub mod detect;
 // pub mod export;
 // pub mod mock;
-// pub mod prompts;
+pub mod prompts;
 pub mod text;
 // pub mod topics;
-// pub mod vad;
+pub mod vad;
 // pub mod vision;
 
 mod json;

@@ -17,6 +17,8 @@ use openmeet_platform::audio::{AudioCapture, AudioCaptureConfig};
 use openmeet_platform::screen::{SamplerConfig, ScreenSampler, ScreenStatus};
 use parking_lot::Mutex;
 
+use crate::screenshots::ScreenshotStore;
+
 /// Maximum duration of a device level test.
 const AUDIO_TEST_SECONDS: u64 = 15;
 
@@ -158,6 +160,7 @@ impl CaptureManager {
         spec: ScreenSourceSpec,
         settings: &Settings,
         rules: Vec<PrivacyRule>,
+        keep_screenshots: Option<Arc<ScreenshotStore>>,
     ) -> Result<(), CoreError> {
         self.stop_screen(engine);
         let feed = engine.clone();
@@ -175,7 +178,12 @@ impl CaptureManager {
         let last_status = Arc::new(Mutex::new(None::<ScreenStatus>));
         let sampler = ScreenSampler::start(
             config,
-            Box::new(move |frame| feed.push_screen_frame(frame)),
+            Box::new(move |frame| {
+                if let Some(store) = &keep_screenshots {
+                    keep_screenshot(&feed, store, &frame);
+                }
+                feed.push_screen_frame(frame)
+            }),
             Box::new(move |status| {
                 let mut last = last_status.lock();
                 if last.as_ref() == Some(&status) {
@@ -304,5 +312,17 @@ impl CaptureManager {
         if let Some(c) = self.inner.lock().test.take() {
             c.stop();
         }
+    }
+}
+
+/// Saves an analyzed frame when the user opted into keeping screenshots and
+/// the current meeting is persisted (never for "do not retain" meetings).
+pub fn keep_screenshot(engine: &Engine, store: &ScreenshotStore, frame: &openmeet_core::types::ScreenFrame) {
+    if engine.unpersisted_meeting().is_some() {
+        return;
+    }
+    let Some(meeting_id) = engine.current_meeting_id() else { return };
+    if let Err(e) = store.save(&meeting_id, frame) {
+        tracing::warn!(error = %e, "could not keep screenshot");
     }
 }

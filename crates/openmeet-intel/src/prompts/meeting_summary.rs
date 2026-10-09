@@ -18,7 +18,7 @@ use super::shared::{
     one_line, question_line, sanitize, sanitize_line,
 };
 use super::{PromptParts, TranscriptLine};
-use crate::json::{first_json_object, get, get_str, value_to_str_list};
+use crate::json::{first_json_object, get, value_to_str_list};
 use crate::text::{estimate_tokens, truncate_to_tokens};
 use crate::timefmt::{clock, utc_datetime};
 

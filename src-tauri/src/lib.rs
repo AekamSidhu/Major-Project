@@ -10,6 +10,7 @@ mod local_ai;
 mod logging;
 mod overlay;
 mod providers_build;
+mod screenshots;
 mod secrets;
 mod shortcuts;
 mod sink;
@@ -179,11 +180,6 @@ fn setup(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = db.recover_interrupted_meetings(now) {
         tracing::warn!(error = %e, "meeting recovery failed");
     }
-    match db.apply_retention(settings.privacy.retention, now) {
-        Ok(n) if n > 0 => tracing::info!(deleted = n, "retention applied at startup"),
-        Ok(_) => {}
-        Err(e) => tracing::warn!(error = %e, "retention failed"),
-    }
 
     let secrets = Arc::new(SecretStore::new());
     let providers = providers_build::build(&settings, secrets.as_ref());
@@ -242,6 +238,9 @@ fn setup(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     tray::create(app)?;
     state.shortcuts.register_all(app, &settings.shortcuts);
+    // Retention (database + kept screenshots) right away, then hourly.
+    let retention_state = state.clone();
+    tauri::async_runtime::spawn(async move { retention_state.apply_retention().await });
     state.spawn_retention_task();
     tracing::info!(autostarted, "OpenMeet started");
     Ok(())

@@ -19,6 +19,7 @@ use tauri_plugin_autostart::ManagerExt as AutostartExt;
 
 use crate::capture::{CaptureManager, MeetingSources};
 use crate::local_ai::{self, LocalAiManager};
+use crate::screenshots::ScreenshotStore;
 use crate::overlay::OverlayController;
 use crate::secrets::SecretStore;
 use crate::shortcuts::ShortcutManager;
@@ -36,6 +37,7 @@ pub struct AppState {
     pub shortcuts: ShortcutManager,
     pub local_ai: LocalAiManager,
     pub stats: Mutex<ProcessStats>,
+    pub screenshots: Arc<ScreenshotStore>,
     pub data_dir: PathBuf,
     /// Serializes settings updates (read-modify-write).
     settings_lock: tokio::sync::Mutex<()>,
@@ -68,6 +70,7 @@ impl AppState {
             shortcuts: ShortcutManager::new(),
             local_ai: LocalAiManager::new(&app),
             stats: Mutex::new(ProcessStats::new()),
+            screenshots: Arc::new(ScreenshotStore::new(&data_dir)),
             settings_lock: tokio::sync::Mutex::new(()),
             app,
             engine,
@@ -164,9 +167,7 @@ impl AppState {
             }
         }
         if prev.privacy.retention != next.privacy.retention {
-            let db = self.db.clone();
-            let policy = next.privacy.retention;
-            let _ = blocking(move || db.apply_retention(policy, now_ms()).map(|_| ()).map_err(CoreError::from)).await;
+            self.apply_retention().await;
         }
         // Screen settings while a meeting is live.
         if prev.screen != next.screen && self.engine.is_live() {
@@ -279,7 +280,9 @@ impl AppState {
             .await
             .unwrap_or_default();
         let settings = self.settings();
-        if let Err(e) = self.capture.start_screen(&self.engine, spec, &settings, rules) {
+        let keep = (settings.screen.store_screenshots && settings.privacy.retention.persists())
+            .then(|| self.screenshots.clone());
+        if let Err(e) = self.capture.start_screen(&self.engine, spec, &settings, rules, keep) {
             self.notice(NoticeLevel::Error, format!("Screen capture unavailable: {e}"));
         }
     }
@@ -388,8 +391,39 @@ impl AppState {
         .await?;
         let mut frame = frame;
         frame.manual = true;
+        if settings.screen.store_screenshots && settings.privacy.retention.persists() {
+            crate::capture::keep_screenshot(&self.engine, &self.screenshots, &frame);
+        }
         self.engine.push_screen_frame(frame);
         Ok(())
+    }
+
+    /// Applies the retention policy to the database and to kept screenshots.
+    pub async fn apply_retention(&self) {
+        let policy = self.settings().privacy.retention;
+        let db = self.db.clone();
+        let shots = self.screenshots.clone();
+        let current = self.engine.current_meeting_id();
+        let r = blocking(move || {
+            let deleted = db.apply_retention(policy, now_ms()).map_err(CoreError::from)?;
+            let mut existing: std::collections::HashSet<String> = db
+                .list_meetings(u32::MAX, 0)
+                .map_err(CoreError::from)?
+                .into_iter()
+                .map(|m| m.id)
+                .collect();
+            existing.extend(current);
+            let pruned = shots.prune(&existing);
+            Ok((deleted, pruned))
+        })
+        .await;
+        match r {
+            Ok((deleted, pruned)) if deleted > 0 || pruned > 0 => {
+                tracing::info!(deleted, pruned, "retention applied")
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "retention failed"),
+        }
     }
 
     /// Periodic retention enforcement (spec §90).
@@ -399,13 +433,7 @@ impl AppState {
             loop {
                 tokio::time::sleep(Duration::from_secs(3600)).await;
                 let Some(state) = state.upgrade() else { break };
-                let policy = state.settings().privacy.retention;
-                let db = state.db.clone();
-                match blocking(move || db.apply_retention(policy, now_ms()).map_err(CoreError::from)).await {
-                    Ok(n) if n > 0 => tracing::info!(deleted = n, "retention applied"),
-                    Ok(_) => {}
-                    Err(e) => tracing::warn!(error = %e, "retention failed"),
-                }
+                state.apply_retention().await;
             }
         });
     }

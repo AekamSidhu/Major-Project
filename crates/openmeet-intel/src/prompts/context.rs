@@ -177,7 +177,7 @@ pub(crate) fn render_context_with(
         let text = if alloc[i] >= needs[i] {
             render_kind(*kind, ctx, usize::MAX)
         } else {
-            render_kind(*kind, ctx, alloc[i])
+            fit_kind(*kind, ctx, alloc[i])
         };
         if let Some(t) = text.filter(|t| !t.trim().is_empty()) {
             rendered.push((*kind, t));
@@ -216,6 +216,22 @@ pub(crate) fn render_context_with(
         }
     }
     out.join("\n\n")
+}
+
+/// Renders a block within `max_tokens`, shrinking the target when a
+/// renderer's estimate of its own overhead was too optimistic.
+fn fit_kind(kind: Kind, ctx: &PromptContext, max_tokens: usize) -> Option<String> {
+    let mut cap = max_tokens;
+    loop {
+        let text = render_kind(kind, ctx, cap)?;
+        if estimate_tokens(&text) <= max_tokens {
+            return Some(text);
+        }
+        cap = cap * 4 / 5;
+        if cap < MIN_BLOCK_TOKENS {
+            return None;
+        }
+    }
 }
 
 fn render_kind(kind: Kind, ctx: &PromptContext, max_tokens: usize) -> Option<String> {
@@ -458,8 +474,14 @@ fn render_profile(ctx: &PromptContext, max_tokens: usize) -> Option<String> {
         return Some(full);
     }
     // Shrink the free-text fields proportionally (background gets the most).
-    let skeleton = estimate_tokens(&render("", "", ""));
-    if skeleton + MIN_BLOCK_TOKENS > max_tokens {
+    // The skeleton keeps the labels and tags of every non-empty field.
+    let placeholder = |s: &str| if s.is_empty() { "" } else { "x" };
+    let skeleton = estimate_tokens(&render(
+        placeholder(&background),
+        placeholder(&role),
+        placeholder(&prefs),
+    ));
+    if skeleton + 12 + MIN_BLOCK_TOKENS > max_tokens {
         return None;
     }
     let room = max_tokens - skeleton - 12;

@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How should it work? Mention UI, shortcuts and settings if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy considerations
+      description: Would this capture, store or send any new data? How should the user control it?
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Principles
+      options:
+        - label: This keeps OpenMeet assistive (it never speaks for the user or scores people)
+          required: true
+        - label: This uses only documented OS capabilities
+          required: true
