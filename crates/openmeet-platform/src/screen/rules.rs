@@ -317,9 +317,29 @@ fn domain_matches(app: Option<&str>, title: &str, value: &str) -> bool {
         return false;
     }
     match site_label(&domain) {
-        Some(label) => contains_word_sequence(&strip_browser_suffix(title), &label),
+        Some(label) => {
+            let page = strip_browser_suffix(title);
+            contains_word_sequence(&page, &label) || contains_joined_words(&page, &label)
+        }
         None => false,
     }
+}
+
+/// True when 2–4 consecutive words of `haystack`, joined without separators,
+/// spell `label` ("Example Bank" ↔ "examplebank"). Only for labels of at
+/// least 6 characters, to avoid accidental matches of short names.
+fn contains_joined_words(haystack: &str, label: &str) -> bool {
+    if label.chars().count() < 6 {
+        return false;
+    }
+    let words = tokens(haystack);
+    (0..words.len()).any(|i| {
+        let mut joined = String::new();
+        words[i..].iter().take(4).enumerate().any(|(k, w)| {
+            joined.push_str(w);
+            k >= 1 && joined == label
+        })
+    })
 }
 
 #[cfg(test)]
@@ -540,5 +560,31 @@ mod tests {
         assert!(is_browser("Safari"));
         assert!(!is_browser("Slack"));
         assert!(!is_browser("Zoom"));
+    }
+
+    #[test]
+    fn domain_label_split_into_words() {
+        let rules = [rule(PrivacyRuleType::Domain, "examplebank.com")];
+        assert!(
+            excluded_by(
+                Some("Google Chrome"),
+                Some("Example Bank - Google Chrome"),
+                &rules
+            )
+            .is_some()
+        );
+        assert!(
+            excluded_by(
+                Some("Google Chrome"),
+                Some("Example news - Google Chrome"),
+                &rules
+            )
+            .is_none()
+        );
+        // Short labels never match by concatenation.
+        let short = [rule(PrivacyRuleType::Domain, "abcd.com")];
+        assert!(
+            excluded_by(Some("Google Chrome"), Some("ab cd - Google Chrome"), &short).is_none()
+        );
     }
 }
