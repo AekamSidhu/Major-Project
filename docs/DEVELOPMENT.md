@@ -102,6 +102,21 @@ in the same `cargo test` invocation, so `cargo test --workspace` fails to link
 the `openmeet-store` doctest there (`unresolved external symbol
 __CxxFrameHandler3`). Testing the libraries and the app in two runs avoids it.
 
+### Live test with local models
+
+`crates/openmeet-engine/tests/live.rs` runs the real pipeline — recorded
+speech → VAD → local AI sidecar (Whisper) → question detection → Ollama →
+follow-ups → summary — with no mocks. It is ignored by default. Start Ollama
+(with `llama3.2`) and the sidecar, record two 16 kHz mono WAV files (a spoken
+rate-limiter question and a spoken candidate answer; on Windows,
+`System.Speech.Synthesis.SpeechSynthesizer` can generate them), then:
+
+```bash
+OPENMEET_LIVE_QUESTION_WAV=question.wav OPENMEET_LIVE_ANSWER_WAV=answer.wav   cargo test -p openmeet-engine --test live -- --ignored --nocapture
+```
+
+It prints stage timings and the suggested follow-ups.
+
 ### Hardware tests
 
 Tests that need real devices are `#[ignore]`d. Run them on a machine with a

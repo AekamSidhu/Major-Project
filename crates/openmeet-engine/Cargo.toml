@@ -20,4 +20,5 @@ parking_lot.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+openmeet-providers.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util", "time", "sync"] }
