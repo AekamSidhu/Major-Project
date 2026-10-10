@@ -1,0 +1,90 @@
+// DFD Level 1: the main processes inside OpenMeet, the data stores they use
+// and the flows between them. Yourdon–DeMarco notation: rectangle = external
+// entity, circle = process, open-ended box = data store. External entities
+// marked * are drawn more than once to keep flows short; double-headed
+// arrows are a request and its response.
+digraph dfd1 {
+  graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.35, ranksep=0.9,
+         label="OpenMeet — DFD Level 1", pad=0.3, splines=true];
+  node  [fontname="Segoe UI", fontsize=11];
+  edge  [fontname="Segoe UI", fontsize=9, color="#3E4756", fontcolor="#3E4756"];
+
+  // External entities
+  node [shape=box, style=filled, fillcolor="#FFFFFF", color="#3E4756"];
+  os_a   [label="Operating system\n(audio devices)"];
+  os_s   [label="Operating system\n(displays, OCR)"];
+  ai_t   [label="AI provider *\n(transcription)"];
+  ai_v   [label="AI provider *\n(vision)"];
+  ai_l   [label="AI provider *\n(language model)"];
+  user_u [label="User *"];
+  user_s [label="User *"];
+  user_h [label="User *"];
+  keych  [label="OS credential store"];
+  fs     [label="File system"];
+
+  // Processes
+  node [shape=circle, style=filled, fillcolor="#E6E9FB", color="#4F5BD5", penwidth=1.6, width=1.15];
+  p1  [label="1.0\nCapture\naudio"];
+  p2  [label="2.0\nSegment &\ntranscribe"];
+  p3  [label="3.0\nAnalyse\nconversation"];
+  p4  [label="4.0\nCapture &\ninterpret\nscreen"];
+  p5  [label="5.0\nAssemble\ncontext"];
+  p6  [label="6.0\nGenerate\nsuggestions"];
+  p7  [label="7.0\nPresent\nUI"];
+  p8  [label="8.0\nManage\nsettings &\nkeys"];
+  p9  [label="9.0\nPersist &\nexport"];
+  p10 [label="10.0\nSummarize\nmeeting"];
+
+  // Data stores
+  node [shape=none, width=0, style="", penwidth=1];
+  d1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D1</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Meeting database</TD></TR></TABLE>>];
+  d2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D2</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Settings, profile, rules</TD></TR></TABLE>>];
+  d3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory</TD></TR></TABLE>>];
+  d4 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D4</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Kept screenshots (opt.)</TD></TR></TABLE>>];
+
+  // 1-2-3: audio to conversation analysis
+  os_a -> p1  [label="PCM frames"];
+  p1 -> p2    [label="16 kHz frames"];
+  p2 -> ai_t  [dir=both, label="utterance audio /\ntranscript"];
+  p2 -> p3    [label="final segments"];
+  p2 -> d3    [label="transcript lines"];
+  p3 -> d3    [label="topics, claims"];
+
+  // 4: screen
+  os_s -> p4  [label="frames, OCR text"];
+  p4 -> ai_v  [dir=both, label="changed frame /\ndescription"];
+  p4 -> d3    [label="observations"];
+  p4 -> d4    [label="PNG (if enabled)", style=dashed];
+  d2 -> p4    [label="privacy rules"];
+
+  // 5-6-7: suggestions
+  p3 -> p6    [label="question /\nfinished turn"];
+  d3 -> p5    [label="window, summary,\nsnippets, observations"];
+  d2 -> p5    [label="profile"];
+  p6 -> p5    [dir=both, label="query /\nprompt context"];
+  p6 -> ai_l  [dir=both, label="prompt /\nstreamed tokens"];
+  p6 -> p7    [label="answers,\nfollow-ups"];
+  p2 -> p7    [label="live transcript"];
+  user_u -> p7 [dir=both, label="hotkeys, Ask /\noverlay"];
+  p7 -> p6    [label="generate, refine,\nask commands"];
+
+  // 8: settings & secrets
+  user_s -> p8 [label="settings, keys,\nrules, profile"];
+  p8 -> d2     [label="sanitized\nsettings"];
+  p8 -> keych  [dir=both, label="API key"];
+  p8 -> p6     [label="providers"];
+
+  // 9-10: persistence and summary
+  p6 -> p9    [label="suggestions"];
+  p3 -> p9    [label="questions, answers,\ntopics, claims"];
+  p9 -> d1    [dir=both, label="records"];
+  user_h -> p9 [dir=both, label="export, delete /\nhistory"];
+  p9 -> fs    [label="exports"];
+  d3 -> p10   [label="meeting record"];
+  p10 -> ai_l [dir=both, label="summary prompt /\nsummary"];
+  p10 -> p9   [label="summary"];
+
+  { rank=same; os_a; os_s; user_s; }
+  { rank=same; p1; p4; p8; }
+  { rank=same; p9; p10; }
+}

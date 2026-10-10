@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "mode": "candidate",
+  "ai": {
+    "llm": {
+      "provider": "ollama",
+      "model": "llama3.2",
+      "baseUrl": "http://127.0.0.1:11434",
+      "temperature": 0.3,
+      "maxOutputTokens": 1200,
+      "reasoningEffort": "low",
+      "fastModel": null
+    },
+    "vision": {
+      "provider": "ocr_only",
+      "model": "",
+      "baseUrl": null,
+      "useOcr": true
+    },
+    "embeddings": {
+      "provider": "local_hash",
+      "model": "",
+      "baseUrl": null
+    }
+  },
+  "transcription": {
+    "provider": "local_ai",
+    "model": "base.en",
+    "baseUrl": "http://127.0.0.1:8765",
+    "language": "en",
+    "interimResults": false,
+    "vocabulary": ""
+  },
+  "assistant": {
+    "answerStyle": "concise",
+    "responseLength": "medium",
+    "autoAnswer": true,
+    "autoFollowups": true,
+    "semanticDetection": true,
+    "detectionThreshold": 0.6,
+    "followupMinWords": 20,
+    "turnEndSilenceMs": 1500,
+    "contextWindowSecs": 180,
+    "contextTokenBudget": 3500
+  },
+  "audio": {
+    "microphoneEnabled": true,
+    "microphoneDevice": null,
+    "systemAudioEnabled": true,
+    "systemAudioDevice": null,
+    "vadSensitivity": 0.6,
+    "silenceMs": 700
+  },
+  "screen": {
+    "enabled": false,
+    "source": null,
+    "frequency": "fps1",
+    "changeThreshold": 0.08,
+    "storeScreenshots": false,
+    "maxVisionPerMinute": 6
+  },
+  "privacy": {
+    "captureExclusion": true,
+    "localOnly": false,
+    "retention": "seven_days"
+  },
+  "overlay": {
+    "opacity": 0.92,
+    "width": 380,
+    "maxHeight": 560,
+    "fontSize": 14,
+    "density": "comfortable",
+    "theme": "dark",
+    "translucent": true,
+    "minimal": false,
+    "position": "top_right",
+    "customPositions": {},
+    "targetDisplay": null,
+    "layout": "same_display",
+    "clickThrough": false,
+    "reducedMotion": false,
+    "showOnMeetingStart": true,
+    "margin": 16
+  },
+  "shortcuts": {
+    "bindings": {
+      "toggle_overlay": "CommandOrControl+Shift+Space",
+      "generate_answer": "CommandOrControl+Shift+Enter",
+      "generate_followups": "CommandOrControl+Shift+Q",
+      "ask_ai": "CommandOrControl+Shift+A",
+      "toggle_mode": "CommandOrControl+Shift+M",
+      "toggle_click_through": "CommandOrControl+Shift+C",
+      "capture_screen": "CommandOrControl+Shift+S",
+      "pause_resume": "CommandOrControl+Shift+P",
+      "emergency_stop": "CommandOrControl+Shift+Backspace",
+      "expand_hud": "CommandOrControl+Shift+Period",
+      "cycle_style": "CommandOrControl+Shift+Y"
+    }
+  },
+  "general": {
+    "onboardingComplete": false,
+    "launchAtStartup": false,
+    "developerMode": true,
+    "voiceCommands": false,
+    "notifications": true
+  },
+  "profile": {
+    "background": "",
+    "roleContext": "",
+    "plannedTopics": "",
+    "customInstructions": ""
+  }
+}

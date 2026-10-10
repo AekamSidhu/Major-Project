@@ -1,0 +1,69 @@
+// DFD Level 2 for processes 3.0 (Analyse conversation), 5.0 (Assemble
+// context) and 6.0 (Generate suggestions).
+digraph dfd2_suggest {
+  graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.4, ranksep=0.8,
+         label="DFD Level 2 — 3.0 Analyse conversation, 5.0 Assemble context, 6.0 Generate suggestions", pad=0.3];
+  node  [fontname="Segoe UI", fontsize=11];
+  edge  [fontname="Segoe UI", fontsize=9, color="#3E4756", fontcolor="#3E4756"];
+
+  node [shape=box, style=filled, fillcolor="#FFFFFF", color="#3E4756"];
+  p2   [label="2.0 Transcribe", style="filled,dashed"];
+  user [label="User\n(hotkey, overlay,\nvoice command)"];
+  llm_c [label="Language model *\n(classification)"];
+  llm_g [label="Language model *\n(answers, follow-ups)"];
+  llm_s [label="Language model *\n(compression)"];
+  emb  [label="Embedding provider\n(built-in, local or cloud)"];
+  p7a  [label="7.0 Present UI *", style="filled,dashed"];
+  p7b  [label="7.0 Present UI *", style="filled,dashed"];
+  p7c  [label="7.0 Present UI *", style="filled,dashed"];
+  p9a  [label="9.0 Persist *", style="filled,dashed"];
+  p9b  [label="9.0 Persist *", style="filled,dashed"];
+
+  node [shape=circle, style=filled, fillcolor="#E6E9FB", color="#4F5BD5", penwidth=1.6, width=1.1];
+  p31 [label="3.1\nDetect\nquestion"];
+  p32 [label="3.2\nSemantic\ncheck"];
+  p33 [label="3.3\nTrack turns,\ntopics &\nclaims"];
+  p61 [label="6.1\nAdmit request\nto UI slot"];
+  p51 [label="5.1\nRetrieve\nrelevant\nhistory"];
+  p52 [label="5.2\nCollect &\nbudget\ncontext"];
+  p53 [label="5.3\nCompress\nold transcript"];
+  p62 [label="6.2\nBuild\nprompt"];
+  p63 [label="6.3\nStream &\nparse reply"];
+
+  node [shape=none, width=0, style="", penwidth=1];
+  d2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D2</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Settings &amp; profile</TD></TR></TABLE>>];
+  d3a [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3 *</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory (window, summary, index)</TD></TR></TABLE>>];
+  d3b [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3 *</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory (window, summary, index)</TD></TR></TABLE>>];
+  d3c [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3 *</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory (window, summary, index)</TD></TR></TABLE>>];
+
+  p2 -> p31   [label="final segment"];
+  d3a -> p31   [label="recent turns\n(lead-ins, continuations)"];
+  p31 -> p32  [label="ambiguous candidate\n(if semantic detection on)", style=dashed];
+  p32 -> llm_c [dir=both, label="classification\nprompt / JSON"];
+  p32 -> p31  [label="confirmed / rejected"];
+  p31 -> p33  [label="detected question"];
+  p31 -> p7a  [label="question detected"];
+  p33 -> d3a   [label="topics, claims,\nanswers"];
+  p33 -> p9a  [label="questions, answers,\ntopics, claims"];
+  p33 -> p7a  [label="topics updated"];
+
+  p31 -> p61  [label="auto answer\n(candidate mode,\nneeds your response,\nconfidence ≥ threshold)"];
+  p33 -> p61  [label="candidate turn ended\n(interviewer mode)"];
+  user -> p61 [label="answer / follow-ups /\nask / refine / style"];
+  p61 -> p7c  [label="answer started\n(previous in slot\ncancelled)"];
+  p61 -> p51  [label="query text"];
+  p51 -> emb  [dir=both, label="query / vector"];
+  d3b -> p51   [label="BM25 + vector index"];
+  p51 -> p52  [label="top snippets\n(screen boost if\n\"this\" / \"that\")"];
+  d3b -> p52   [label="recent window, summary,\nobservations, asked questions"];
+  d2 -> p52   [label="profile, style,\ntoken budget"];
+  p52 -> p62  [label="prompt context"];
+  p62 -> llm_g [label="system + user\nmessages"];
+  llm_g -> p63 [label="streamed tokens"];
+  p63 -> p7b  [label="answer deltas,\nfollow-ups, complete"];
+  p63 -> p9b  [label="suggestion"];
+  p63 -> d3c   [label="answered / suggested\n(for de-duplication)"];
+  d3c -> p53   [label="lines older than\nthe window"];
+  p53 -> llm_s [dir=both, label="compression\nprompt / summary"];
+  p53 -> d3c   [label="long-term summary"];
+}

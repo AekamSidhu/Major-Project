@@ -1,0 +1,51 @@
+// DFD Level 2 for processes 1.0 (Capture audio) and 2.0 (Segment &
+// transcribe): from device audio to final transcript segments.
+digraph dfd2_audio {
+  graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.4, ranksep=0.8,
+         label="DFD Level 2 — 1.0 Capture audio and 2.0 Segment & transcribe", pad=0.3];
+  node  [fontname="Segoe UI", fontsize=11];
+  edge  [fontname="Segoe UI", fontsize=9, color="#3E4756", fontcolor="#3E4756"];
+
+  node [shape=box, style=filled, fillcolor="#FFFFFF", color="#3E4756"];
+  mic   [label="Microphone\n(OS input device)"];
+  spk   [label="Speakers\n(OS output device,\nloopback)"];
+  ai    [label="Transcription provider\n(local AI sidecar\nor cloud)"];
+  p3    [label="3.0 Analyse\nconversation", style="filled,dashed"];
+  p7    [label="7.0 Present UI", style="filled,dashed"];
+  p6    [label="6.0 Generate\nsuggestions", style="filled,dashed"];
+  p9    [label="9.0 Persist", style="filled,dashed"];
+
+  node [shape=circle, style=filled, fillcolor="#E6E9FB", color="#4F5BD5", penwidth=1.6, width=1.1];
+  p11 [label="1.1\nOpen mic\nstream"];
+  p12 [label="1.2\nOpen loopback\nstream"];
+  p13 [label="1.3\nDownmix &\nresample to\n16 kHz"];
+  p21 [label="2.1\nDetect speech\n(VAD)"];
+  p22 [label="2.2\nTranscribe\nutterance"];
+  p23 [label="2.3\nClean text &\nfilter\nhallucinations"];
+  p24 [label="2.4\nAttribute\nspeaker"];
+  p25 [label="2.5\nParse voice\ncommand"];
+
+  node [shape=none, width=0, style="", penwidth=1];
+  d2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D2</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Settings (VAD, language, vocabulary)</TD></TR></TABLE>>];
+  d3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory</TD></TR></TABLE>>];
+
+  mic -> p11  [label="PCM (device rate,\nchannels)"];
+  spk -> p12  [label="PCM played to\nthe output device"];
+  p11 -> p13  [label="frames + capture time"];
+  p12 -> p13  [label="frames + capture time"];
+  p13 -> p21  [label="20 ms frames,\nper source"];
+  p13 -> p7   [label="audio level (~10 Hz)"];
+  d2 -> p21   [label="sensitivity,\nsilence length"];
+  p21 -> p22  [label="utterance clip\n(+ pre-roll, timestamps)"];
+  p21 -> p22  [label="interim clip\n(if enabled)", style=dashed];
+  d2 -> p22   [label="language, vocabulary"];
+  p22 -> ai   [dir=both, label="WAV / text, confidence"];
+  p22 -> p23  [label="raw text"];
+  p23 -> p24  [label="clean text"];
+  p24 -> p3   [label="final segment\n(mic = You, system = Remote)"];
+  p24 -> p7   [label="partial / final\ntranscript"];
+  p24 -> d3   [label="transcript line"];
+  p24 -> p9   [label="segment"];
+  p24 -> p25  [label="your own speech\n(if voice commands on)"];
+  p25 -> p6   [label="\"OpenMeet, …\" command"];
+}

@@ -1,0 +1,54 @@
+// DFD Level 2 for process 4.0 (Capture & interpret screen): an explicitly
+// selected source becomes privacy-filtered, change-filtered observations.
+digraph dfd2_screen {
+  graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.45, ranksep=0.75,
+         label="DFD Level 2 — 4.0 Capture & interpret screen", pad=0.3];
+  node  [fontname="Segoe UI", fontsize=11];
+  edge  [fontname="Segoe UI", fontsize=9, color="#3E4756", fontcolor="#3E4756"];
+
+  node [shape=box, style=filled, fillcolor="#FFFFFF", color="#3E4756"];
+  user [label="User"];
+  os   [label="Operating system\n(window list, pixels)"];
+  ocr  [label="OS text recognition\n(Windows.Media.Ocr)"];
+  ai   [label="Vision provider\n(local or cloud)"];
+  p7   [label="7.0 Present UI", style="filled,dashed"];
+  p9   [label="9.0 Persist", style="filled,dashed"];
+
+  node [shape=circle, style=filled, fillcolor="#E6E9FB", color="#4F5BD5", penwidth=1.6, width=1.1];
+  p41 [label="4.1\nSelect\nsource"];
+  p42 [label="4.2\nCheck privacy\nrules"];
+  p43 [label="4.3\nGrab frame"];
+  p44 [label="4.4\nMask regions\n& downscale"];
+  p45 [label="4.5\nDetect\nchange"];
+  p46 [label="4.6\nRecognize\ntext"];
+  p47 [label="4.7\nDescribe with\nvision model"];
+  p48 [label="4.8\nBuild\nobservation"];
+
+  node [shape=none, width=0, style="", penwidth=1];
+  d2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D2</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Privacy rules, screen settings</TD></TR></TABLE>>];
+  d3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory</TD></TR></TABLE>>];
+  d4 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D4</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Kept screenshots (opt.)</TD></TR></TABLE>>];
+
+  user -> p41 [label="display / window /\napp / region choice"];
+  os -> p41   [label="available sources"];
+  p41 -> p42  [label="source spec"];
+  d2 -> p42   [label="app, window,\ndomain rules"];
+  os -> p42   [label="focused window,\ntitle, app"];
+  p42 -> p43  [label="allowed\n(else frame skipped)"];
+  os -> p43   [label="pixels"];
+  p43 -> p44  [label="RGBA image"];
+  d2 -> p44   [label="region rules"];
+  p44 -> p45  [label="masked image"];
+  d2 -> p45   [label="change threshold,\nframe rate"];
+  user -> p45 [label="manual capture\n(bypasses diff)", style=dashed];
+  p45 -> p46  [label="changed frame (PNG)"];
+  p45 -> d4   [label="PNG (only if\nkeep screenshots)", style=dashed];
+  p46 -> ocr  [dir=both, label="PNG / lines"];
+  p46 -> p47  [label="frame + OCR text"];
+  d2 -> p47   [label="max vision\ncalls / minute"];
+  p47 -> ai   [dir=both, label="frame, context /\ndescription"];
+  p47 -> p48  [label="description\n(or OCR-only summary)"];
+  p48 -> d3   [label="observation"];
+  p48 -> p9   [label="observation"];
+  p48 -> p7   [label="screen updated"];
+}

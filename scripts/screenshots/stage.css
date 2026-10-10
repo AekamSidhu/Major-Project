@@ -1,0 +1,31 @@
+/* Backdrop for overlay screenshots: an abstract desktop with a generic
+   meeting window (no real product branding). */
+html.overlay.shot-overlay,
+html.overlay.shot-overlay body {
+  background: linear-gradient(135deg, #1d2433 0%, #2a3346 55%, #1a2030 100%);
+}
+
+.shot-stage {
+  position: relative;
+  height: 100%;
+}
+
+.shot-stage::before {
+  /* the "meeting window" */
+  content: "";
+  position: absolute;
+  inset: 48px 440px 48px 48px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 30% 42%, #3b4660 0 70px, transparent 71px),
+    radial-gradient(circle at 70% 42%, #3b4660 0 70px, transparent 71px),
+    linear-gradient(#262e3f, #262e3f);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.shot-overlay-slot {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+}

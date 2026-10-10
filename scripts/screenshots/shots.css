@@ -1,0 +1,4 @@
+/* Harness stylesheet: the app styles plus the app sources for Tailwind,
+   which otherwise only scans this folder. */
+@import "../../src/styles/base.css";
+@source "../../src";

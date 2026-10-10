@@ -1,0 +1,70 @@
+// DFD Level 2 for processes 8.0 (Manage settings & keys), 9.0 (Persist &
+// export) and 10.0 (Summarize meeting).
+digraph dfd2_data {
+  graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.4, ranksep=0.8,
+         label="DFD Level 2 — 8.0 Settings & keys, 9.0 Persist & export, 10.0 Summarize", pad=0.3];
+  node  [fontname="Segoe UI", fontsize=11];
+  edge  [fontname="Segoe UI", fontsize=9, color="#3E4756", fontcolor="#3E4756"];
+
+  node [shape=box, style=filled, fillcolor="#FFFFFF", color="#3E4756"];
+  user  [label="User"];
+  user2 [label="User *"];
+  keych [label="OS credential store"];
+  env   [label="Environment variables\n(development fallback)"];
+  llm   [label="Language model"];
+  fs    [label="File system\n(save dialog)"];
+  eng   [label="Pipeline processes\n2.0–6.0", style="filled,dashed"];
+  os    [label="OS hotkey service"];
+
+  node [shape=circle, style=filled, fillcolor="#E6E9FB", color="#4F5BD5", penwidth=1.6, width=1.1];
+  p81 [label="8.1\nValidate &\nsanitize\nsettings"];
+  p82 [label="8.2\nStore /\nclear\nAPI key"];
+  p83 [label="8.3\nBuild\nproviders"];
+  p84 [label="8.4\nRegister\nhotkeys"];
+  p91 [label="9.1\nQueue &\napply writes"];
+  p92 [label="9.2\nApply\nretention"];
+  p93 [label="9.3\nDelete\nmeeting(s)"];
+  p94 [label="9.4\nExport\nmeeting"];
+  p95 [label="9.5\nBrowse\nhistory"];
+  p101 [label="10.1\nSummarize\n(LLM or\nextractive)"];
+
+  node [shape=none, width=0, style="", penwidth=1];
+  d1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D1</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Meeting database</TD></TR></TABLE>>];
+  d2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D2</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Settings, profile, rules</TD></TR></TABLE>>];
+  d3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory</TD></TR></TABLE>>];
+  d4 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D4</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Kept screenshots</TD></TR></TABLE>>];
+  d4b [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D4 *</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Kept screenshots</TD></TR></TABLE>>];
+
+  user -> p81  [label="settings changes"];
+  p81 -> d2    [label="sanitized settings"];
+  p81 -> user  [label="validation errors"];
+  user -> p82  [label="API key (write-only)"];
+  p82 -> keych [label="set / delete"];
+  keych -> p83 [label="API key"];
+  env -> p83   [label="API key if no\nkeychain entry", style=dashed];
+  d2 -> p83    [label="provider settings,\nlocal-only flag"];
+  p83 -> eng   [label="provider set\n(remote refused in\nlocal-only mode)"];
+  d2 -> p84    [label="accelerators"];
+  p84 -> os    [label="register"];
+  p84 -> user  [label="status, conflicts"];
+
+  eng -> p91   [label="meeting, segments,\nquestions, suggestions,\nobservations, embeddings"];
+  p91 -> d1    [label="ordered upserts\n(dropped for deleted\nmeetings)"];
+  d2 -> p92    [label="retention policy"];
+  p92 -> d1    [label="delete expired,\ncheckpoint WAL"];
+  p92 -> d4b   [label="delete expired"];
+  user2 -> p93 [label="delete one / all"];
+  p93 -> eng2  [label="forget meeting\n(cancel summary)"];
+  p93 -> d1    [label="cascade delete"];
+  p93 -> d4    [label="delete files"];
+  user2 -> p94 [label="format, parts"];
+  d1 -> p94    [label="meeting record"];
+  p94 -> fs    [label="Markdown / text / JSON"];
+  user2 -> p95 [label="page, meeting id"];
+  d1 -> p95    [label="list, record"];
+  p95 -> user2 [label="history view"];
+
+  d3 -> p101   [label="meeting record,\nlong-term summary,\nopen gaps"];
+  p101 -> llm  [dir=both, label="summary prompt /\nJSON"];
+  p101 -> p91  [label="summary"];
+}
