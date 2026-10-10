@@ -2,7 +2,12 @@
 // level test, voice activity detection and assistant behaviour (spec §9–§16,
 // §20, §27).
 
-import { AudioDevicesError, AudioDevicesStatus, AudioSourceSettings, useAudioDevices } from "../../components/AudioDevicePicker";
+import {
+  AudioDevicesError,
+  AudioDevicesStatus,
+  AudioSourceSettings,
+  useAudioDevices,
+} from "../../components/AudioDevicePicker";
 import { NumberSetting, SelectSetting, SliderSetting } from "../../components/fields";
 import { saveSettings } from "../../components/save";
 import { ANSWER_STYLE_OPTIONS, RESPONSE_LENGTH_OPTIONS } from "../../components/settingsMeta";
@@ -31,7 +36,10 @@ function AudioSources() {
 function SpeechDetection() {
   const audio = useSettings().audio;
   return (
-    <Section title="Speech detection" description="How OpenMeet decides that someone started and stopped speaking.">
+    <Section
+      title="Speech detection"
+      description="How OpenMeet decides that someone started and stopped speaking."
+    >
       <SliderSetting
         label="Sensitivity"
         description="Higher picks up quieter speech but also more background noise."
@@ -67,7 +75,10 @@ function SpeechDetection() {
 function AssistantBehaviour() {
   const a = useSettings().assistant;
   return (
-    <Section title="Assistant behaviour" description="When suggestions appear and how much context they use.">
+    <Section
+      title="Assistant behaviour"
+      description="When suggestions appear and how much context they use."
+    >
       <ToggleField
         label="Suggest answers automatically (candidate mode)"
         description="Starts a suggestion as soon as a question to you is detected. Off: press the Answer hotkey."

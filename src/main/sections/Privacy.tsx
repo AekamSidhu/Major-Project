@@ -3,18 +3,47 @@
 // backend's data-flow report is the source of truth.
 
 import { useCallback, useState, type FormEvent } from "react";
-import type { CapturePrivacyStatus, DataFlowReport, PrivacyRule, PrivacyRuleType } from "@/bindings";
+import type {
+  CapturePrivacyStatus,
+  DataFlowReport,
+  PrivacyRule,
+  PrivacyRuleType,
+} from "@/bindings";
 import { api, errorMessage } from "@/lib/ipc";
 import { formatDateTime } from "@/lib/format";
-import { audioFlow, otherNodes, privacyStatement, screenFlow, screenFlowDisabled, type FlowStep } from "../components/dataFlow";
+import {
+  audioFlow,
+  otherNodes,
+  privacyStatement,
+  screenFlow,
+  screenFlowDisabled,
+  type FlowStep,
+} from "../components/dataFlow";
 import { LocationBadge } from "../components/LocationBadge";
 import { saveSettings } from "../components/save";
 import { RETENTION_OPTIONS } from "../components/settingsMeta";
 import { useLoader } from "../components/useLoader";
 import { useMeetingLive, useSettings } from "../components/useSettings";
-import { RULE_TYPE_LABELS, RULE_TYPE_PLACEHOLDERS, normalizeRuleValue } from "../components/validation";
+import {
+  RULE_TYPE_LABELS,
+  RULE_TYPE_PLACEHOLDERS,
+  normalizeRuleValue,
+} from "../components/validation";
 import { useMain } from "../store";
-import { Badge, Banner, Button, ConfirmDialog, Field, PageHeader, Section, Select, Spinner, TextInput, ToggleField, cx } from "../ui";
+import {
+  Badge,
+  Banner,
+  Button,
+  ConfirmDialog,
+  Field,
+  PageHeader,
+  Section,
+  Select,
+  Spinner,
+  TextInput,
+  ToggleField,
+  cx,
+} from "../ui";
 
 const RULE_TYPES: ReadonlyArray<PrivacyRuleType> = ["application", "window", "domain", "region"];
 
@@ -58,7 +87,14 @@ function DataFlow({ report }: { report: DataFlowReport }) {
       description="Based on the providers that are configured right now."
     >
       <div className="py-3">
-        <Banner tone={statement.tone === "ok" ? "ok" : "warn"} title={statement.tone === "ok" ? "Everything stays on this device" : "Some data is sent to cloud providers"}>
+        <Banner
+          tone={statement.tone === "ok" ? "ok" : "warn"}
+          title={
+            statement.tone === "ok"
+              ? "Everything stays on this device"
+              : "Some data is sent to cloud providers"
+          }
+        >
           {statement.text}
         </Banner>
       </div>
@@ -69,16 +105,22 @@ function DataFlow({ report }: { report: DataFlowReport }) {
         </div>
         <div>
           <div className="mb-1.5 text-[0.78rem] font-medium text-fg-soft">
-            Screen {screenFlowDisabled(report) && <span className="font-normal text-muted">(off)</span>}
+            Screen{" "}
+            {screenFlowDisabled(report) && <span className="font-normal text-muted">(off)</span>}
           </div>
           <Flow steps={screenFlow(report)} muted={screenFlowDisabled(report)} />
         </div>
         {others.length > 0 && (
           <ul className="flex flex-wrap gap-2 pt-1">
             {others.map((n) => (
-              <li key={n.component} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[0.76rem]">
+              <li
+                key={n.component}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[0.76rem]"
+              >
                 <span className="text-fg-soft">{n.label}</span>
-                <span className="text-muted">{n.endpoint ? `${n.provider} · ${n.endpoint}` : n.provider}</span>
+                <span className="text-muted">
+                  {n.endpoint ? `${n.provider} · ${n.endpoint}` : n.provider}
+                </span>
                 <LocationBadge location={n.location} endpoint={n.endpoint} />
               </li>
             ))}
@@ -94,7 +136,10 @@ function QuickControls() {
   const reloadSettings = useMain((s) => s.reloadSettings);
   const [error, setError] = useState<string | null>(null);
   return (
-    <Section title="Quick controls" description="Turn data sources and cloud processing off at any time, also during a meeting.">
+    <Section
+      title="Quick controls"
+      description="Turn data sources and cloud processing off at any time, also during a meeting."
+    >
       {error && <Banner tone="danger">{error}</Banner>}
       <ToggleField
         label="Local-only mode (no cloud processing)"
@@ -126,13 +171,20 @@ function QuickControls() {
       />
       <ToggleField
         label="Screen context"
-        description={settings.screen.source ? undefined : "Choose a source in Screen context settings to enable it."}
+        description={
+          settings.screen.source
+            ? undefined
+            : "Choose a source in Screen context settings to enable it."
+        }
         checked={settings.screen.enabled}
         disabled={!settings.screen.enabled && !settings.screen.source}
         onChange={(v) =>
           void api
             .setScreenCapture(v, null)
-            .then(() => setError(null), (e: unknown) => setError(errorMessage(e)))
+            .then(
+              () => setError(null),
+              (e: unknown) => setError(errorMessage(e)),
+            )
             .finally(() => void reloadSettings())
         }
       />
@@ -155,7 +207,10 @@ function CapturePrivacy() {
     }
   };
 
-  let badge: { tone: "ok" | "warn" | "neutral"; text: string } = { tone: "neutral", text: "Checking…" };
+  let badge: { tone: "ok" | "warn" | "neutral"; text: string } = {
+    tone: "neutral",
+    text: "Checking…",
+  };
   if (status) {
     if (!status.supported) badge = { tone: "warn", text: "Not supported here" };
     else if (status.active) badge = { tone: "ok", text: "Active" };
@@ -180,9 +235,10 @@ function CapturePrivacy() {
       <div className="space-y-1.5 py-2.5 text-[0.8rem] text-muted">
         {status?.note && <p>{status.note}</p>}
         <p>
-          This is not a guarantee. It relies on documented operating-system features that capture tools may ignore —
-          for example hardware capture, a phone camera pointed at the screen, some remote-desktop tools, or older
-          operating-system versions. Treat the overlay as potentially visible.
+          This is not a guarantee. It relies on documented operating-system features that capture
+          tools may ignore — for example hardware capture, a phone camera pointed at the screen,
+          some remote-desktop tools, or older operating-system versions. Treat the overlay as
+          potentially visible.
         </p>
       </div>
     </Section>
@@ -232,7 +288,9 @@ function PrivacyRules() {
     if (await add(type, value)) setValue("");
   };
 
-  const existing = new Set(list.filter((r) => r.type === "application").map((r) => r.value.toLowerCase()));
+  const existing = new Set(
+    list.filter((r) => r.type === "application").map((r) => r.value.toLowerCase()),
+  );
   const suggested = (suggestions.data ?? []).filter((a) => !existing.has(a.toLowerCase()));
 
   return (
@@ -252,9 +310,16 @@ function PrivacyRules() {
           {list.map((r) => (
             <li key={r.id} className="flex items-center gap-3 py-1.5">
               <Badge>{RULE_TYPE_LABELS[r.type]}</Badge>
-              <span className="min-w-0 flex-1 truncate font-mono text-[0.82rem] text-fg">{r.value}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-[0.82rem] text-fg">
+                {r.value}
+              </span>
               <span className="text-[0.72rem] text-muted">{formatDateTime(r.createdAt)}</span>
-              <Button size="sm" variant="ghost" aria-label={`Remove rule ${r.value}`} onClick={() => void remove(r.id)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`Remove rule ${r.value}`}
+                onClick={() => void remove(r.id)}
+              >
                 Remove
               </Button>
             </li>
@@ -290,12 +355,17 @@ function PrivacyRules() {
           </p>
         )}
         {type === "region" && (
-          <p className="mt-1.5 text-[0.76rem] text-muted">Pixels from the top-left corner of the captured display or window. The region is blacked out before any processing.</p>
+          <p className="mt-1.5 text-[0.76rem] text-muted">
+            Pixels from the top-left corner of the captured display or window. The region is blacked
+            out before any processing.
+          </p>
         )}
       </form>
       {suggested.length > 0 && (
         <div className="py-3">
-          <div className="mb-1.5 text-[0.78rem] text-muted">Suggested sensitive apps installed or running on this computer:</div>
+          <div className="mb-1.5 text-[0.78rem] text-muted">
+            Suggested sensitive apps installed or running on this computer:
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {suggested.map((a) => (
               <Button key={a} size="sm" onClick={() => void add("application", a)}>
@@ -331,7 +401,10 @@ function Retention() {
   };
 
   return (
-    <Section title="Stored data" description="Meetings are stored in a local database on this device. Nothing is uploaded for storage.">
+    <Section
+      title="Stored data"
+      description="Meetings are stored in a local database on this device. Nothing is uploaded for storage."
+    >
       <Field label="Keep meetings for" description={option?.description} inline>
         <Select
           value={settings.privacy.retention}
@@ -386,7 +459,11 @@ export function PrivacySection() {
         title="Privacy & data"
         description="OpenMeet has no telemetry or analytics. API keys are kept in your operating system's credential store."
       />
-      {flow.error && <Banner tone="danger" title="Could not build the data-flow report">{flow.error}</Banner>}
+      {flow.error && (
+        <Banner tone="danger" title="Could not build the data-flow report">
+          {flow.error}
+        </Banner>
+      )}
       {flow.data ? (
         <DataFlow report={flow.data} />
       ) : (

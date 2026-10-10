@@ -92,7 +92,9 @@ export function pauseMeeting() {
 export async function resumeMeeting() {
   const { core } = useOverlay.getState();
   const noMeeting =
-    core.meetingState !== "active" && core.meetingState !== "paused" && core.meetingState !== "starting";
+    core.meetingState !== "active" &&
+    core.meetingState !== "paused" &&
+    core.meetingState !== "starting";
   try {
     await api.resumeMeeting();
     if (noMeeting) dispatch({ type: "LOCAL_CLEAR_STOPPED" });

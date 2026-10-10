@@ -99,7 +99,9 @@ function CaptureIndicator() {
         className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2 text-left text-[0.78rem]"
       >
         <StatusDot tone={active ? "danger" : "warn"} pulse={active} />
-        <span className="font-medium text-fg">{active ? "Meeting in progress" : "Meeting paused"}</span>
+        <span className="font-medium text-fg">
+          {active ? "Meeting in progress" : "Meeting paused"}
+        </span>
       </button>
     );
   }
@@ -118,7 +120,10 @@ function Notices() {
   }, [notices, dismiss]);
   if (notices.length === 0) return null;
   return (
-    <div aria-live="polite" className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2">
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2"
+    >
       {notices.map((n) => (
         <div
           key={n.id}
@@ -126,7 +131,9 @@ function Notices() {
           className="om-fade-in pointer-events-auto flex items-start gap-2.5 rounded-lg border border-border bg-raised px-3 py-2.5 text-[0.82rem] shadow-lg"
         >
           <span className="mt-1.5">
-            <StatusDot tone={n.level === "error" ? "danger" : n.level === "warning" ? "warn" : "accent"} />
+            <StatusDot
+              tone={n.level === "error" ? "danger" : n.level === "warning" ? "warn" : "accent"}
+            />
           </span>
           <span className="min-w-0 flex-1 text-fg-soft">{n.message}</span>
           <button
@@ -183,7 +190,11 @@ export function App() {
   }, [settings]);
 
   if (!ready) {
-    return <div className="flex h-full items-center justify-center text-[0.86rem] text-muted">Loading…</div>;
+    return (
+      <div className="flex h-full items-center justify-center text-[0.86rem] text-muted">
+        Loading…
+      </div>
+    );
   }
   if (loadError || !settings) {
     return (
@@ -212,9 +223,15 @@ export function App() {
   const devMode = settings.general.developerMode;
   return (
     <div className="flex h-full">
-      <nav aria-label="Sections" className="flex w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-4">
+      <nav
+        aria-label="Sections"
+        className="flex w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-4"
+      >
         <div className="mb-4 flex items-center gap-2 px-2">
-          <span aria-hidden className="inline-block size-3 rounded-full border-[3px] border-accent" />
+          <span
+            aria-hidden
+            className="inline-block size-3 rounded-full border-[3px] border-accent"
+          />
           <span className="text-[0.95rem] font-semibold tracking-tight">OpenMeet</span>
           {devMode && <span className="ml-auto text-[0.68rem] text-muted">dev</span>}
         </div>
@@ -224,7 +241,9 @@ export function App() {
         <div className="flex-1 overflow-y-auto">
           {NAV.map((g) => (
             <div key={g.group} className="mb-3">
-              <div className="px-2 pb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">{g.group}</div>
+              <div className="px-2 pb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
+                {g.group}
+              </div>
               <ul>
                 {g.items.map((item) => (
                   <li key={item.id}>
@@ -234,7 +253,9 @@ export function App() {
                       onClick={() => setSection(item.id)}
                       className={cx(
                         "w-full rounded-md px-2 py-1.5 text-left text-[0.84rem] transition-colors",
-                        section === item.id ? "bg-accent-soft font-medium text-fg" : "text-fg-soft hover:bg-surface-2",
+                        section === item.id
+                          ? "bg-accent-soft font-medium text-fg"
+                          : "text-fg-soft hover:bg-surface-2",
                       )}
                     >
                       {item.label}

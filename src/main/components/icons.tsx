@@ -2,7 +2,11 @@
 
 import type { ReactNode, SVGProps } from "react";
 
-function Icon({ children, size = 14, ...rest }: SVGProps<SVGSVGElement> & { size?: number; children: ReactNode }) {
+function Icon({
+  children,
+  size = 14,
+  ...rest
+}: SVGProps<SVGSVGElement> & { size?: number; children: ReactNode }) {
   return (
     <svg
       width={size}

@@ -6,9 +6,25 @@ import { useMemo, useState } from "react";
 import type { AnswerStyle, FollowUpQuestion, Refinement, Topic } from "@/bindings";
 import { answerToPlainText, parseAnswer, type ParsedAnswer } from "@/lib/answer";
 import { categoryLabel } from "@/lib/format";
-import { chooseStyle, copyText, dismiss, generateAnswer, generateFollowups, openMainWindow, refine, retry, setPinned } from "./actions";
+import {
+  chooseStyle,
+  copyText,
+  dismiss,
+  generateAnswer,
+  generateFollowups,
+  openMainWindow,
+  refine,
+  retry,
+  setPinned,
+} from "./actions";
 import { CheckIcon, CopyIcon, PinIcon, RefreshIcon } from "./icons";
-import { isRunning, isThinking, orderTopics, type FollowupsRequest, type PrimaryRequest } from "./state";
+import {
+  isRunning,
+  isThinking,
+  orderTopics,
+  type FollowupsRequest,
+  type PrimaryRequest,
+} from "./state";
 import { ActionButton, ChipButton, Dot, IconButton, LinkButton, SectionLabel, Tag, cx } from "./ui";
 import { useHotkey, withHotkey } from "./hooks";
 
@@ -28,7 +44,11 @@ const REFINEMENTS: ReadonlyArray<{ value: Refinement; label: string; title: stri
   { value: "more_technical", label: "Technical", title: "More technical depth" },
   { value: "simplify", label: "Simplify", title: "Simpler wording" },
   { value: "give_example", label: "Example", title: "Add a concrete example" },
-  { value: "show_rationale", label: "Reasoning", title: "Show the key considerations behind this answer" },
+  {
+    value: "show_rationale",
+    label: "Reasoning",
+    title: "Show the key considerations behind this answer",
+  },
 ];
 
 const REFINEMENT_LABEL: Record<Refinement, string> = {
@@ -93,7 +113,10 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
           <SectionLabel>Suggested structure</SectionLabel>
           <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-[0.86rem] text-fg-soft">
             {a.structure.map((s, i) => (
-              <li key={i} className={cx(caretOn("structure") && i === a.structure.length - 1 && "om-caret")}>
+              <li
+                key={i}
+                className={cx(caretOn("structure") && i === a.structure.length - 1 && "om-caret")}
+              >
                 {s}
               </li>
             ))}
@@ -103,7 +126,12 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
       {(a.answer || (streaming && a.current === "answer")) && (
         <div>
           <SectionLabel>Suggested answer</SectionLabel>
-          <p className={cx("mt-1 text-[0.92rem] leading-relaxed whitespace-pre-wrap text-fg", caretOn("answer") && "om-caret")}>
+          <p
+            className={cx(
+              "mt-1 text-[0.92rem] leading-relaxed whitespace-pre-wrap text-fg",
+              caretOn("answer") && "om-caret",
+            )}
+          >
             {a.answer}
           </p>
         </div>
@@ -114,8 +142,14 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
           <ul className="mt-1 space-y-0.5 text-[0.86rem] text-fg-soft">
             {a.clarify.map((c, i) => (
               <li key={i} className="flex gap-1.5">
-                <span aria-hidden className="text-accent">→</span>
-                <span className={cx(caretOn("clarify") && i === a.clarify.length - 1 && "om-caret")}>{c}</span>
+                <span aria-hidden className="text-accent">
+                  →
+                </span>
+                <span
+                  className={cx(caretOn("clarify") && i === a.clarify.length - 1 && "om-caret")}
+                >
+                  {c}
+                </span>
               </li>
             ))}
           </ul>
@@ -127,8 +161,14 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
           <ul className="mt-1 space-y-0.5 text-[0.86rem] text-fg-soft">
             {a.keyPoints.map((k, i) => (
               <li key={i} className="flex gap-1.5">
-                <span aria-hidden className="text-muted">•</span>
-                <span className={cx(caretOn("keyPoints") && i === a.keyPoints.length - 1 && "om-caret")}>{k}</span>
+                <span aria-hidden className="text-muted">
+                  •
+                </span>
+                <span
+                  className={cx(caretOn("keyPoints") && i === a.keyPoints.length - 1 && "om-caret")}
+                >
+                  {k}
+                </span>
               </li>
             ))}
           </ul>
@@ -145,7 +185,14 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
             <SectionLabel>{showExample ? "Example ▾" : "Example ▸"}</SectionLabel>
           </button>
           {showExample && (
-            <p className={cx("mt-1 text-[0.84rem] leading-relaxed text-fg-soft", caretOn("example") && "om-caret")}>{a.example}</p>
+            <p
+              className={cx(
+                "mt-1 text-[0.84rem] leading-relaxed text-fg-soft",
+                caretOn("example") && "om-caret",
+              )}
+            >
+              {a.example}
+            </p>
           )}
         </div>
       )}
@@ -162,7 +209,10 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
         </div>
       )}
       {a.caveat && (
-        <div role="note" className="rounded-md border border-warn/40 px-2 py-1.5 text-[0.8rem] text-warn">
+        <div
+          role="note"
+          className="rounded-md border border-warn/40 px-2 py-1.5 text-[0.8rem] text-warn"
+        >
           {a.caveat}
         </div>
       )}
@@ -170,7 +220,15 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
   );
 }
 
-export function PrimaryCard({ p, style, mode }: { p: PrimaryRequest; style: AnswerStyle; mode: "candidate" | "interviewer" }) {
+export function PrimaryCard({
+  p,
+  style,
+  mode,
+}: {
+  p: PrimaryRequest;
+  style: AnswerStyle;
+  mode: "candidate" | "interviewer";
+}) {
   const parsed = useMemo(() => parseAnswer(p.text), [p.text]);
   const [copied, copy] = useCopied();
   const running = isRunning(p.state);
@@ -180,12 +238,17 @@ export function PrimaryCard({ p, style, mode }: { p: PrimaryRequest; style: Answ
   const regenerateKey = useHotkey("generate_answer");
 
   return (
-    <section aria-label={header.label} className="om-fade-in space-y-[calc(var(--om-space)*0.6rem)]">
+    <section
+      aria-label={header.label}
+      className="om-fade-in space-y-[calc(var(--om-space)*0.6rem)]"
+    >
       <div>
         <SectionLabel>{header.label}</SectionLabel>
         {header.text && (
           <p className="mt-0.5 text-[0.88rem] leading-snug font-medium text-fg">
-            {p.kind === "candidate_answer" || p.kind === "refinement" ? `“${header.text}”` : header.text}
+            {p.kind === "candidate_answer" || p.kind === "refinement"
+              ? `“${header.text}”`
+              : header.text}
           </p>
         )}
       </div>
@@ -194,13 +257,18 @@ export function PrimaryCard({ p, style, mode }: { p: PrimaryRequest; style: Answ
       {!thinking && p.text.trim() && <Sections a={parsed} streaming={p.state === "streaming"} />}
 
       {p.state === "failed" && (
-        <div role="alert" className="space-y-1.5 rounded-md border border-danger/40 bg-danger-soft px-2 py-1.5">
+        <div
+          role="alert"
+          className="space-y-1.5 rounded-md border border-danger/40 bg-danger-soft px-2 py-1.5"
+        >
           <p className="text-[0.82rem] text-danger">{p.error ?? "The request failed."}</p>
           <div className="flex items-center gap-2">
             <ActionButton onClick={() => void retry(p)}>
               <RefreshIcon /> Retry
             </ActionButton>
-            <LinkButton onClick={() => void openMainWindow("settings/ai")}>Provider settings</LinkButton>
+            <LinkButton onClick={() => void openMainWindow("settings/ai")}>
+              Provider settings
+            </LinkButton>
           </div>
         </div>
       )}
@@ -213,7 +281,11 @@ export function PrimaryCard({ p, style, mode }: { p: PrimaryRequest; style: Answ
 
       {!thinking && (p.text.trim() || p.state === "complete") && (
         <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Answer controls">
+          <div
+            className="flex flex-wrap items-center gap-1"
+            role="group"
+            aria-label="Answer controls"
+          >
             <ChipButton
               disabled={running}
               title={withHotkey("Regenerate", regenerateKey)}
@@ -222,7 +294,12 @@ export function PrimaryCard({ p, style, mode }: { p: PrimaryRequest; style: Answ
               <RefreshIcon /> Regenerate
             </ChipButton>
             {REFINEMENTS.map((r) => (
-              <ChipButton key={r.value} disabled={!canRefine} title={r.title} onClick={() => void refine(p.requestId, r.value)}>
+              <ChipButton
+                key={r.value}
+                disabled={!canRefine}
+                title={r.title}
+                onClick={() => void refine(p.requestId, r.value)}
+              >
                 {r.label}
               </ChipButton>
             ))}
@@ -264,7 +341,9 @@ export function PrimaryCard({ p, style, mode }: { p: PrimaryRequest; style: Answ
                 <PinIcon filled={p.pinned} />
               </IconButton>
               <IconButton label="Dismiss" onClick={() => void dismiss(p.requestId)}>
-                <span aria-hidden className="text-[0.95rem] leading-none">×</span>
+                <span aria-hidden className="text-[0.95rem] leading-none">
+                  ×
+                </span>
               </IconButton>
             </div>
           </div>
@@ -291,8 +370,18 @@ function FollowupItem({ f }: { f: FollowUpQuestion }) {
         className="group w-full rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--om-fg)_7%,transparent)]"
       >
         <div className="flex items-start gap-1.5">
-          <span aria-hidden className={cx("mt-px", f.priority === "high" ? "text-accent" : "text-muted")}>→</span>
-          <span className={cx("text-[0.88rem] leading-snug", f.priority === "optional" ? "text-fg-soft" : "text-fg")}>
+          <span
+            aria-hidden
+            className={cx("mt-px", f.priority === "high" ? "text-accent" : "text-muted")}
+          >
+            →
+          </span>
+          <span
+            className={cx(
+              "text-[0.88rem] leading-snug",
+              f.priority === "optional" ? "text-fg-soft" : "text-fg",
+            )}
+          >
             {f.question}
           </span>
           <span className="ml-auto shrink-0 pl-1 text-[0.7rem] text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -330,13 +419,20 @@ export function FollowupsCard({ f }: { f: FollowupsRequest }) {
         </ol>
       )}
       {f.state === "complete" && f.done && f.questions.length === 0 && (
-        <p className="text-[0.8rem] text-muted">No new follow-ups — everything relevant was already asked.</p>
+        <p className="text-[0.8rem] text-muted">
+          No new follow-ups — everything relevant was already asked.
+        </p>
       )}
       {f.state === "failed" && (
-        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-danger/40 bg-danger-soft px-2 py-1.5 text-[0.8rem] text-danger">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 rounded-md border border-danger/40 bg-danger-soft px-2 py-1.5 text-[0.8rem] text-danger"
+        >
           {f.error ?? "Couldn't suggest follow-ups."}
           <LinkButton onClick={() => void generateFollowups()}>Retry</LinkButton>
-          <LinkButton onClick={() => void openMainWindow("settings/ai")}>Provider settings</LinkButton>
+          <LinkButton onClick={() => void openMainWindow("settings/ai")}>
+            Provider settings
+          </LinkButton>
         </div>
       )}
     </section>
@@ -345,7 +441,13 @@ export function FollowupsCard({ f }: { f: FollowupsRequest }) {
 
 const TOPIC_MARK: Record<Topic["status"], string> = { covered: "✓", current: "→", pending: "○" };
 
-export function TopicsStrip({ topics, suggestedNext }: { topics: Topic[]; suggestedNext: string | null }) {
+export function TopicsStrip({
+  topics,
+  suggestedNext,
+}: {
+  topics: Topic[];
+  suggestedNext: string | null;
+}) {
   const ordered = orderTopics(topics);
   if (ordered.length === 0 && !suggestedNext) return null;
   return (
@@ -356,10 +458,21 @@ export function TopicsStrip({ topics, suggestedNext }: { topics: Topic[]; sugges
           <li
             key={t.id}
             className={cx(
-              t.status === "current" ? "font-medium text-fg" : t.status === "covered" ? "text-fg-soft" : "text-muted",
+              t.status === "current"
+                ? "font-medium text-fg"
+                : t.status === "covered"
+                  ? "text-fg-soft"
+                  : "text-muted",
             )}
           >
-            <span aria-hidden className={cx("mr-0.5", t.status === "current" && "text-accent", t.status === "covered" && "text-ok")}>
+            <span
+              aria-hidden
+              className={cx(
+                "mr-0.5",
+                t.status === "current" && "text-accent",
+                t.status === "covered" && "text-ok",
+              )}
+            >
               {TOPIC_MARK[t.status]}
             </span>
             <span className="sr-only">{t.status}: </span>
@@ -384,11 +497,17 @@ export function ListeningActions({ mode }: { mode: "candidate" | "interviewer" }
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {mode === "candidate" ? (
-        <ActionButton title={withHotkey("Answer the latest question", answerKey)} onClick={() => void generateAnswer(null)}>
+        <ActionButton
+          title={withHotkey("Answer the latest question", answerKey)}
+          onClick={() => void generateAnswer(null)}
+        >
           Answer latest question
         </ActionButton>
       ) : (
-        <ActionButton title={withHotkey("Suggest follow-ups for the latest answer", followKey)} onClick={() => void generateFollowups()}>
+        <ActionButton
+          title={withHotkey("Suggest follow-ups for the latest answer", followKey)}
+          onClick={() => void generateFollowups()}
+        >
           Suggest follow-ups
         </ActionButton>
       )}

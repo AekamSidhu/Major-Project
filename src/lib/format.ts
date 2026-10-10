@@ -75,7 +75,10 @@ const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigat
 
 /** Renders a Tauri accelerator for display ("CommandOrControl+Shift+A" -> "Ctrl+Shift+A" / "⌘⇧A"). */
 export function formatAccelerator(acc: string): string {
-  const parts = acc.split("+").map((p) => p.trim()).filter(Boolean);
+  const parts = acc
+    .split("+")
+    .map((p) => p.trim())
+    .filter(Boolean);
   const map = (p: string): string => {
     const l = p.toLowerCase();
     if (["commandorcontrol", "cmdorctrl", "cmdorcontrol", "commandorctrl"].includes(l))

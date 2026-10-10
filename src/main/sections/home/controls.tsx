@@ -150,7 +150,10 @@ export function LevelMeter({ level, label }: { level: number; label: string }) {
       aria-valuenow={pct}
       className="inline-block h-1 w-14 overflow-hidden rounded-full bg-surface-2"
     >
-      <span className="block h-full rounded-full bg-ok transition-[width] duration-100" style={{ width: `${pct}%` }} />
+      <span
+        className="block h-full rounded-full bg-ok transition-[width] duration-100"
+        style={{ width: `${pct}%` }}
+      />
     </span>
   );
 }

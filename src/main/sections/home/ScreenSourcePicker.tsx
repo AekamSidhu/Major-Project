@@ -6,7 +6,14 @@ import type { ScreenSourceInfo, ScreenSourceKind, ScreenSourceSpec } from "@/bin
 import { api } from "@/lib/ipc";
 import { Button, Select, TextInput } from "@/main/ui";
 import { InlineError, Segmented } from "./controls";
-import { formatRegion, parseRegion, pickerKind, SCREEN_KINDS, sourceOptionLabel, sourceToSpec } from "./helpers";
+import {
+  formatRegion,
+  parseRegion,
+  pickerKind,
+  SCREEN_KINDS,
+  sourceOptionLabel,
+  sourceToSpec,
+} from "./helpers";
 import { useAsyncData } from "./hooks";
 import { Icon } from "./icons";
 
@@ -34,7 +41,10 @@ export function ScreenSourcePicker({ value, onChange, disabled }: ScreenSourcePi
   const selectedId = value && pickerKind(value.kind) === kind ? value.id : "";
   const selected = ofKind.find((s) => s.id === selectedId) ?? null;
   const missing = value !== null && selectedId !== "" && sources.data !== null && selected === null;
-  const region = parseRegion(regionText, selected ? { width: selected.width, height: selected.height } : undefined);
+  const region = parseRegion(
+    regionText,
+    selected ? { width: selected.width, height: selected.height } : undefined,
+  );
 
   const emit = (info: ScreenSourceInfo | null, text: string) => {
     if (!info) {
@@ -42,12 +52,28 @@ export function ScreenSourcePicker({ value, onChange, disabled }: ScreenSourcePi
       return;
     }
     const r = parseRegion(text, { width: info.width, height: info.height });
-    onChange(sourceToSpec(info, info.kind === "display" ? r.rect : null), info.kind === "display" ? r.error : null);
+    onChange(
+      sourceToSpec(info, info.kind === "display" ? r.rect : null),
+      info.kind === "display" ? r.error : null,
+    );
   };
 
   const options = [
-    { value: "", label: kind === "display" ? "Choose a display…" : kind === "window" ? "Choose a window…" : "Choose an application…", disabled: true },
-    ...ofKind.map((s) => ({ value: s.id, label: sourceOptionLabel(s), disabled: s.excludedByRule })),
+    {
+      value: "",
+      label:
+        kind === "display"
+          ? "Choose a display…"
+          : kind === "window"
+            ? "Choose a window…"
+            : "Choose an application…",
+      disabled: true,
+    },
+    ...ofKind.map((s) => ({
+      value: s.id,
+      label: sourceOptionLabel(s),
+      disabled: s.excludedByRule,
+    })),
   ];
 
   return (
@@ -94,11 +120,14 @@ export function ScreenSourcePicker({ value, onChange, disabled }: ScreenSourcePi
           />
         )}
         {sources.error && (
-          <InlineError className="mt-1.5">Could not list screen sources: {sources.error}</InlineError>
+          <InlineError className="mt-1.5">
+            Could not list screen sources: {sources.error}
+          </InlineError>
         )}
         {!sources.loading && !sources.error && ofKind.length === 0 && (
           <p className="mt-1.5 text-[0.78rem] text-muted">
-            No {kind === "display" ? "displays" : kind === "window" ? "windows" : "applications"} found.
+            No {kind === "display" ? "displays" : kind === "window" ? "windows" : "applications"}{" "}
+            found.
           </p>
         )}
         {missing && (
@@ -107,7 +136,9 @@ export function ScreenSourcePicker({ value, onChange, disabled }: ScreenSourcePi
           </p>
         )}
         {ofKind.some((s) => s.excludedByRule) && (
-          <p className="mt-1.5 text-[0.78rem] text-muted">Sources excluded by your privacy rules can’t be selected.</p>
+          <p className="mt-1.5 text-[0.78rem] text-muted">
+            Sources excluded by your privacy rules can’t be selected.
+          </p>
         )}
       </div>
 

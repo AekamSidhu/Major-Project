@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
 import type { DataFlowNode, DataFlowReport, Settings } from "@/bindings";
-import { acceleratorFromEvent, conflictsFor, normalizeAccelerator, validateAccelerator } from "./accelerator";
+import {
+  acceleratorFromEvent,
+  conflictsFor,
+  normalizeAccelerator,
+  validateAccelerator,
+} from "./accelerator";
 import { ALL_LOCAL_STATEMENT, audioFlow, privacyStatement } from "./dataFlow";
-import { effectiveEndpoint, locationForUrl, resolvedBaseUrl, DEFAULT_OPENAI_URL, DEFAULT_OLLAMA_URL } from "./settingsMeta";
+import {
+  effectiveEndpoint,
+  locationForUrl,
+  resolvedBaseUrl,
+  DEFAULT_OPENAI_URL,
+  DEFAULT_OLLAMA_URL,
+} from "./settingsMeta";
 import { normalizeRuleValue, parseRegion, validateBaseUrl } from "./validation";
 
-function node(component: DataFlowNode["component"], location: DataFlowNode["location"], provider = "x", endpoint: string | null = null): DataFlowNode {
+function node(
+  component: DataFlowNode["component"],
+  location: DataFlowNode["location"],
+  provider = "x",
+  endpoint: string | null = null,
+): DataFlowNode {
   return { component, label: component, location, provider, endpoint };
 }
 
@@ -20,7 +36,11 @@ describe("privacyStatement", () => {
   });
 
   it("never repeats an all-local claim when a node is remote", () => {
-    const r = report([node("llm", "remote", "OpenAI", "api.openai.com")], false, "No meeting data leaves this device.");
+    const r = report(
+      [node("llm", "remote", "OpenAI", "api.openai.com")],
+      false,
+      "No meeting data leaves this device.",
+    );
     const s = privacyStatement(r);
     expect(s.tone).toBe("warn");
     expect(s.text).not.toMatch(/no meeting data leaves/i);
@@ -33,14 +53,25 @@ describe("privacyStatement", () => {
   });
 
   it("marks audio as off when both sources are disabled", () => {
-    const steps = audioFlow(report([node("microphone", "disabled"), node("system_audio", "disabled")], true));
+    const steps = audioFlow(
+      report([node("microphone", "disabled"), node("system_audio", "disabled")], true),
+    );
     expect(steps[0]).toMatchObject({ location: "disabled", detail: "Off" });
-    expect(steps.map((s) => s.key)).toEqual(["audio", "transcription", "context", "llm", "overlay"]);
+    expect(steps.map((s) => s.key)).toEqual([
+      "audio",
+      "transcription",
+      "context",
+      "llm",
+      "overlay",
+    ]);
   });
 });
 
 describe("accelerators", () => {
-  const key = (code: string, mods: Partial<Record<"ctrlKey" | "metaKey" | "altKey" | "shiftKey", boolean>> = {}) => ({
+  const key = (
+    code: string,
+    mods: Partial<Record<"ctrlKey" | "metaKey" | "altKey" | "shiftKey", boolean>> = {},
+  ) => ({
     code,
     ctrlKey: false,
     metaKey: false,
@@ -50,12 +81,16 @@ describe("accelerators", () => {
   });
 
   it("builds Tauri accelerators from key events", () => {
-    expect(acceleratorFromEvent(key("KeyK", { ctrlKey: true, shiftKey: true }), false)).toMatchObject({
+    expect(
+      acceleratorFromEvent(key("KeyK", { ctrlKey: true, shiftKey: true }), false),
+    ).toMatchObject({
       kind: "complete",
       accelerator: "CommandOrControl+Shift+K",
     });
     expect(acceleratorFromEvent(key("ShiftLeft", { shiftKey: true }), false).kind).toBe("partial");
-    expect(acceleratorFromEvent(key("KeyK", { metaKey: true }), true)).toMatchObject({ accelerator: "CommandOrControl+K" });
+    expect(acceleratorFromEvent(key("KeyK", { metaKey: true }), true)).toMatchObject({
+      accelerator: "CommandOrControl+K",
+    });
   });
 
   it("rejects shortcuts that would block typing", () => {
@@ -66,7 +101,9 @@ describe("accelerators", () => {
   });
 
   it("detects conflicts regardless of modifier spelling and order", () => {
-    expect(normalizeAccelerator("Shift+CmdOrCtrl+k")).toBe(normalizeAccelerator("CommandOrControl+Shift+K"));
+    expect(normalizeAccelerator("Shift+CmdOrCtrl+k")).toBe(
+      normalizeAccelerator("CommandOrControl+Shift+K"),
+    );
     const bindings = [
       { action: "toggle_overlay" as const, accelerator: "CommandOrControl+Shift+O" },
       { action: "ask_ai" as const, accelerator: "CommandOrControl+Shift+Space" },
@@ -88,7 +125,9 @@ describe("endpoints", () => {
 
   it("ignores another provider's default URL left over from switching", () => {
     expect(resolvedBaseUrl(DEFAULT_OPENAI_URL, DEFAULT_OLLAMA_URL)).toBe(DEFAULT_OPENAI_URL);
-    expect(resolvedBaseUrl(DEFAULT_OLLAMA_URL, "http://gpu-box:11434")).toBe("http://gpu-box:11434");
+    expect(resolvedBaseUrl(DEFAULT_OLLAMA_URL, "http://gpu-box:11434")).toBe(
+      "http://gpu-box:11434",
+    );
   });
 
   it("reports the built-in embeddings as local and needs an address for compatible servers", () => {
@@ -115,9 +154,15 @@ describe("validation", () => {
   });
 
   it("normalizes privacy rule values", () => {
-    expect(normalizeRuleValue("domain", "https://Bank.Example.com/login?x=1")).toEqual({ ok: true, value: "bank.example.com" });
+    expect(normalizeRuleValue("domain", "https://Bank.Example.com/login?x=1")).toEqual({
+      ok: true,
+      value: "bank.example.com",
+    });
     expect(normalizeRuleValue("domain", "not a domain").ok).toBe(false);
-    expect(normalizeRuleValue("region", " 0, 10 ,800,600 ")).toEqual({ ok: true, value: "0,10,800,600" });
+    expect(normalizeRuleValue("region", " 0, 10 ,800,600 ")).toEqual({
+      ok: true,
+      value: "0,10,800,600",
+    });
     expect(normalizeRuleValue("region", "0,0,0,10").ok).toBe(false);
     expect(normalizeRuleValue("application", "  ").ok).toBe(false);
     expect(parseRegion("1,2,3")).toMatchObject({ ok: false });

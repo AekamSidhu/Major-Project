@@ -124,17 +124,24 @@ export function TranscriptionProviderForm({ variant = "full" }: { variant?: "ful
 
       <div className="flex items-center gap-2 py-1 text-[0.8rem] text-muted" aria-live="polite">
         <span>Audio goes to</span>
-        {ep.url ? <span className="font-mono text-fg-soft">{displayHost(ep.url)}</span> : <span>—</span>}
+        {ep.url ? (
+          <span className="font-mono text-fg-soft">{displayHost(ep.url)}</span>
+        ) : (
+          <span>—</span>
+        )}
         <LocationBadge location={ep.location} endpoint={ep.url ? displayHost(ep.url) : null} />
       </div>
 
       {settings.privacy.localOnly && ep.location === "remote" && (
         <Banner tone="warn" title="Blocked by local-only mode">
-          This provider sends audio off this device, so OpenMeet will refuse to use it while local-only mode is on.
+          This provider sends audio off this device, so OpenMeet will refuse to use it while
+          local-only mode is on.
         </Banner>
       )}
       {urlRequired && !t.baseUrl && (
-        <Banner tone="warn">Enter the server address below — transcription can't start without it.</Banner>
+        <Banner tone="warn">
+          Enter the server address below — transcription can't start without it.
+        </Banner>
       )}
 
       {t.provider === "local_ai" && <LocalAiPanel compact={variant === "compact"} />}
@@ -188,11 +195,14 @@ export function TranscriptionProviderForm({ variant = "full" }: { variant?: "ful
       <LanguageSetting />
       {isEnglishOnlyModel(t.model) && language !== "en" && (
         <Banner tone="warn">
-          {t.model} only understands English. Choose a multilingual model (e.g. without “.en”) for other languages.
+          {t.model} only understands English. Choose a multilingual model (e.g. without “.en”) for
+          other languages.
         </Banner>
       )}
 
-      {choice.secret && <ApiKeyField provider={choice.secret} optional={t.provider === "openai_compatible"} />}
+      {choice.secret && (
+        <ApiKeyField provider={choice.secret} optional={t.provider === "openai_compatible"} />
+      )}
 
       {variant === "full" && (
         <>

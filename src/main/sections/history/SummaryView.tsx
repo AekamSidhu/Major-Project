@@ -8,7 +8,11 @@ import { generatedByLabel, summarySections } from "./helpers";
 const CHIP_SECTIONS = new Set(["keyTopics", "technicalTopics"]);
 
 function Heading({ children }: { children: string }) {
-  return <h3 className="mb-1.5 text-[0.72rem] font-semibold tracking-wider text-muted uppercase">{children}</h3>;
+  return (
+    <h3 className="mb-1.5 text-[0.72rem] font-semibold tracking-wider text-muted uppercase">
+      {children}
+    </h3>
+  );
 }
 
 export function SummaryView({ summary }: { summary: MeetingSummary }) {
@@ -17,7 +21,11 @@ export function SummaryView({ summary }: { summary: MeetingSummary }) {
   const empty = !overview && sections.length === 0;
   return (
     <article className="space-y-5">
-      {empty && <p className="text-[0.86rem] text-muted">The summary has no content — the meeting may have been very short.</p>}
+      {empty && (
+        <p className="text-[0.86rem] text-muted">
+          The summary has no content — the meeting may have been very short.
+        </p>
+      )}
       {overview && (
         <section>
           <Heading>Overview</Heading>
@@ -30,7 +38,10 @@ export function SummaryView({ summary }: { summary: MeetingSummary }) {
           {CHIP_SECTIONS.has(s.key) ? (
             <ul className="flex flex-wrap gap-1.5">
               {s.items.map((item, i) => (
-                <li key={i} className="rounded-md border border-border px-2 py-0.5 text-[0.8rem] text-fg-soft">
+                <li
+                  key={i}
+                  className="rounded-md border border-border px-2 py-0.5 text-[0.8rem] text-fg-soft"
+                >
                   {item}
                 </li>
               ))}

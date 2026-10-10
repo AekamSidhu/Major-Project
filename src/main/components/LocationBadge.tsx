@@ -14,8 +14,17 @@ const TITLES: Record<AnyLocation, string> = {
   unknown: "Not reported by OpenMeet",
 };
 
-export function LocationBadge({ location, endpoint }: { location: AnyLocation; endpoint?: string | null }) {
-  const title = endpoint && location === "remote" ? `Sent to ${endpoint}, outside this device` : TITLES[location];
+export function LocationBadge({
+  location,
+  endpoint,
+}: {
+  location: AnyLocation;
+  endpoint?: string | null;
+}) {
+  const title =
+    endpoint && location === "remote"
+      ? `Sent to ${endpoint}, outside this device`
+      : TITLES[location];
   switch (location) {
     case "local":
       return (

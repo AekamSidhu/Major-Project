@@ -26,7 +26,13 @@ const ICON_TONES: Record<NonNullable<IconButtonProps["tone"]>, string> = {
 };
 
 /** Square icon-only button with an accessible name and tooltip. */
-export function IconButton({ label, tone = "default", className, children, ...rest }: IconButtonProps) {
+export function IconButton({
+  label,
+  tone = "default",
+  className,
+  children,
+  ...rest
+}: IconButtonProps) {
   return (
     <button
       type="button"
@@ -128,7 +134,11 @@ export function Dot({ tone, pulse }: { tone: Tone; pulse?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={cx("inline-block size-[0.5rem] shrink-0 rounded-full", DOT_TONES[tone], pulse && "om-pulse")}
+      className={cx(
+        "inline-block size-[0.5rem] shrink-0 rounded-full",
+        DOT_TONES[tone],
+        pulse && "om-pulse",
+      )}
     />
   );
 }
@@ -155,7 +165,15 @@ const CHIP_TONES: Record<Tone, string> = {
   danger: "border-transparent bg-danger-soft text-danger",
 };
 
-export function Tag({ tone = "neutral", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
+export function Tag({
+  tone = "neutral",
+  children,
+  className,
+}: {
+  tone?: Tone;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <span
       className={cx(

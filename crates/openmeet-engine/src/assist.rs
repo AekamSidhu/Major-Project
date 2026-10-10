@@ -1447,9 +1447,36 @@ pub(crate) fn spawn_meeting_summary(engine: Engine, meeting_id: String) {
     let Some((record, long_term, gaps, store)) = snapshot else {
         return;
     };
+    let cancel = CancellationToken::new();
+    engine
+        .inner
+        .summaries
+        .lock()
+        .insert(meeting_id.clone(), cancel.clone());
     let handle = engine.inner.handle.clone();
     handle.spawn(async move {
-        let summary = summarize_with(&engine, &record, llm, &long_term, &gaps).await;
+        let summary = if engine.is_deleted(&meeting_id) {
+            None
+        } else {
+            tokio::select! {
+                s = summarize_with(&engine, &record, llm, &long_term, &gaps) => Some(s),
+                _ = cancel.cancelled() => None,
+            }
+        };
+        engine.inner.summaries.lock().remove(&meeting_id);
+        let Some(summary) = summary.filter(|_| !engine.is_deleted(&meeting_id)) else {
+            // Deleted while the summary was being written: nothing is saved
+            // or shown, and the engine is ready for the next meeting.
+            {
+                let mut st = engine.inner.state.lock();
+                if let Some(rt) = st.runtime.as_mut().filter(|r| r.meeting.id == meeting_id) {
+                    let _ = rt.transition(MeetingState::Completed);
+                }
+            }
+            engine.emit_state(&meeting_id);
+            tracing::info!(meeting = %meeting_id, "summary cancelled: the meeting was deleted");
+            return;
+        };
         let meeting = {
             let mut st = engine.inner.state.lock();
             st.runtime

@@ -37,6 +37,8 @@ pub type EngineError = CoreError;
 const AUDIO_QUEUE: usize = 1024;
 /// How long a graceful stop waits for in-flight transcriptions.
 const STOP_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+/// Deleted meeting ids remembered so late writes for them are dropped.
+const MAX_DELETED: usize = 256;
 
 /// Everything the engine needs from the outside world.
 pub struct EngineDeps {
@@ -97,6 +99,10 @@ pub(crate) struct Inner {
     pub accepting_audio: AtomicBool,
     pub dropped_frames: AtomicU64,
     pub sim: Mutex<SimState>,
+    /// Meetings the user deleted while work for them could still be queued.
+    pub deleted: Mutex<std::collections::VecDeque<Id>>,
+    /// Cancels the background summary of a meeting (keyed by meeting id).
+    pub summaries: Mutex<std::collections::HashMap<Id, CancellationToken>>,
     pub handle: Handle,
 }
 
@@ -143,6 +149,8 @@ impl Engine {
             accepting_audio: AtomicBool::new(false),
             dropped_frames: AtomicU64::new(0),
             sim: Mutex::new(SimState::default()),
+            deleted: Mutex::new(std::collections::VecDeque::new()),
+            summaries: Mutex::new(std::collections::HashMap::new()),
             handle: handle.clone(),
         });
         handle.spawn(audio_router(audio_rx, ctl_rx));
@@ -251,7 +259,82 @@ impl Engine {
     }
 
     pub(crate) fn persist(&self, store: &Arc<dyn MeetingStore>, op: PersistOp) {
+        // A write that arrives after the user deleted its meeting must not
+        // bring the meeting back.
+        if let Some(id) = op.meeting_id() {
+            if self.is_deleted(id) {
+                tracing::debug!(op = op.name(), "dropped a write for a deleted meeting");
+                return;
+            }
+        }
         self.inner.persist.send(store, op);
+    }
+
+    pub(crate) fn is_deleted(&self, meeting_id: &str) -> bool {
+        self.inner.deleted.lock().iter().any(|d| d == meeting_id)
+    }
+
+    /// Call before deleting a stored meeting: cancels its summary if one is
+    /// still being written, drops any later writes for it, waits for writes
+    /// already queued, and clears it from memory if it is the last meeting.
+    /// Fails while the meeting is still running or ending.
+    pub async fn forget_meeting(&self, meeting_id: &str) -> Result<(), CoreError> {
+        {
+            let st = self.inner.state.lock();
+            if let Some(rt) = st.runtime.as_ref().filter(|r| r.meeting.id == meeting_id) {
+                let s = rt.state();
+                if s.is_live() || matches!(s, MeetingState::Starting | MeetingState::Stopping) {
+                    return Err(CoreError::InvalidState(
+                        "End the meeting before deleting it.".into(),
+                    ));
+                }
+            }
+        }
+        {
+            let mut deleted = self.inner.deleted.lock();
+            if !deleted.iter().any(|d| d == meeting_id) {
+                if deleted.len() >= MAX_DELETED {
+                    deleted.pop_front();
+                }
+                deleted.push_back(meeting_id.to_string());
+            }
+        }
+        if let Some(token) = self.inner.summaries.lock().remove(meeting_id) {
+            token.cancel();
+        }
+        self.flush_persistence().await;
+        let cleared = {
+            let mut st = self.inner.state.lock();
+            let hit = st
+                .runtime
+                .as_ref()
+                .is_some_and(|r| r.meeting.id == meeting_id);
+            if hit {
+                st.runtime = None;
+            }
+            hit.then_some(st.mode)
+        };
+        if let Some(mode) = cleared {
+            // `Idle` without a meeting id tells windows to drop the meeting.
+            self.emit(MeetingEvent::MeetingStateChanged {
+                meeting_id: None,
+                state: MeetingState::Idle,
+                mode,
+                paused_reason: None,
+            });
+        }
+        Ok(())
+    }
+
+    /// [`Engine::forget_meeting`] for every meeting (before deleting all data).
+    pub async fn forget_all_meetings(&self) -> Result<(), CoreError> {
+        match self.current_meeting_id() {
+            Some(id) => self.forget_meeting(&id).await,
+            None => {
+                self.flush_persistence().await;
+                Ok(())
+            }
+        }
     }
 
     /// Waits until every queued write of the current meeting is applied.

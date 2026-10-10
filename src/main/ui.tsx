@@ -97,7 +97,9 @@ export function Field({ label, description, error, htmlFor, children, inline }: 
         <label htmlFor={htmlFor} className="block text-[0.86rem] font-medium text-fg">
           {label}
         </label>
-        {description && <div className="mt-0.5 text-[0.78rem] leading-snug text-muted">{description}</div>}
+        {description && (
+          <div className="mt-0.5 text-[0.78rem] leading-snug text-muted">{description}</div>
+        )}
       </div>
       <div className={cx(inline && "shrink-0")}>{children}</div>
       {error && (
@@ -118,7 +120,9 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={cx(INPUT, "min-h-24 py-2 leading-relaxed", props.className)} />;
+  return (
+    <textarea {...props} className={cx(INPUT, "min-h-24 py-2 leading-relaxed", props.className)} />
+  );
 }
 
 export interface SelectOption<T extends string> {
@@ -127,14 +131,22 @@ export interface SelectOption<T extends string> {
   disabled?: boolean;
 }
 
-export interface SelectProps<T extends string>
-  extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange" | "value"> {
+export interface SelectProps<T extends string> extends Omit<
+  SelectHTMLAttributes<HTMLSelectElement>,
+  "onChange" | "value"
+> {
   value: T;
   options: ReadonlyArray<SelectOption<T>>;
   onChange: (value: T) => void;
 }
 
-export function Select<T extends string>({ value, options, onChange, className, ...rest }: SelectProps<T>) {
+export function Select<T extends string>({
+  value,
+  options,
+  onChange,
+  className,
+  ...rest
+}: SelectProps<T>) {
   return (
     <select
       {...rest}
@@ -239,7 +251,15 @@ export function Slider({ value, min, max, step = 1, onChange, format, label, id 
 // Layout & feedback
 // ---------------------------------------------------------------------------
 
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <header className="mb-5 flex items-start justify-between gap-4">
       <div>
@@ -251,7 +271,17 @@ export function PageHeader({ title, description, actions }: { title: string; des
   );
 }
 
-export function Section({ title, description, children, actions }: { title?: string; description?: ReactNode; children: ReactNode; actions?: ReactNode }) {
+export function Section({
+  title,
+  description,
+  children,
+  actions,
+}: {
+  title?: string;
+  description?: ReactNode;
+  children: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <section className="mb-5 rounded-lg border border-border bg-surface px-4 py-3">
       {(title || actions) && (
@@ -278,9 +308,23 @@ const BADGE_TONES: Record<Tone, string> = {
   danger: "bg-danger-soft text-danger border-transparent",
 };
 
-export function Badge({ tone = "neutral", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
+export function Badge({
+  tone = "neutral",
+  children,
+  className,
+}: {
+  tone?: Tone;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <span className={cx("inline-flex items-center gap-1 rounded border px-1.5 py-px text-[0.72rem] font-medium", BADGE_TONES[tone], className)}>
+    <span
+      className={cx(
+        "inline-flex items-center gap-1 rounded border px-1.5 py-px text-[0.72rem] font-medium",
+        BADGE_TONES[tone],
+        className,
+      )}
+    >
       {children}
     </span>
   );
@@ -300,7 +344,11 @@ export function StatusDot({ tone, pulse, label }: { tone: Tone; pulse?: boolean;
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
-      className={cx("inline-block size-2 shrink-0 rounded-full", DOT_TONES[tone], pulse && "om-pulse")}
+      className={cx(
+        "inline-block size-2 shrink-0 rounded-full",
+        DOT_TONES[tone],
+        pulse && "om-pulse",
+      )}
     />
   );
 }
@@ -313,7 +361,17 @@ export function Kbd({ children }: { children: ReactNode }) {
   );
 }
 
-export function Banner({ tone = "neutral", title, children, actions }: { tone?: Tone; title?: string; children?: ReactNode; actions?: ReactNode }) {
+export function Banner({
+  tone = "neutral",
+  title,
+  children,
+  actions,
+}: {
+  tone?: Tone;
+  title?: string;
+  children?: ReactNode;
+  actions?: ReactNode;
+}) {
   const border: Record<Tone, string> = {
     neutral: "border-border",
     accent: "border-accent/40",
@@ -324,7 +382,10 @@ export function Banner({ tone = "neutral", title, children, actions }: { tone?: 
   return (
     <div
       role={tone === "danger" || tone === "warn" ? "alert" : "status"}
-      className={cx("mb-4 flex items-start justify-between gap-4 rounded-lg border bg-surface px-3.5 py-2.5", border[tone])}
+      className={cx(
+        "mb-4 flex items-start justify-between gap-4 rounded-lg border bg-surface px-3.5 py-2.5",
+        border[tone],
+      )}
     >
       <div className="flex min-w-0 gap-2.5">
         <span className="mt-1.5">
@@ -340,7 +401,15 @@ export function Banner({ tone = "neutral", title, children, actions }: { tone?: 
   );
 }
 
-export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
+export function EmptyState({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children?: ReactNode;
+  action?: ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 py-12 text-center">
       <p className="text-[0.92rem] font-medium text-fg">{title}</p>
@@ -389,7 +458,9 @@ export function Dialog({ open, title, onClose, children, footer }: DialogProps) 
         </h2>
         <div className="mt-2 text-[0.86rem] text-fg-soft">{children}</div>
       </div>
-      {footer && <div className="flex justify-end gap-2 border-t border-border px-5 py-3">{footer}</div>}
+      {footer && (
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">{footer}</div>
+      )}
     </dialog>
   );
 }
@@ -405,7 +476,16 @@ export interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-export function ConfirmDialog({ open, title, message, confirmLabel, danger, busy, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel,
+  danger,
+  busy,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
   return (
     <Dialog
       open={open}
@@ -453,7 +533,9 @@ export function Tabs<T extends string>({
           onClick={() => onChange(t.value)}
           className={cx(
             "-mb-px border-b-2 px-3 py-2 text-[0.84rem] font-medium transition-colors",
-            value === t.value ? "border-accent text-fg" : "border-transparent text-muted hover:text-fg-soft",
+            value === t.value
+              ? "border-accent text-fg"
+              : "border-transparent text-muted hover:text-fg-soft",
           )}
         >
           {t.label}

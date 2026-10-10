@@ -50,7 +50,9 @@ const PATHS = {
   chevronRight: <path d="M9.5 6l6 6-6 6" />,
   download: <path d="M12 4v10.5M7.5 10l4.5 4.5 4.5-4.5M5 19.5h14" />,
   trash: <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.9 12.5h9.2L17.5 7" />,
-  sparkle: <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z" />,
+  sparkle: (
+    <path d="M12 3.5l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7 1.7-5zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z" />
+  ),
   arrowDown: <path d="M12 5v14M6.5 13.5L12 19l5.5-5.5" />,
   arrowRight: <path d="M5 12h14M13.5 6.5L19 12l-5.5 5.5" />,
   copy: (
@@ -83,7 +85,15 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, className, label }: { name: IconName; className?: string; label?: string }) {
+export function Icon({
+  name,
+  className,
+  label,
+}: {
+  name: IconName;
+  className?: string;
+  label?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"

@@ -25,9 +25,11 @@
   --color-warn: var(--om-warn);
   --color-danger: var(--om-danger);
   --color-danger-soft: var(--om-danger-soft);
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text",
-    "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
-  --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-sans:
+    "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+    "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-mono:
+    "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 :root,

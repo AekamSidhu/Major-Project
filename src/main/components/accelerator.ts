@@ -128,12 +128,28 @@ export function acceleratorFromEvent(e: KeyComboInput, isMac: boolean): RecordRe
  * Super, unless the key is a function key. Null when acceptable.
  */
 export function validateAccelerator(accelerator: string): string | null {
-  const parts = accelerator.split("+").map((p) => p.trim().toLowerCase()).filter(Boolean);
+  const parts = accelerator
+    .split("+")
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean);
   if (parts.length === 0) return "Press a key combination.";
   const key = parts[parts.length - 1] ?? "";
   const mods = parts.slice(0, -1);
   const strong = mods.some((m) =>
-    ["commandorcontrol", "cmdorctrl", "cmdorcontrol", "commandorctrl", "control", "ctrl", "alt", "option", "super", "command", "cmd", "meta"].includes(m),
+    [
+      "commandorcontrol",
+      "cmdorctrl",
+      "cmdorcontrol",
+      "commandorctrl",
+      "control",
+      "ctrl",
+      "alt",
+      "option",
+      "super",
+      "command",
+      "cmd",
+      "meta",
+    ].includes(m),
   );
   if (!strong && !isFunctionKey(key.toUpperCase())) {
     return "Include Ctrl, Alt or the Windows/⌘ key so the shortcut doesn't interfere with typing.";
@@ -149,10 +165,14 @@ export function validateAccelerator(accelerator: string): string | null {
 export function normalizeAccelerator(acc: string): string {
   const mods: string[] = [];
   let key = "";
-  for (const raw of acc.split("+").map((s) => s.trim()).filter(Boolean)) {
+  for (const raw of acc
+    .split("+")
+    .map((s) => s.trim())
+    .filter(Boolean)) {
     const lower = raw.toLowerCase();
     let m: string | null = null;
-    if (["commandorcontrol", "cmdorctrl", "cmdorcontrol", "commandorctrl"].includes(lower)) m = "cmdorctrl";
+    if (["commandorcontrol", "cmdorctrl", "cmdorcontrol", "commandorctrl"].includes(lower))
+      m = "cmdorctrl";
     else if (lower === "control" || lower === "ctrl") m = "ctrl";
     else if (["command", "cmd", "super", "meta"].includes(lower)) m = "super";
     else if (lower === "shift") m = "shift";
@@ -191,4 +211,5 @@ export function duplicateMap(
 }
 
 /** True on macOS (⌘ is CommandOrControl there). */
-export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+export const IS_MAC =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);

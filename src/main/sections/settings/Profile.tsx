@@ -20,9 +20,9 @@ export function ProfileSection() {
         description="Stored only on this device and sent to your AI provider as part of each request."
       />
       <Banner tone="accent" title="Suggestions use only what you provide">
-        In candidate mode, suggested answers use facts from here and from the conversation. OpenMeet never invents
-        employers, projects, numbers or achievements; where a personal example is needed, it shows a placeholder for you
-        to fill in.
+        In candidate mode, suggested answers use facts from here and from the conversation. OpenMeet
+        never invents employers, projects, numbers or achievements; where a personal example is
+        needed, it shows a placeholder for you to fill in.
       </Banner>
       <Section title="Candidate mode">
         <TextAreaSetting
@@ -31,7 +31,9 @@ export function ProfileSection() {
           value={p.background}
           maxLength={20000}
           rows={10}
-          placeholder={"e.g. 6 years backend engineering. At Acme I led the migration of the billing service to Kafka (cut p99 latency from 900 ms to 120 ms)…"}
+          placeholder={
+            "e.g. 6 years backend engineering. At Acme I led the migration of the billing service to Kafka (cut p99 latency from 900 ms to 120 ms)…"
+          }
           onCommit={(v) =>
             saveSettings((d) => {
               d.profile.background = v;

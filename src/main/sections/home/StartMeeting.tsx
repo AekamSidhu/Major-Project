@@ -2,7 +2,13 @@
 // (mode → audio → optional screen → privacy check → meeting app → start).
 
 import { useId, useMemo, useState, type ReactNode } from "react";
-import type { AudioDevices, CapturePrivacyStatus, MeetingAppInfo, Mode, Settings } from "@/bindings";
+import type {
+  AudioDevices,
+  CapturePrivacyStatus,
+  MeetingAppInfo,
+  Mode,
+  Settings,
+} from "@/bindings";
 import { api, errorMessage } from "@/lib/ipc";
 import { useMain } from "@/main/store";
 import { Badge, Banner, Button, PageHeader, Spinner, TextInput, Toggle, cx } from "@/main/ui";
@@ -26,12 +32,14 @@ const MODES: ReadonlyArray<{ value: Mode; title: string; description: string }> 
   {
     value: "candidate",
     title: "Candidate",
-    description: "You’re being interviewed. OpenMeet suggests answers to the questions you’re asked.",
+    description:
+      "You’re being interviewed. OpenMeet suggests answers to the questions you’re asked.",
   },
   {
     value: "interviewer",
     title: "Interviewer",
-    description: "You’re interviewing. OpenMeet suggests follow-up questions grounded in what the candidate said.",
+    description:
+      "You’re interviewing. OpenMeet suggests follow-up questions grounded in what the candidate said.",
   },
 ];
 
@@ -50,7 +58,10 @@ function Step({
 }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-3 px-5 py-4">
+    <section
+      aria-labelledby={headingId}
+      className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-3 px-5 py-4"
+    >
       <span
         aria-hidden
         className="mt-px flex size-5 items-center justify-center rounded-full border border-border-strong text-[0.68rem] font-semibold text-muted tabular-nums"
@@ -126,7 +137,9 @@ function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => v
             />
             <span className="min-w-0">
               <span className="block text-[0.86rem] font-semibold text-fg">{m.title}</span>
-              <span className="block text-[0.78rem] leading-snug text-fg-soft">{m.description}</span>
+              <span className="block text-[0.78rem] leading-snug text-fg-soft">
+                {m.description}
+              </span>
             </span>
           </label>
         );
@@ -155,8 +168,16 @@ function AudioStep({
   const setSection = useMain((s) => s.setSection);
   const support = devices?.systemAudio ?? null;
   const unsupported = support !== null && !support.supported;
-  const micName = deviceName(settings.audio.microphoneDevice, devices?.inputs ?? null, "Default microphone");
-  const sysName = deviceName(settings.audio.systemAudioDevice, devices?.outputs ?? null, "Default output device");
+  const micName = deviceName(
+    settings.audio.microphoneDevice,
+    devices?.inputs ?? null,
+    "Default microphone",
+  );
+  const sysName = deviceName(
+    settings.audio.systemAudioDevice,
+    devices?.outputs ?? null,
+    "Default output device",
+  );
   return (
     <Step
       n={2}
@@ -175,7 +196,11 @@ function AudioStep({
           title="Microphone"
           detail={<>Your voice · {micName}</>}
           control={
-            <Toggle label="Microphone" checked={form.microphone} onChange={(v) => update({ microphone: v })} />
+            <Toggle
+              label="Microphone"
+              checked={form.microphone}
+              onChange={(v) => update({ microphone: v })}
+            />
           }
         />
         <SourceRow
@@ -222,8 +247,13 @@ function AudioStep({
 }
 
 function captureSummary(status: CapturePrivacyStatus): { text: string; tone: "ok" | "warn" } {
-  if (!status.supported) return { text: "Not available on this platform — the overlay can appear in screen shares", tone: "warn" };
-  if (status.active) return { text: "Overlay hidden from screen sharing and recordings", tone: "ok" };
+  if (!status.supported)
+    return {
+      text: "Not available on this platform — the overlay can appear in screen shares",
+      tone: "warn",
+    };
+  if (status.active)
+    return { text: "Overlay hidden from screen sharing and recordings", tone: "ok" };
   if (status.requested) return { text: "Requested, but not active right now", tone: "warn" };
   return { text: "Off — the overlay is visible in screen shares", tone: "warn" };
 }
@@ -231,7 +261,14 @@ function captureSummary(status: CapturePrivacyStatus): { text: string; tone: "ok
 function PrivacyStep({ settings }: { settings: Settings }) {
   const setSection = useMain((s) => s.setSection);
   const flowKey = useMemo(
-    () => JSON.stringify([settings.ai, settings.transcription, settings.privacy, settings.audio, settings.screen]),
+    () =>
+      JSON.stringify([
+        settings.ai,
+        settings.transcription,
+        settings.privacy,
+        settings.audio,
+        settings.screen,
+      ]),
     [settings],
   );
   const flow = useAsyncData(api.getDataFlow, flowKey);
@@ -257,7 +294,9 @@ function PrivacyStep({ settings }: { settings: Settings }) {
     >
       <dl className="space-y-3 text-[0.82rem]">
         <div>
-          <dt className="mb-1 text-[0.72rem] font-semibold tracking-wide text-muted uppercase">Data flow</dt>
+          <dt className="mb-1 text-[0.72rem] font-semibold tracking-wide text-muted uppercase">
+            Data flow
+          </dt>
           <dd>
             {flow.loading && !flow.data && (
               <p role="status" className="flex items-center gap-2 text-muted">
@@ -289,16 +328,26 @@ function PrivacyStep({ settings }: { settings: Settings }) {
                     );
                   })}
                 </ul>
-                <p className={cx("mt-1.5 text-[0.8rem]", flow.data.allLocal ? "text-ok" : "text-fg-soft")}>
+                <p
+                  className={cx(
+                    "mt-1.5 text-[0.8rem]",
+                    flow.data.allLocal ? "text-ok" : "text-fg-soft",
+                  )}
+                >
                   {flow.data.statement}
-                  {flow.data.localOnlyMode && <span className="ml-1.5 text-muted">(local-only mode is on)</span>}
+                  {flow.data.localOnlyMode && (
+                    <span className="ml-1.5 text-muted">(local-only mode is on)</span>
+                  )}
                 </p>
               </>
             )}
           </dd>
         </div>
         <div className="flex items-start gap-2">
-          <Icon name="shield" className={cx("mt-0.5", cap?.tone === "ok" ? "text-ok" : "text-warn")} />
+          <Icon
+            name="shield"
+            className={cx("mt-0.5", cap?.tone === "ok" ? "text-ok" : "text-warn")}
+          />
           <div className="min-w-0">
             <dt className="font-medium text-fg">Capture privacy</dt>
             <dd className="text-fg-soft">
@@ -307,7 +356,9 @@ function PrivacyStep({ settings }: { settings: Settings }) {
               {cap && capture.data && (
                 <>
                   <span className={cap.tone === "ok" ? "text-ok" : "text-warn"}>{cap.text}</span>
-                  {capture.data.note && <span className="block text-[0.76rem] text-muted">{capture.data.note}</span>}
+                  {capture.data.note && (
+                    <span className="block text-[0.76rem] text-muted">{capture.data.note}</span>
+                  )}
                 </>
               )}
             </dd>
@@ -326,10 +377,18 @@ function PrivacyStep({ settings }: { settings: Settings }) {
 }
 
 function appLabel(app: MeetingAppInfo): string {
-  return app.windowTitle && app.windowTitle !== app.name ? `${app.name} — ${app.windowTitle}` : app.name;
+  return app.windowTitle && app.windowTitle !== app.name
+    ? `${app.name} — ${app.windowTitle}`
+    : app.name;
 }
 
-function MeetingAppStep({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+function MeetingAppStep({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
   const apps = useAsyncData(api.detectMeetingApps);
   const name = useId();
   const list = apps.data ?? [];
@@ -360,7 +419,11 @@ function MeetingAppStep({ value, onChange }: { value: string | null; onChange: (
           <Spinner /> Looking for meeting apps…
         </p>
       ) : (
-        <div role="radiogroup" aria-label="Meeting app to focus after start" className="space-y-0.5">
+        <div
+          role="radiogroup"
+          aria-label="Meeting app to focus after start"
+          className="space-y-0.5"
+        >
           {options.map((o) => (
             <label
               key={o.id ?? "none"}
@@ -379,12 +442,15 @@ function MeetingAppStep({ value, onChange }: { value: string | null; onChange: (
           ))}
           {apps.data !== null && list.length === 0 && !apps.error && (
             <p className="px-2 pt-1 text-[0.78rem] text-muted">
-              No meeting apps detected. Open Zoom, Teams or your browser meeting first, then press Detect.
+              No meeting apps detected. Open Zoom, Teams or your browser meeting first, then press
+              Detect.
             </p>
           )}
         </div>
       )}
-      {apps.error && <InlineError className="mt-1.5">Could not detect meeting apps: {apps.error}</InlineError>}
+      {apps.error && (
+        <InlineError className="mt-1.5">Could not detect meeting apps: {apps.error}</InlineError>
+      )}
     </Step>
   );
 }
@@ -428,7 +494,8 @@ export function StartMeeting({ settings }: { settings: Settings }) {
       />
       {processingStopped && (
         <Banner tone="danger" title="Processing stopped">
-          The emergency stop halted audio, screen and AI processing. Starting a meeting turns processing back on.
+          The emergency stop halted audio, screen and AI processing. Starting a meeting turns
+          processing back on.
         </Banner>
       )}
       <form
@@ -449,7 +516,11 @@ export function StartMeeting({ settings }: { settings: Settings }) {
               id={titleId}
               value={form.title}
               maxLength={120}
-              placeholder={form.mode === "candidate" ? "e.g. Acme — system design round" : "e.g. Backend engineer — J. Doe"}
+              placeholder={
+                form.mode === "candidate"
+                  ? "e.g. Acme — system design round"
+                  : "e.g. Backend engineer — J. Doe"
+              }
               onChange={(e) => update({ title: e.target.value })}
               className="max-w-md"
             />
@@ -474,7 +545,9 @@ export function StartMeeting({ settings }: { settings: Settings }) {
             <Toggle
               label="Use screen context"
               checked={form.screenEnabled}
-              onChange={(v) => update({ screenEnabled: v, screenError: v ? form.screenError : null })}
+              onChange={(v) =>
+                update({ screenEnabled: v, screenError: v ? form.screenError : null })
+              }
             />
           }
         >
@@ -485,8 +558,8 @@ export function StartMeeting({ settings }: { settings: Settings }) {
             />
           ) : (
             <p className="text-[0.8rem] text-muted">
-              Off. Turn it on to let suggestions use what’s on a display, window or application (e.g. code or a
-              diagram).
+              Off. Turn it on to let suggestions use what’s on a display, window or application
+              (e.g. code or a diagram).
             </p>
           )}
         </Step>
@@ -499,11 +572,17 @@ export function StartMeeting({ settings }: { settings: Settings }) {
           <p className="flex max-w-md items-start gap-2 text-[0.8rem] text-fg-soft">
             <Icon name="info" className="mt-0.5 text-accent" />
             <span>
-              Make sure recording and AI assistance are allowed in this meeting, and tell participants where that’s
-              required.
+              Make sure recording and AI assistance are allowed in this meeting, and tell
+              participants where that’s required.
             </span>
           </p>
-          <Button type="submit" variant="primary" busy={starting} disabled={problem !== null} className="h-10 px-5 text-[0.92rem]">
+          <Button
+            type="submit"
+            variant="primary"
+            busy={starting}
+            disabled={problem !== null}
+            className="h-10 px-5 text-[0.92rem]"
+          >
             <Icon name="play" />
             Start meeting
           </Button>

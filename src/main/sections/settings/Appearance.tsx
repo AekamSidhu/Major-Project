@@ -7,11 +7,22 @@ import { api, errorMessage } from "@/lib/ipc";
 import { NumberSetting, SelectSetting, SliderSetting } from "../../components/fields";
 import { useLoader } from "../../components/useLoader";
 import { saveSettings } from "../../components/save";
-import { DENSITY_OPTIONS, LAYOUT_OPTIONS, POSITION_LABELS, THEME_OPTIONS } from "../../components/settingsMeta";
+import {
+  DENSITY_OPTIONS,
+  LAYOUT_OPTIONS,
+  POSITION_LABELS,
+  THEME_OPTIONS,
+} from "../../components/settingsMeta";
 import { useSettings } from "../../components/useSettings";
 import { Banner, Button, Field, PageHeader, Section, Select, ToggleField } from "../../ui";
 
-const POSITIONS: ReadonlyArray<OverlayPosition> = ["top_left", "top_right", "bottom_left", "bottom_right", "custom"];
+const POSITIONS: ReadonlyArray<OverlayPosition> = [
+  "top_left",
+  "top_right",
+  "bottom_left",
+  "bottom_right",
+  "custom",
+];
 
 function Placement() {
   const o = useSettings().overlay;
@@ -30,18 +41,33 @@ function Placement() {
   const list = displays.data ?? [];
   const known = o.targetDisplay !== null && list.some((d) => d.key === o.targetDisplay);
   const displayOptions = [
-    { value: "", label: o.layout === "separate_display" ? "Automatic (a secondary display)" : "Automatic (primary display)" },
+    {
+      value: "",
+      label:
+        o.layout === "separate_display"
+          ? "Automatic (a secondary display)"
+          : "Automatic (primary display)",
+    },
     ...list.map((d) => ({
       value: d.key,
       label: `${d.name}${d.isPrimary ? " (primary)" : ""} — ${d.width}×${d.height}, ${Math.round(d.scaleFactor * 100)}%, ${d.orientation}`,
     })),
-    ...(o.targetDisplay !== null && !known ? [{ value: o.targetDisplay, label: "Disconnected display" }] : []),
+    ...(o.targetDisplay !== null && !known
+      ? [{ value: o.targetDisplay, label: "Disconnected display" }]
+      : []),
   ];
 
   return (
-    <Section title="Placement" description="Drag the overlay by its top bar to move it; choose Custom to keep that spot.">
+    <Section
+      title="Placement"
+      description="Drag the overlay by its top bar to move it; choose Custom to keep that spot."
+    >
       {error && <Banner tone="danger">{error}</Banner>}
-      <Field label="Position" description="Custom remembers the dragged position per display and meeting app." inline>
+      <Field
+        label="Position"
+        description="Custom remembers the dragged position per display and meeting app."
+        inline
+      >
         <Select
           value={o.position}
           className="w-56"
@@ -62,7 +88,11 @@ function Placement() {
       />
       <Field
         label="Display"
-        description={displays.error ? `Could not list displays: ${displays.error}` : `${list.length} display${list.length === 1 ? "" : "s"} connected.`}
+        description={
+          displays.error
+            ? `Could not list displays: ${displays.error}`
+            : `${list.length} display${list.length === 1 ? "" : "s"} connected.`
+        }
       >
         <div className="flex items-center gap-2">
           <Select

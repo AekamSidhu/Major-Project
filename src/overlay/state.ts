@@ -408,7 +408,8 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
     case "SUGGESTION_DISMISSED": {
       const hitPrimary = state.primary?.requestId === ev.requestId;
       const hitFollowups = state.followups?.requestId === ev.requestId;
-      if (!hitPrimary && !hitFollowups) return { ...state, retired: retire(state.retired, ev.requestId) };
+      if (!hitPrimary && !hitFollowups)
+        return { ...state, retired: retire(state.retired, ev.requestId) };
       return {
         ...state,
         primary: hitPrimary ? null : state.primary,
@@ -449,7 +450,10 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
         stopReason: null,
         demoRunning: ev.meeting.title.startsWith("Demo:"),
         summaryReady: false,
-        retired: retire(retire(state.retired, state.primary?.requestId), state.followups?.requestId),
+        retired: retire(
+          retire(state.retired, state.primary?.requestId),
+          state.followups?.requestId,
+        ),
         primary: null,
         followups: null,
         pendingRefinement: null,
@@ -462,6 +466,32 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
       };
 
     case "MEETING_STATE_CHANGED": {
+      // Idle without a meeting id: the meeting was deleted; drop everything
+      // that belonged to it.
+      if (ev.state === "idle" && ev.meetingId === null && state.meetingId !== null) {
+        return {
+          ...state,
+          meetingId: null,
+          meetingTitle: null,
+          meetingState: "idle",
+          mode: ev.mode,
+          pausedReason: null,
+          summaryReady: false,
+          retired: retire(
+            retire(state.retired, state.primary?.requestId),
+            state.followups?.requestId,
+          ),
+          primary: null,
+          followups: null,
+          pendingRefinement: null,
+          pendingQuestion: null,
+          ticker: null,
+          topics: [],
+          suggestedNextTopic: null,
+          pinned: [],
+          levels: {},
+        };
+      }
       const ended = ev.state === "idle" || ev.state === "completed";
       const meetingId = ev.meetingId ?? (ev.state === "idle" ? null : state.meetingId);
       return {
@@ -842,7 +872,11 @@ export function worstComponent(components: ReadonlyArray<ComponentHealth>): Comp
   const rank = (c: ComponentHealth) => (c.status === "error" ? 2 : c.status === "degraded" ? 1 : 0);
   for (const c of components) {
     if (c.component === "meeting" || rank(c) === 0) continue;
-    if (!worst || rank(c) > rank(worst) || (rank(c) === rank(worst) && c.updatedAt > worst.updatedAt)) {
+    if (
+      !worst ||
+      rank(c) > rank(worst) ||
+      (rank(c) === rank(worst) && c.updatedAt > worst.updatedAt)
+    ) {
       worst = c;
     }
   }

@@ -80,7 +80,16 @@ export interface TextAreaSettingProps {
   footer?: ReactNode;
 }
 
-export function TextAreaSetting({ label, description, value, onCommit, maxLength, placeholder, rows = 6, footer }: TextAreaSettingProps) {
+export function TextAreaSetting({
+  label,
+  description,
+  value,
+  onCommit,
+  maxLength,
+  placeholder,
+  rows = 6,
+  footer,
+}: TextAreaSettingProps) {
   const id = useId();
   const countId = `${id}-count`;
   const draft = useDraft({ value, commit: onCommit, delay: 800 });
@@ -97,7 +106,10 @@ export function TextAreaSetting({ label, description, value, onCommit, maxLength
         onChange={(e) => draft.onChange(e.target.value)}
         onBlur={draft.onBlur}
       />
-      <div id={countId} className="mt-1 flex items-center justify-between gap-3 text-[0.74rem] text-muted">
+      <div
+        id={countId}
+        className="mt-1 flex items-center justify-between gap-3 text-[0.74rem] text-muted"
+      >
         <span>{footer}</span>
         <span className={cx("tabular-nums", count >= maxLength && "text-warn")}>
           {count.toLocaleString()} / {maxLength.toLocaleString()}
@@ -124,7 +136,16 @@ export interface NumberSettingProps {
 }
 
 /** Whole-number input with range validation. */
-export function NumberSetting({ label, description, value, min, max, unit, onCommit, inline = true }: NumberSettingProps) {
+export function NumberSetting({
+  label,
+  description,
+  value,
+  min,
+  max,
+  unit,
+  onCommit,
+  inline = true,
+}: NumberSettingProps) {
   const id = useId();
   const draft = useDraft<string>({
     value: String(value),
@@ -167,12 +188,30 @@ export interface SliderSettingProps {
 }
 
 /** Range slider; saves shortly after the user stops dragging. */
-export function SliderSetting({ label, description, value, min, max, step = 1, format, onCommit }: SliderSettingProps) {
+export function SliderSetting({
+  label,
+  description,
+  value,
+  min,
+  max,
+  step = 1,
+  format,
+  onCommit,
+}: SliderSettingProps) {
   const id = useId();
   const draft = useDraft<number>({ value, commit: onCommit, delay: 250, resetOnCommit: true });
   return (
     <Field label={label} description={description} htmlFor={id} error={draft.error} inline>
-      <Slider id={id} label={label} value={draft.value} min={min} max={max} step={step} format={format} onChange={draft.onChange} />
+      <Slider
+        id={id}
+        label={label}
+        value={draft.value}
+        min={min}
+        max={max}
+        step={step}
+        format={format}
+        onChange={draft.onChange}
+      />
     </Field>
   );
 }
@@ -191,11 +230,26 @@ export interface SelectSettingProps<T extends string> {
   inline?: boolean;
 }
 
-export function SelectSetting<T extends string>({ label, description, value, options, onChange, disabled, inline = true }: SelectSettingProps<T>) {
+export function SelectSetting<T extends string>({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  disabled,
+  inline = true,
+}: SelectSettingProps<T>) {
   const id = useId();
   return (
     <Field label={label} description={description} htmlFor={id} inline={inline}>
-      <Select id={id} value={value} options={options} onChange={onChange} disabled={disabled} className={inline ? "w-56" : undefined} />
+      <Select
+        id={id}
+        value={value}
+        options={options}
+        onChange={onChange}
+        disabled={disabled}
+        className={inline ? "w-56" : undefined}
+      />
     </Field>
   );
 }
@@ -227,8 +281,16 @@ export function ChoiceCards<T extends string>({
   const name = useId();
   return (
     <fieldset className="py-2.5">
-      <legend className={cx("mb-2 text-[0.86rem] font-medium text-fg", hideLabel && "sr-only")}>{label}</legend>
-      <div className={cx("grid gap-2", columns === 2 && "sm:grid-cols-2", columns === 3 && "sm:grid-cols-3")}>
+      <legend className={cx("mb-2 text-[0.86rem] font-medium text-fg", hideLabel && "sr-only")}>
+        {label}
+      </legend>
+      <div
+        className={cx(
+          "grid gap-2",
+          columns === 2 && "sm:grid-cols-2",
+          columns === 3 && "sm:grid-cols-3",
+        )}
+      >
         {options.map((o) => {
           const checked = o.value === value;
           return (
@@ -237,7 +299,9 @@ export function ChoiceCards<T extends string>({
               className={cx(
                 "flex cursor-pointer gap-2.5 rounded-md border px-3 py-2.5 transition-colors",
                 "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
-                checked ? "border-accent bg-accent-soft" : "border-border hover:border-border-strong",
+                checked
+                  ? "border-accent bg-accent-soft"
+                  : "border-border hover:border-border-strong",
                 o.disabled && "cursor-not-allowed opacity-50",
               )}
             >
@@ -255,7 +319,11 @@ export function ChoiceCards<T extends string>({
                   {o.label}
                   {o.location && <ChoiceBadge location={o.location} />}
                 </span>
-                {o.description && <span className="mt-0.5 block text-[0.78rem] leading-snug text-muted">{o.description}</span>}
+                {o.description && (
+                  <span className="mt-0.5 block text-[0.78rem] leading-snug text-muted">
+                    {o.description}
+                  </span>
+                )}
               </span>
             </label>
           );

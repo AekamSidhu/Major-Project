@@ -77,10 +77,12 @@ scripts/                setup and maintenance scripts
 # Rust
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test --workspace --exclude openmeet   # libraries (see note below)
+cargo test -p openmeet                       # the desktop app crate
 cargo test -p openmeet-engine --test pipeline      # end-to-end pipeline with mocks
 
 # Frontend
+npm run format          # Prettier (CI checks it)
 npx tsc -p tsconfig.json --noEmit
 npx eslint .
 npx vitest run
@@ -92,6 +94,13 @@ npm run bindings
 # Local AI sidecar tests
 cd local-ai && .venv/Scripts/python -m pytest -q   # Windows (.venv/bin/python elsewhere)
 ```
+
+Why the app crate is tested separately: on Windows, Tauri links the Visual
+C++ runtime statically, and its build script puts a stub `msvcrt.lib` on the
+link path. Cargo passes every build script's link path to all doctests built
+in the same `cargo test` invocation, so `cargo test --workspace` fails to link
+the `openmeet-store` doctest there (`unresolved external symbol
+__CxxFrameHandler3`). Testing the libraries and the app in two runs avoids it.
 
 ### Hardware tests
 
@@ -158,6 +167,6 @@ secrets) — see the Tauri distribution guides.
 | Local transcription slow | Use a smaller model (`base.en`, `tiny.en`), or a GPU with the CUDA runtime (`OPENMEET_WHISPER_DEVICE=cuda`) |
 | `cublas64_12.dll is not found` in sidecar logs | Harmless with `OPENMEET_WHISPER_DEVICE=auto` (falls back to CPU); install the CUDA 12 runtime + cuDNN 9 to use the GPU |
 | A hotkey does nothing | Settings → Shortcuts shows registration errors (another app owns the keys) and known conflicts; pick another combination |
-| No system audio on macOS | Use a virtual loopback device (e.g. BlackHole) as the system audio device |
+| No system audio on macOS | Built-in capture needs macOS 14.6 or later and the System Audio Recording permission; on older versions use a virtual loopback device (e.g. BlackHole) as the system audio device |
 | Screen capture permission (macOS) | System Settings → Privacy & Security → Screen Recording → enable OpenMeet |
 | Overlay steals focus / not on top | Report with your OS and window manager; Linux WMs differ in honouring always-on-top and focus hints |

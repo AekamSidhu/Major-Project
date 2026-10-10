@@ -1,7 +1,13 @@
 // Window-integration hooks for the overlay: content-driven window size,
 // remembering the position after a drag, and hotkey labels.
 
-import { useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+} from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ShortcutAction } from "@/bindings";
 import { api, errorMessage } from "@/lib/ipc";
@@ -158,7 +164,9 @@ export function useDragSave(): (e: ReactMouseEvent<HTMLElement>) => void {
     () =>
       createDragSaver(() => {
         api.overlaySavePosition().catch((e: unknown) => {
-          useOverlay.getState().notify("error", `Couldn't remember the position: ${errorMessage(e)}`);
+          useOverlay
+            .getState()
+            .notify("error", `Couldn't remember the position: ${errorMessage(e)}`);
         });
       }),
     [],

@@ -83,8 +83,8 @@ export function SummaryTab({
         </Panel>
       ) : (
         <EmptyState title="No summary yet" action={button}>
-          Generate one from the saved transcript, questions and topics. With a cloud AI provider this sends the
-          meeting text to that provider.
+          Generate one from the saved transcript, questions and topics. With a cloud AI provider
+          this sends the meeting text to that provider.
         </EmptyState>
       )}
     </div>
@@ -109,7 +109,10 @@ export function TranscriptTab({ record }: { record: MeetingRecord }) {
     <div>
       <div className="mb-3 flex items-center gap-3">
         <div className="relative w-full max-w-xs">
-          <Icon name="search" className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted" />
+          <Icon
+            name="search"
+            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted"
+          />
           <TextInput
             type="search"
             aria-label="Search transcript"
@@ -127,7 +130,9 @@ export function TranscriptTab({ record }: { record: MeetingRecord }) {
       </div>
       <div className="space-y-3 rounded-lg border border-border bg-surface px-4 py-3">
         {segments.length === 0 ? (
-          <p className="py-4 text-center text-[0.84rem] text-muted">No lines match “{query.trim()}”.</p>
+          <p className="py-4 text-center text-[0.84rem] text-muted">
+            No lines match “{query.trim()}”.
+          </p>
         ) : (
           <TranscriptBlocks
             segments={segments}
@@ -145,7 +150,9 @@ export function TranscriptTab({ record }: { record: MeetingRecord }) {
 // ---------------------------------------------------------------------------
 
 function SuggestionCard({ s }: { s: Suggestion }) {
-  const meta = [s.style ? answerStyleLabel(s.style) : null, s.model || s.provider || null].filter(Boolean).join(" · ");
+  const meta = [s.style ? answerStyleLabel(s.style) : null, s.model || s.provider || null]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div className="rounded-md border border-border bg-bg/40 px-3.5 py-3">
       <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[0.74rem] text-muted">
@@ -172,7 +179,9 @@ function SuggestionCard({ s }: { s: Suggestion }) {
 function SpokenAnswer({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <div className="mb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">{label}</div>
+      <div className="mb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
+        {label}
+      </div>
       <blockquote className="border-l-2 border-border-strong pl-3 text-[0.86rem] leading-relaxed whitespace-pre-line text-fg">
         {text}
       </blockquote>
@@ -184,7 +193,9 @@ export function QaTab({ record }: { record: MeetingRecord }) {
   const qa = useMemo(() => buildQa(record), [record]);
   const mode = record.meeting.mode;
   if (qa.items.length === 0 && qa.otherSuggestions.length === 0 && qa.otherAnswers.length === 0) {
-    return <EmptyState title="No questions">No questions were detected in this meeting.</EmptyState>;
+    return (
+      <EmptyState title="No questions">No questions were detected in this meeting.</EmptyState>
+    );
   }
   return (
     <div className="space-y-4">
@@ -192,8 +203,15 @@ export function QaTab({ record }: { record: MeetingRecord }) {
         <article key={q.id} className="rounded-lg border border-border bg-surface px-5 py-4">
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[0.74rem] text-muted">
             <Badge tone="accent">{categoryLabel(q.category)}</Badge>
-            <span className="tabular-nums">{formatOffset(segmentOffset(q.detectedAt, record.meeting.startedAt))}</span>
-            <span>· asked by {speakerLabel(q.speakerRole, mode).toLowerCase() === "you" ? "you" : speakerLabel(q.speakerRole, mode)}</span>
+            <span className="tabular-nums">
+              {formatOffset(segmentOffset(q.detectedAt, record.meeting.startedAt))}
+            </span>
+            <span>
+              · asked by{" "}
+              {speakerLabel(q.speakerRole, mode).toLowerCase() === "you"
+                ? "you"
+                : speakerLabel(q.speakerRole, mode)}
+            </span>
           </div>
           <h3 className="text-[0.92rem] leading-snug font-semibold text-fg">{q.question}</h3>
           {q.parts.length > 1 && (
@@ -205,9 +223,15 @@ export function QaTab({ record }: { record: MeetingRecord }) {
           )}
           <div className="mt-3 space-y-3">
             {answers.map((a) => (
-              <SpokenAnswer key={a.id} label={spokenAnswerLabel(a.speakerRole, mode)} text={a.text} />
+              <SpokenAnswer
+                key={a.id}
+                label={spokenAnswerLabel(a.speakerRole, mode)}
+                text={a.text}
+              />
             ))}
-            {answers.length === 0 && <p className="text-[0.8rem] text-muted">No spoken answer was recorded.</p>}
+            {answers.length === 0 && (
+              <p className="text-[0.8rem] text-muted">No spoken answer was recorded.</p>
+            )}
             {suggestions.map((s) => (
               <SuggestionCard key={s.id} s={s} />
             ))}
@@ -219,7 +243,11 @@ export function QaTab({ record }: { record: MeetingRecord }) {
           <SubHeading count={qa.otherAnswers.length}>Other answers</SubHeading>
           <div className="space-y-3">
             {qa.otherAnswers.map((a) => (
-              <SpokenAnswer key={a.id} label={spokenAnswerLabel(a.speakerRole, mode)} text={a.text} />
+              <SpokenAnswer
+                key={a.id}
+                label={spokenAnswerLabel(a.speakerRole, mode)}
+                text={a.text}
+              />
             ))}
           </div>
         </Panel>
@@ -257,7 +285,10 @@ function FollowupItem({ f }: { f: FollowUpQuestion }) {
   };
   return (
     <li className="flex items-start gap-3 py-2.5">
-      <span aria-hidden className={cx("mt-px text-[0.9rem]", f.priority === "high" ? "text-accent" : "text-muted")}>
+      <span
+        aria-hidden
+        className={cx("mt-px text-[0.9rem]", f.priority === "high" ? "text-accent" : "text-muted")}
+      >
         →
       </span>
       <div className="min-w-0 flex-1">
@@ -273,7 +304,12 @@ function FollowupItem({ f }: { f: FollowUpQuestion }) {
           </p>
         )}
       </div>
-      <Button size="sm" variant="ghost" aria-label={copied ? "Copied" : `Copy question: ${f.question}`} onClick={() => void copy()}>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={copied ? "Copied" : `Copy question: ${f.question}`}
+        onClick={() => void copy()}
+      >
         <Icon name={copied ? "check" : "copy"} className="size-3.5" />
         <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
       </Button>
@@ -323,7 +359,9 @@ export function TopicsTab({ record }: { record: MeetingRecord }) {
   const claims = useMemo(() => groupClaims(record.claims), [record.claims]);
   const mode: Mode = record.meeting.mode;
   if (record.topics.length === 0 && claims.length === 0) {
-    return <EmptyState title="No topics or claims">Nothing was tracked for this meeting.</EmptyState>;
+    return (
+      <EmptyState title="No topics or claims">Nothing was tracked for this meeting.</EmptyState>
+    );
   }
   return (
     <div className="space-y-4">
@@ -337,7 +375,11 @@ export function TopicsTab({ record }: { record: MeetingRecord }) {
                   aria-hidden
                   className={cx(
                     "mt-px w-4 text-center",
-                    t.status === "covered" ? "text-ok" : t.status === "current" ? "text-accent" : "text-muted",
+                    t.status === "covered"
+                      ? "text-ok"
+                      : t.status === "current"
+                        ? "text-accent"
+                        : "text-muted",
                   )}
                 >
                   {t.status === "covered" ? "✓" : t.status === "current" ? "→" : "○"}
@@ -364,9 +406,13 @@ export function TopicsTab({ record }: { record: MeetingRecord }) {
           <ul className="space-y-1.5">
             {g.claims.map((c) => (
               <li key={c.id} className="flex items-start gap-2 text-[0.86rem]">
-                <span className="mt-0.5 w-20 shrink-0 text-[0.74rem] text-muted">{speakerLabel(c.speakerRole, mode)}</span>
+                <span className="mt-0.5 w-20 shrink-0 text-[0.74rem] text-muted">
+                  {speakerLabel(c.speakerRole, mode)}
+                </span>
                 <span className="min-w-0 flex-1 text-fg">{c.text}</span>
-                <span className="shrink-0 text-[0.7rem] text-muted">{c.source === "llm" ? "AI" : "Heuristic"}</span>
+                <span className="shrink-0 text-[0.7rem] text-muted">
+                  {c.source === "llm" ? "AI" : "Heuristic"}
+                </span>
               </li>
             ))}
           </ul>
@@ -381,7 +427,10 @@ export function TopicsTab({ record }: { record: MeetingRecord }) {
 // ---------------------------------------------------------------------------
 
 export function ScreenTab({ record }: { record: MeetingRecord }) {
-  const observations = useMemo(() => sortedObservations(record.observations), [record.observations]);
+  const observations = useMemo(
+    () => sortedObservations(record.observations),
+    [record.observations],
+  );
   if (observations.length === 0) {
     return (
       <EmptyState title="No screen observations">
@@ -391,7 +440,9 @@ export function ScreenTab({ record }: { record: MeetingRecord }) {
   }
   return (
     <div className="space-y-3">
-      <p className="text-[0.78rem] text-muted">Text descriptions only — raw screenshots are not part of the record.</p>
+      <p className="text-[0.78rem] text-muted">
+        Text descriptions only — raw screenshots are not part of the record.
+      </p>
       {observations.map((o) => (
         <article key={o.id} className="rounded-lg border border-border bg-surface px-5 py-3.5">
           <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[0.74rem] text-muted">
@@ -399,14 +450,21 @@ export function ScreenTab({ record }: { record: MeetingRecord }) {
               {formatOffset(segmentOffset(o.timestamp, record.meeting.startedAt))}
             </span>
             <span>· {o.source}</span>
-            {(o.application || o.title) && <span>· {[o.application, o.title].filter(Boolean).join(" — ")}</span>}
+            {(o.application || o.title) && (
+              <span>· {[o.application, o.title].filter(Boolean).join(" — ")}</span>
+            )}
             {o.contentType && <Badge>{o.contentType}</Badge>}
           </div>
-          <p className="text-[0.86rem] leading-relaxed whitespace-pre-line text-fg">{o.description}</p>
+          <p className="text-[0.86rem] leading-relaxed whitespace-pre-line text-fg">
+            {o.description}
+          </p>
           {o.entities.length > 0 && (
             <ul aria-label="Entities" className="mt-2 flex flex-wrap gap-1">
               {o.entities.map((e, i) => (
-                <li key={i} className="rounded border border-border px-1.5 py-px text-[0.74rem] text-fg-soft">
+                <li
+                  key={i}
+                  className="rounded border border-border px-1.5 py-px text-[0.74rem] text-fg-soft"
+                >
                   {e}
                 </li>
               ))}
@@ -414,7 +472,9 @@ export function ScreenTab({ record }: { record: MeetingRecord }) {
           )}
           {o.visibleText && (
             <details className="mt-2 text-[0.8rem]">
-              <summary className="cursor-pointer text-muted select-none hover:text-fg-soft">Visible text</summary>
+              <summary className="cursor-pointer text-muted select-none hover:text-fg-soft">
+                Visible text
+              </summary>
               <pre className="mt-1.5 max-h-60 overflow-auto rounded-md bg-surface-2 p-2.5 font-mono text-[0.76rem] whitespace-pre-wrap text-fg-soft">
                 {o.visibleText}
               </pre>

@@ -2,7 +2,14 @@
 // questions, topics and component health.
 
 import { useId, useMemo, useState, type ReactNode } from "react";
-import type { ComponentHealth, DetectedQuestion, Mode, ScreenSourceSpec, Settings, Topic } from "@/bindings";
+import type {
+  ComponentHealth,
+  DetectedQuestion,
+  Mode,
+  ScreenSourceSpec,
+  Settings,
+  Topic,
+} from "@/bindings";
 import { categoryLabel, formatOffset } from "@/lib/format";
 import { api, errorMessage } from "@/lib/ipc";
 import { useMain, type LiveState } from "@/main/store";
@@ -44,7 +51,10 @@ function Card({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className={cx("rounded-lg border border-border bg-surface", className)}>
+    <section
+      aria-labelledby={id}
+      className={cx("rounded-lg border border-border bg-surface", className)}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <h2 id={id} className="text-[0.84rem] font-semibold text-fg">
           {title}
@@ -60,7 +70,9 @@ function ElapsedClock({ startedAt }: { startedAt: number }) {
   const now = useNow(1000);
   return (
     <div className="text-right">
-      <div className="text-[0.68rem] font-semibold tracking-wider text-muted uppercase">Elapsed</div>
+      <div className="text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
+        Elapsed
+      </div>
       <time aria-label="Elapsed time" className="text-[1.25rem] font-semibold text-fg tabular-nums">
         {formatElapsed(startedAt, now)}
       </time>
@@ -90,7 +102,11 @@ function HealthWarnings({ components }: { components: ReadonlyArray<ComponentHea
             <span className="min-w-0 flex-1 text-fg-soft">
               <span className="font-medium text-fg">{componentLabel(w.component)}</span>
               {" · "}
-              {w.status === "error" ? "Error" : w.status === "degraded" ? "Degraded" : "Unsupported"}
+              {w.status === "error"
+                ? "Error"
+                : w.status === "degraded"
+                  ? "Degraded"
+                  : "Unsupported"}
               {w.message ? ` — ${w.message}` : ""}
             </span>
             <LinkButton onClick={() => setSection(componentSection(w.component))}>
@@ -123,7 +139,9 @@ function SourceLine({
       <div className="flex items-center gap-2.5">
         <Icon name={icon} className="text-fg-soft" />
         <span className="flex-1 text-[0.84rem] font-medium text-fg">{title}</span>
-        {level !== undefined && status.tone === "ok" && <LevelMeter level={level} label={`${title} level`} />}
+        {level !== undefined && status.tone === "ok" && (
+          <LevelMeter level={level} label={`${title} level`} />
+        )}
         <Badge tone={status.tone}>{status.label}</Badge>
         {control}
       </div>
@@ -202,7 +220,10 @@ function ScreenControl({
       </div>
       {picking && (
         <div className="mt-3 rounded-md border border-border bg-bg/40 p-3">
-          <ScreenSourcePicker value={pick.spec} onChange={(spec, error) => setPick({ spec, error })} />
+          <ScreenSourcePicker
+            value={pick.spec}
+            onChange={(spec, error) => setPick({ spec, error })}
+          />
           <div className="mt-3 flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setPicking(false)}>
               Cancel
@@ -242,7 +263,8 @@ function QuestionItem({
         <Badge tone="accent">{categoryLabel(q.category)}</Badge>
         {q.requiresResponse && mode === "candidate" && <Badge tone="warn">Needs your answer</Badge>}
         <span>
-          {speakerLabel(q.speakerRole, mode)} · {formatOffset(segmentOffset(q.detectedAt, startedAt))}
+          {speakerLabel(q.speakerRole, mode)} ·{" "}
+          {formatOffset(segmentOffset(q.detectedAt, startedAt))}
         </span>
       </div>
       <p className="text-[0.84rem] leading-snug text-fg">{q.question}</p>
@@ -254,7 +276,13 @@ function QuestionItem({
         </ul>
       )}
       {onSuggest && (
-        <Button size="sm" variant="ghost" className="mt-1 -ml-2" disabled={busy} onClick={() => onSuggest(q)}>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-1 -ml-2"
+          disabled={busy}
+          onClick={() => onSuggest(q)}
+        >
           <Icon name="sparkle" className="size-3.5" />
           Suggest answer in overlay
         </Button>
@@ -271,7 +299,11 @@ const TOPIC_STYLE: Record<Topic["status"], { mark: string; className: string; la
 
 function Topics({ topics, next }: { topics: ReadonlyArray<Topic>; next: string | null }) {
   if (topics.length === 0) {
-    return <p className="px-4 py-3 text-[0.8rem] text-muted">Topics appear here as the conversation develops.</p>;
+    return (
+      <p className="px-4 py-3 text-[0.8rem] text-muted">
+        Topics appear here as the conversation develops.
+      </p>
+    );
   }
   return (
     <div className="px-4 py-3">
@@ -381,7 +413,9 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
             {live.demoRunning && <Badge tone="accent">Demo</Badge>}
             {!meeting.persisted && !live.demoRunning && <Badge>Not saved</Badge>}
           </div>
-          <h1 className="truncate text-[1.25rem] font-semibold tracking-tight text-fg">{meeting.title}</h1>
+          <h1 className="truncate text-[1.25rem] font-semibold tracking-tight text-fg">
+            {meeting.title}
+          </h1>
         </div>
         <ElapsedClock startedAt={meeting.startedAt} />
       </header>
@@ -391,7 +425,12 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
           tone="danger"
           title="PROCESSING STOPPED"
           actions={
-            <Button size="sm" variant="primary" busy={busy === "pause"} onClick={() => void run("pause", () => api.resumeMeeting())}>
+            <Button
+              size="sm"
+              variant="primary"
+              busy={busy === "pause"}
+              onClick={() => void run("pause", () => api.resumeMeeting())}
+            >
               Resume
             </Button>
           }
@@ -406,7 +445,11 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
       )}
       <HealthWarnings components={live.components} />
 
-      <div role="group" aria-label="Meeting controls" className="mb-5 flex flex-wrap items-center gap-2">
+      <div
+        role="group"
+        aria-label="Meeting controls"
+        className="mb-5 flex flex-wrap items-center gap-2"
+      >
         {!stopped && (
           <Button
             className="h-10 px-4"
@@ -418,7 +461,12 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
             {paused ? "Resume" : "Pause"}
           </Button>
         )}
-        <Button className="h-10 px-4" busy={busy === "end"} disabled={state === "stopping"} onClick={() => void end()}>
+        <Button
+          className="h-10 px-4"
+          busy={busy === "end"}
+          disabled={state === "stopping"}
+          onClick={() => void end()}
+        >
           <Icon name="stop" />
           End meeting
         </Button>
@@ -433,9 +481,18 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
           Emergency stop
         </Button>
         <span className="mx-1 h-6 w-px bg-border" aria-hidden />
-        <Button variant="ghost" className="h-10" busy={busy === "overlay"} onClick={() => void toggleOverlay()}>
+        <Button
+          variant="ghost"
+          className="h-10"
+          busy={busy === "overlay"}
+          onClick={() => void toggleOverlay()}
+        >
           <Icon name={overlayVisible === true ? "eyeOff" : "eye"} />
-          {overlayVisible === true ? "Hide overlay" : overlayVisible === false ? "Show overlay" : "Show / hide overlay"}
+          {overlayVisible === true
+            ? "Hide overlay"
+            : overlayVisible === false
+              ? "Show overlay"
+              : "Show / hide overlay"}
         </Button>
         {mode === "interviewer" && (
           <Button
@@ -474,8 +531,18 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
             bodyClassName="divide-y divide-border"
             actions={<LinkButton onClick={() => setSection("settings/ai")}>AI provider</LinkButton>}
           >
-            <SourceLine icon="mic" title="Microphone" status={sourceStatus(mic?.status)} level={live.levels.microphone ?? 0} />
-            <SourceLine icon="speaker" title="System audio" status={sourceStatus(sys?.status)} level={live.levels.system ?? 0} />
+            <SourceLine
+              icon="mic"
+              title="Microphone"
+              status={sourceStatus(mic?.status)}
+              level={live.levels.microphone ?? 0}
+            />
+            <SourceLine
+              icon="speaker"
+              title="System audio"
+              status={sourceStatus(sys?.status)}
+              level={live.levels.system ?? 0}
+            />
             <ScreenControl settings={settings} on={screenOn} busy={busy} run={run} />
             <p className="px-4 py-2 text-[0.74rem] text-muted">
               Audio sources are chosen when the meeting starts. Pause to stop listening.

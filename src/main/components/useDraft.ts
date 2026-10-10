@@ -37,7 +37,13 @@ interface Box<T> {
   pending: { value: T } | null;
 }
 
-export function useDraft<T>({ value, commit, validate, delay = 600, resetOnCommit = false }: DraftOptions<T>): Draft<T> {
+export function useDraft<T>({
+  value,
+  commit,
+  validate,
+  delay = 600,
+  resetOnCommit = false,
+}: DraftOptions<T>): Draft<T> {
   const [draft, setDraft] = useState<{ value: T } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const box = useRef<Box<T>>({ commit, timer: null, pending: null });

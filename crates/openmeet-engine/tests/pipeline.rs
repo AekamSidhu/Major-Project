@@ -832,3 +832,64 @@ async fn benchmark_runs_offline() {
         }
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn deleting_a_meeting_while_it_is_summarized_saves_nothing_more() {
+    let h = harness();
+    let meeting = h
+        .engine
+        .start_meeting(start_request(Mode::Interviewer))
+        .await
+        .unwrap();
+    h.engine
+        .simulate(SimulationAction::Transcript {
+            speaker: SpeakerRole::Remote,
+            text: "I migrated the billing service to Kafka last year.".into(),
+        })
+        .unwrap();
+    h.sink
+        .wait_for(WAIT, |e| matches!(e, MeetingEvent::TranscriptFinal { .. }))
+        .await
+        .unwrap();
+    assert!(
+        h.engine.forget_meeting(&meeting.id).await.is_err(),
+        "a running meeting cannot be deleted"
+    );
+
+    // Slow summary, deleted while it is being written.
+    h.llm.set_first_token_latency_ms(2_000);
+    h.engine.stop_meeting().await.unwrap();
+    assert_eq!(h.engine.meeting_state(), MeetingState::Summarizing);
+    h.engine.forget_meeting(&meeting.id).await.unwrap();
+    h.sink
+        .wait_for(WAIT, |e| {
+            matches!(
+                e,
+                MeetingEvent::MeetingStateChanged {
+                    meeting_id: None,
+                    state: MeetingState::Idle,
+                    ..
+                }
+            )
+        })
+        .await
+        .expect("windows are told to drop the meeting");
+    assert_eq!(h.engine.meeting_state(), MeetingState::Idle);
+    assert!(h.engine.snapshot().transcript.is_empty());
+
+    tokio::time::sleep(Duration::from_millis(2_500)).await;
+    h.engine.flush_persistence().await;
+    assert_eq!(h.sink.count("SUMMARY_READY"), 0);
+    let stored = h.store.load_meeting(&meeting.id).unwrap();
+    assert!(
+        stored.summary.is_none(),
+        "no summary is written after deletion"
+    );
+    assert_ne!(stored.meeting.state, MeetingState::Completed);
+
+    // The engine is ready for the next meeting.
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
+}

@@ -8,6 +8,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use openmeet_core::error::StoreError;
 use openmeet_core::events::{EventSink, MeetingEvent, NoticeLevel};
 use openmeet_core::store::{EmbeddingRecord, MeetingStore};
 use openmeet_core::types::*;
@@ -40,7 +41,25 @@ pub enum PersistOp {
 }
 
 impl PersistOp {
-    fn name(&self) -> &'static str {
+    /// Meeting the write belongs to, when known.
+    pub(crate) fn meeting_id(&self) -> Option<&str> {
+        match self {
+            PersistOp::Meeting(m) => Some(&m.id),
+            PersistOp::Segment(s) => Some(&s.meeting_id),
+            PersistOp::Question(q) => Some(&q.meeting_id),
+            PersistOp::Answer(a) => Some(&a.meeting_id),
+            PersistOp::Suggestion(s) => s.meeting_id.as_deref(),
+            PersistOp::Topics { meeting_id, .. } => Some(meeting_id),
+            PersistOp::Claims(c) => c.first().map(|c| c.meeting_id.as_str()),
+            PersistOp::Observation(o) => o.meeting_id.as_deref(),
+            PersistOp::ActionItems(a) => a.first().map(|a| a.meeting_id.as_str()),
+            PersistOp::Summary(s) => Some(&s.meeting_id),
+            PersistOp::Embedding(e) => Some(&e.meeting_id),
+            PersistOp::Pinned { .. } | PersistOp::Barrier(_) => None,
+        }
+    }
+
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             PersistOp::Meeting(_) => "meeting",
             PersistOp::Segment(_) => "segment",
@@ -88,6 +107,11 @@ impl Persister {
                                 healthy = true;
                                 health.set(Component::Database, ComponentStatus::Active, None);
                             }
+                        }
+                        // The meeting was deleted (by the user or retention)
+                            // while this write was queued: nothing to save.
+                        Err(StoreError::NotFound(_)) => {
+                            tracing::info!(op = name, "skipped a write for a meeting that no longer exists");
                         }
                         Err(e) => {
                             healthy = false;
@@ -185,26 +209,92 @@ mod tests {
         assert!(store.load_meeting("m").is_ok());
     }
 
+    /// A store whose disk is broken: every write fails.
+    struct BrokenStore;
+
+    fn broken<T>() -> Result<T, StoreError> {
+        Err(StoreError::Database("disk I/O error".into()))
+    }
+
+    impl MeetingStore for BrokenStore {
+        fn save_meeting(&self, _: &Meeting) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_segment(&self, _: &TranscriptSegment) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_question(&self, _: &DetectedQuestion) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_answer(&self, _: &AnswerRecord) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_suggestion(&self, _: &Suggestion) -> Result<(), StoreError> {
+            broken()
+        }
+        fn set_suggestion_pinned(&self, _: &str, _: bool) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_topics(&self, _: &str, _: &[Topic]) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_claims(&self, _: &[Claim]) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_observation(&self, _: &ScreenObservation) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_action_items(&self, _: &[ActionItem]) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_summary(&self, _: &MeetingSummary) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_embedding(&self, _: &EmbeddingRecord) -> Result<(), StoreError> {
+            broken()
+        }
+        fn load_meeting(&self, _: &str) -> Result<MeetingRecord, StoreError> {
+            broken()
+        }
+    }
+
+    fn topics(meeting_id: &str) -> PersistOp {
+        PersistOp::Topics {
+            meeting_id: meeting_id.into(),
+            topics: vec![],
+        }
+    }
+
     #[tokio::test]
     async fn failures_report_database_health() {
         let sink = CollectingSink::new();
         let dyn_sink: Arc<dyn EventSink> = Arc::new(sink.clone());
         let health = Arc::new(HealthRegistry::new(dyn_sink.clone()));
         let p = Persister::spawn(dyn_sink, health.clone());
-        let store: Arc<dyn MeetingStore> = Arc::new(MemoryStore::new());
-        // Topics for a meeting that does not exist -> NotFound error.
-        p.send(
-            &store,
-            PersistOp::Topics {
-                meeting_id: "missing".into(),
-                topics: vec![],
-            },
-        );
+        let store: Arc<dyn MeetingStore> = Arc::new(BrokenStore);
+        p.send(&store, topics("m"));
         p.flush(&store).await;
         assert_eq!(
             health.status(Component::Database),
             Some(ComponentStatus::Error)
         );
         assert_eq!(sink.count("NOTICE"), 1);
+    }
+
+    #[tokio::test]
+    async fn writes_for_a_deleted_meeting_are_not_failures() {
+        let sink = CollectingSink::new();
+        let dyn_sink: Arc<dyn EventSink> = Arc::new(sink.clone());
+        let health = Arc::new(HealthRegistry::new(dyn_sink.clone()));
+        let p = Persister::spawn(dyn_sink, health.clone());
+        let store: Arc<dyn MeetingStore> = Arc::new(MemoryStore::new());
+        // The meeting row is gone (deleted while this write was queued).
+        p.send(&store, topics("deleted"));
+        p.flush(&store).await;
+        assert_ne!(
+            health.status(Component::Database),
+            Some(ComponentStatus::Error)
+        );
+        assert_eq!(sink.count("NOTICE"), 0);
     }
 }

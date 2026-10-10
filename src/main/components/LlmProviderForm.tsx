@@ -28,7 +28,10 @@ export interface ModelListState {
 }
 
 /** "Load models" button + datalist for a model input. */
-export function useModelList(component: "llm" | "transcription" | "vision" | "embeddings", provider: string) {
+export function useModelList(
+  component: "llm" | "transcription" | "vision" | "embeddings",
+  provider: string,
+) {
   const listId = useId();
   const [models, setModels] = useState<ModelListState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,7 +81,9 @@ export function LlmProviderForm({ variant = "full" }: { variant?: "full" | "comp
   const shown: LlmProviderKind = pendingCompat ? "openai_compatible" : llm.provider;
   const choice = choiceFor(LLM_PROVIDERS, shown);
   const models = useModelList("llm", shown);
-  const ep = pendingCompat ? { url: "", location: "unset" as const } : effectiveEndpoint(settings, "llm");
+  const ep = pendingCompat
+    ? { url: "", location: "unset" as const }
+    : effectiveEndpoint(settings, "llm");
   const urlRequired = shown === "ollama" || shown === "openai_compatible";
   const showBaseUrl = variant === "full" || urlRequired;
 
@@ -126,18 +131,27 @@ export function LlmProviderForm({ variant = "full" }: { variant?: "full" | "comp
         }))}
       />
 
-      {pendingCompat && <Banner tone="accent">Enter your server's address to switch to an OpenAI-compatible server.</Banner>}
+      {pendingCompat && (
+        <Banner tone="accent">
+          Enter your server's address to switch to an OpenAI-compatible server.
+        </Banner>
+      )}
 
       <div className="flex items-center gap-2 py-1 text-[0.8rem] text-muted" aria-live="polite">
         <span>Requests go to</span>
-        {ep.url ? <span className="font-mono text-fg-soft">{displayHost(ep.url)}</span> : <span>—</span>}
+        {ep.url ? (
+          <span className="font-mono text-fg-soft">{displayHost(ep.url)}</span>
+        ) : (
+          <span>—</span>
+        )}
         <LocationBadge location={ep.location} endpoint={ep.url ? displayHost(ep.url) : null} />
       </div>
 
       {settings.privacy.localOnly && ep.location === "remote" && (
         <Banner tone="warn" title="Blocked by local-only mode">
-          This provider sends data off this device, so OpenMeet will refuse to use it while local-only mode is on.
-          Choose a local provider or turn off local-only mode in Privacy &amp; data.
+          This provider sends data off this device, so OpenMeet will refuse to use it while
+          local-only mode is on. Choose a local provider or turn off local-only mode in Privacy
+          &amp; data.
         </Banner>
       )}
 
@@ -188,7 +202,9 @@ export function LlmProviderForm({ variant = "full" }: { variant?: "full" | "comp
           />
           {models.datalist}
 
-          {choice.secret && <ApiKeyField provider={choice.secret} optional={shown === "openai_compatible"} />}
+          {choice.secret && (
+            <ApiKeyField provider={choice.secret} optional={shown === "openai_compatible"} />
+          )}
 
           <TestConnection component="llm" />
         </>

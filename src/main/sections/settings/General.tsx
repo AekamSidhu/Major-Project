@@ -39,7 +39,10 @@ export function GeneralSection() {
     <>
       <PageHeader title="General" />
       {error && <Banner tone="danger">{error}</Banner>}
-      <Section title="Default mode" description="Also switchable from the overlay, the tray menu or the mode hotkey.">
+      <Section
+        title="Default mode"
+        description="Also switchable from the overlay, the tray menu or the mode hotkey."
+      >
         <ChoiceCards
           label="Mode"
           hideLabel

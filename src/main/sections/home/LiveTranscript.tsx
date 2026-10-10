@@ -28,8 +28,14 @@ export function TranscriptBlocks({
       {groups.map((g) => (
         <div key={g.key} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
           <div className="pt-px text-[0.76rem] leading-snug">
-            <div className={cx("font-semibold", g.role === "user" ? "text-accent" : "text-fg-soft")}>{g.label}</div>
-            <div className="text-muted tabular-nums">{formatOffset(segmentOffset(g.startTime, meetingStartedAt))}</div>
+            <div
+              className={cx("font-semibold", g.role === "user" ? "text-accent" : "text-fg-soft")}
+            >
+              {g.label}
+            </div>
+            <div className="text-muted tabular-nums">
+              {formatOffset(segmentOffset(g.startTime, meetingStartedAt))}
+            </div>
           </div>
           <p className="text-[0.86rem] leading-relaxed text-fg">
             {g.segments.map((s, i) => (
@@ -71,7 +77,10 @@ export function LiveTranscript({
         aria-live="off"
         tabIndex={0}
         onScroll={(e) => setFollowing(isNearBottom(e.currentTarget))}
-        className={cx("space-y-3 overflow-y-auto px-4 py-3 focus-visible:outline-offset-[-2px]", className)}
+        className={cx(
+          "space-y-3 overflow-y-auto px-4 py-3 focus-visible:outline-offset-[-2px]",
+          className,
+        )}
       >
         {segments.length === 0 ? (
           <p className="py-6 text-center text-[0.84rem] text-muted">{emptyText}</p>

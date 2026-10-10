@@ -27,7 +27,12 @@ const SETTINGS = {
     showOnMeetingStart: true,
     margin: 16,
   },
-  shortcuts: { bindings: { generate_answer: "CommandOrControl+Shift+A", ask_ai: "CommandOrControl+Shift+Space" } },
+  shortcuts: {
+    bindings: {
+      generate_answer: "CommandOrControl+Shift+A",
+      ask_ai: "CommandOrControl+Shift+Space",
+    },
+  },
 } as unknown as Settings;
 
 function snapshot(patch: Partial<EngineSnapshot> = {}): EngineSnapshot {
@@ -77,7 +82,14 @@ function backend(snap: EngineSnapshot) {
         case "get_settings":
           return SETTINGS;
         case "get_capture_privacy_status":
-          return { supported: true, requested: true, active: true, platform: "windows", mechanism: "WDA_EXCLUDEFROMCAPTURE", note: "" };
+          return {
+            supported: true,
+            requested: true,
+            active: true,
+            platform: "windows",
+            mechanism: "WDA_EXCLUDEFROMCAPTURE",
+            note: "",
+          };
         default:
           return null;
       }
@@ -165,7 +177,12 @@ describe("OverlayApp", () => {
       style: "concise",
       parentId: null,
     });
-    await sendEvent({ type: "ANSWER_STATE_CHANGED", requestId: "r1", state: "failed", error: "Ollama is not running" });
+    await sendEvent({
+      type: "ANSWER_STATE_CHANGED",
+      requestId: "r1",
+      state: "failed",
+      error: "Ollama is not running",
+    });
     expect(await screen.findByText("Ollama is not running")).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
@@ -197,7 +214,9 @@ describe("OverlayApp", () => {
     await act(async () => {
       fireEvent.submit(input.closest("form")!);
     });
-    expect(calls.find((c) => c.cmd === "ask_openmeet")?.args).toMatchObject({ prompt: "Explain CAP theorem briefly" });
+    expect(calls.find((c) => c.cmd === "ask_openmeet")?.args).toMatchObject({
+      prompt: "Explain CAP theorem briefly",
+    });
     expect(calls.some((c) => c.cmd === "overlay_end_input")).toBe(true);
     expect(screen.queryByRole("textbox", { name: "Ask OpenMeet" })).toBeNull();
   });

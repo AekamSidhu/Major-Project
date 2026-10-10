@@ -3,14 +3,7 @@
 // docs/INTERNALS.md). Works on partial text: call it on every delta.
 
 export type SectionKey =
-  | "structure"
-  | "answer"
-  | "keyPoints"
-  | "example"
-  | "followUp"
-  | "basis"
-  | "caveat"
-  | "clarify";
+  "structure" | "answer" | "keyPoints" | "example" | "followUp" | "basis" | "caveat" | "clarify";
 
 export interface ParsedAnswer {
   structure: string[];
@@ -79,7 +72,10 @@ export function parseAnswer(text: string): ParsedAnswer {
   const result = emptyAnswer();
   const buckets = new Map<SectionKey | "preamble", string[]>();
   let current: SectionKey | "preamble" = "preamble";
-  const lines = text.replace(/\r\n?/g, "\n").replace(/```[a-z]*\n?/gi, "").split("\n");
+  const lines = text
+    .replace(/\r\n?/g, "\n")
+    .replace(/```[a-z]*\n?/gi, "")
+    .split("\n");
   for (const line of lines) {
     const m = MARKER_RE.exec(line);
     const key = m ? MARKERS[(m[1] ?? "").replace(/ /g, "_").toUpperCase()] : undefined;

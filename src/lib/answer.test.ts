@@ -47,7 +47,9 @@ describe("parseAnswer", () => {
   });
 
   it("tolerates CRLF, code fences and inline marker text", () => {
-    const a = parseAnswer("```\r\n[[ANSWER]] Inline start\r\nmore\r\n[[CLARIFY]]\r\n- Which region?\r\n```");
+    const a = parseAnswer(
+      "```\r\n[[ANSWER]] Inline start\r\nmore\r\n[[CLARIFY]]\r\n- Which region?\r\n```",
+    );
     expect(a.answer).toBe("Inline start\nmore");
     expect(a.clarify).toEqual(["Which region?"]);
   });

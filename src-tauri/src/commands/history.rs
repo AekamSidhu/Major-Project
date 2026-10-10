@@ -45,13 +45,9 @@ pub async fn get_meeting(state: AppStateRef<'_>, meeting_id: String) -> CmdResul
 #[tauri::command]
 pub async fn delete_meeting(state: AppStateRef<'_>, meeting_id: String) -> CmdResult<()> {
     check_id(&meeting_id, "meeting")?;
-    if state.engine.is_live()
-        && state.engine.current_meeting_id().as_deref() == Some(meeting_id.as_str())
-    {
-        return Err(CoreError::InvalidState(
-            "End the meeting before deleting it.".into(),
-        ));
-    }
+    // Cancels a summary still being written and drops late writes, so the
+    // deleted meeting cannot reappear.
+    state.engine.forget_meeting(&meeting_id).await?;
     let db = state.db.clone();
     let shots = state.screenshots.clone();
     blocking(move || {
@@ -71,7 +67,7 @@ pub async fn delete_all_data(state: AppStateRef<'_>) -> CmdResult<()> {
             "End the current meeting before deleting all data.".into(),
         ));
     }
-    state.engine.flush_persistence().await;
+    state.engine.forget_all_meetings().await?;
     let db = state.db.clone();
     let shots = state.screenshots.clone();
     blocking(move || {

@@ -35,7 +35,10 @@ export function pageRequest(page: number, pageSize = PAGE_SIZE): { limit: number
   return { limit: pageSize + 1, offset: Math.max(0, page) * pageSize };
 }
 
-export function splitPage<T>(rows: ReadonlyArray<T>, pageSize = PAGE_SIZE): { items: T[]; hasMore: boolean } {
+export function splitPage<T>(
+  rows: ReadonlyArray<T>,
+  pageSize = PAGE_SIZE,
+): { items: T[]; hasMore: boolean } {
   return { items: rows.slice(0, pageSize), hasMore: rows.length > pageSize };
 }
 
@@ -68,16 +71,36 @@ export function countLabel(n: number, singular: string, plural = `${singular}s`)
 // Export
 // ---------------------------------------------------------------------------
 
-export const EXPORT_FORMATS: ReadonlyArray<{ value: ExportFormat; label: string; description: string }> = [
+export const EXPORT_FORMATS: ReadonlyArray<{
+  value: ExportFormat;
+  label: string;
+  description: string;
+}> = [
   { value: "markdown", label: "Markdown", description: "Readable document with headings (.md)" },
   { value: "json", label: "JSON", description: "Structured data for other tools (.json)" },
   { value: "text", label: "Plain text", description: "Simple text without formatting (.txt)" },
 ];
 
-export const EXPORT_PARTS: ReadonlyArray<{ key: keyof ExportParts; label: string; description: string }> = [
-  { key: "summary", label: "Summary", description: "Overview, decisions, action items and open questions" },
-  { key: "transcript", label: "Transcript", description: "Everything that was said, with timestamps" },
-  { key: "questions", label: "Questions & answers", description: "Detected questions, spoken answers and AI suggestions" },
+export const EXPORT_PARTS: ReadonlyArray<{
+  key: keyof ExportParts;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "summary",
+    label: "Summary",
+    description: "Overview, decisions, action items and open questions",
+  },
+  {
+    key: "transcript",
+    label: "Transcript",
+    description: "Everything that was said, with timestamps",
+  },
+  {
+    key: "questions",
+    label: "Questions & answers",
+    description: "Detected questions, spoken answers and AI suggestions",
+  },
   { key: "followups", label: "Follow-ups", description: "Suggested follow-up questions" },
 ];
 
@@ -148,7 +171,9 @@ export function buildQa(record: MeetingRecord): QaView {
     .filter((q) => !supersededBy.has(q.id))
     .slice()
     .sort((a, b) => a.detectedAt - b.detectedAt);
-  const items = new Map<string, QaItem>(questions.map((q) => [q.id, { question: q, answers: [], suggestions: [] }]));
+  const items = new Map<string, QaItem>(
+    questions.map((q) => [q.id, { question: q, answers: [], suggestions: [] }]),
+  );
 
   const suggestionById = new Map(record.suggestions.map((s) => [s.id, s]));
   const suggestionQuestion = (s: Suggestion): string | null => {
@@ -272,7 +297,9 @@ const CLAIM_KINDS: ReadonlyArray<{ kind: ClaimKind; label: string }> = [
   { kind: "unknown", label: "Other statements" },
 ];
 
-export function groupClaims(claims: ReadonlyArray<Claim>): Array<{ kind: ClaimKind; label: string; claims: Claim[] }> {
+export function groupClaims(
+  claims: ReadonlyArray<Claim>,
+): Array<{ kind: ClaimKind; label: string; claims: Claim[] }> {
   return CLAIM_KINDS.map(({ kind, label }) => ({
     kind,
     label,
@@ -319,10 +346,22 @@ export function summarySections(s: MeetingSummary): SummarySection[] {
   ];
   if (s.interviewer) {
     all.push(
-      { key: "questionCoverage", title: "Question coverage", items: s.interviewer.questionCoverage },
-      { key: "clarificationAreas", title: "Areas to clarify", items: s.interviewer.clarificationAreas },
+      {
+        key: "questionCoverage",
+        title: "Question coverage",
+        items: s.interviewer.questionCoverage,
+      },
+      {
+        key: "clarificationAreas",
+        title: "Areas to clarify",
+        items: s.interviewer.clarificationAreas,
+      },
       { key: "claimsToVerify", title: "Claims to verify", items: s.interviewer.claimsToVerify },
-      { key: "unexploredTopics", title: "Unexplored topics", items: s.interviewer.unexploredTopics },
+      {
+        key: "unexploredTopics",
+        title: "Unexplored topics",
+        items: s.interviewer.unexploredTopics,
+      },
     );
   }
   return all

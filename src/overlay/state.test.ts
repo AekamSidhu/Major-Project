@@ -15,7 +15,11 @@ function run(actions: OverlayAction[], from: OverlayState = INITIAL_STATE): Over
   return actions.reduce(reduceOverlay, from);
 }
 
-function started(requestId: string, kind: RequestKind = "candidate_answer", questionText = "How would you shard it?"): MeetingEvent {
+function started(
+  requestId: string,
+  kind: RequestKind = "candidate_answer",
+  questionText = "How would you shard it?",
+): MeetingEvent {
   return {
     type: "ANSWER_STARTED",
     requestId,
@@ -29,7 +33,11 @@ function started(requestId: string, kind: RequestKind = "candidate_answer", ques
   };
 }
 
-const delta = (requestId: string, text: string): MeetingEvent => ({ type: "ANSWER_DELTA", requestId, text });
+const delta = (requestId: string, text: string): MeetingEvent => ({
+  type: "ANSWER_DELTA",
+  requestId,
+  text,
+});
 
 function suggestion(id: string, content: string, followups: FollowUpQuestion[] = []): Suggestion {
   return {
@@ -111,10 +119,25 @@ describe("reduceOverlay — request slots", () => {
     const s = run([
       { type: "MODE_CHANGED", mode: "interviewer" },
       started("f1", "interviewer_followups", ""),
-      { type: "FOLLOWUPS_READY", requestId: "f1", questions: [followup("a", "f1", "How does it fail over?")], done: false },
+      {
+        type: "FOLLOWUPS_READY",
+        requestId: "f1",
+        questions: [followup("a", "f1", "How does it fail over?")],
+        done: false,
+      },
       started("f2", "interviewer_followups", ""),
-      { type: "FOLLOWUPS_READY", requestId: "f1", questions: [followup("b", "f1", "stale")], done: true },
-      { type: "FOLLOWUPS_READY", requestId: "f2", questions: [followup("c", "f2", "What was the p99 latency?")], done: true },
+      {
+        type: "FOLLOWUPS_READY",
+        requestId: "f1",
+        questions: [followup("b", "f1", "stale")],
+        done: true,
+      },
+      {
+        type: "FOLLOWUPS_READY",
+        requestId: "f2",
+        questions: [followup("c", "f2", "What was the p99 latency?")],
+        done: true,
+      },
     ]);
     expect(s.followups?.requestId).toBe("f2");
     expect(s.followups?.questions.map((q) => q.question)).toEqual(["What was the p99 latency?"]);
@@ -125,7 +148,12 @@ describe("reduceOverlay — request slots", () => {
   it("shows provider failures instead of failing silently", () => {
     const s = run([
       started("r1"),
-      { type: "ANSWER_STATE_CHANGED", requestId: "r1", state: "failed", error: "Ollama is not running" },
+      {
+        type: "ANSWER_STATE_CHANGED",
+        requestId: "r1",
+        state: "failed",
+        error: "Ollama is not running",
+      },
     ]);
     expect(s.primary?.state).toBe("failed");
     expect(s.primary?.error).toBe("Ollama is not running");
@@ -134,7 +162,11 @@ describe("reduceOverlay — request slots", () => {
   });
 
   it("removes a dismissed request and ignores its later events", () => {
-    const s = run([started("r1"), { type: "SUGGESTION_DISMISSED", requestId: "r1" }, delta("r1", "late")]);
+    const s = run([
+      started("r1"),
+      { type: "SUGGESTION_DISMISSED", requestId: "r1" },
+      delta("r1", "late"),
+    ]);
     expect(s.primary).toBeNull();
   });
 });
@@ -142,7 +174,13 @@ describe("reduceOverlay — request slots", () => {
 describe("reduceOverlay — emergency stop and lifecycle", () => {
   it("shows PROCESSING STOPPED until the meeting is active again", () => {
     const stopped = run([
-      { type: "MEETING_STATE_CHANGED", meetingId: "m1", state: "active", mode: "candidate", pausedReason: null },
+      {
+        type: "MEETING_STATE_CHANGED",
+        meetingId: "m1",
+        state: "active",
+        mode: "candidate",
+        pausedReason: null,
+      },
       { type: "PROCESSING_STOPPED", reason: "Emergency stop" },
     ]);
     expect(stopped.processingStopped).toBe(true);
@@ -160,7 +198,13 @@ describe("reduceOverlay — emergency stop and lifecycle", () => {
 
   it("only offers questions that need the user's response in candidate mode", () => {
     const base = run([
-      { type: "MEETING_STATE_CHANGED", meetingId: "m1", state: "active", mode: "candidate", pausedReason: null },
+      {
+        type: "MEETING_STATE_CHANGED",
+        meetingId: "m1",
+        state: "active",
+        mode: "candidate",
+        pausedReason: null,
+      },
     ]);
     const q = {
       id: "q1",
@@ -180,17 +224,54 @@ describe("reduceOverlay — emergency stop and lifecycle", () => {
     };
     const asked = reduceOverlay(base, { type: "QUESTION_DETECTED", question: q });
     expect(asked.pendingQuestion?.id).toBe("q1");
-    const own = reduceOverlay(base, { type: "QUESTION_DETECTED", question: { ...q, requiresResponse: false } });
-    expect(own.pendingQuestion).toBeNull();
-    const interviewer = reduceOverlay(reduceOverlay(base, { type: "MODE_CHANGED", mode: "interviewer" }), {
+    const own = reduceOverlay(base, {
       type: "QUESTION_DETECTED",
-      question: q,
+      question: { ...q, requiresResponse: false },
     });
+    expect(own.pendingQuestion).toBeNull();
+    const interviewer = reduceOverlay(
+      reduceOverlay(base, { type: "MODE_CHANGED", mode: "interviewer" }),
+      {
+        type: "QUESTION_DETECTED",
+        question: q,
+      },
+    );
     expect(interviewer.pendingQuestion).toBeNull();
   });
 
+  it("drops everything of a meeting that was deleted", () => {
+    const s = run([
+      {
+        type: "MEETING_STATE_CHANGED",
+        meetingId: "m1",
+        state: "summarizing",
+        mode: "candidate",
+        pausedReason: null,
+      },
+      started("r1"),
+      delta("r1", "[[ANSWER]]\nsecret answer"),
+      {
+        type: "MEETING_STATE_CHANGED",
+        meetingId: null,
+        state: "idle",
+        mode: "candidate",
+        pausedReason: null,
+      },
+      delta("r1", " late"),
+    ]);
+    expect(s.meetingId).toBeNull();
+    expect(s.primary).toBeNull();
+    expect(s.meetingState).toBe("idle");
+  });
+
   it("caps notices", () => {
-    const s = run(Array.from({ length: 6 }, (_, i) => ({ type: "LOCAL_NOTICE" as const, level: "info" as const, message: `n${i}` })));
+    const s = run(
+      Array.from({ length: 6 }, (_, i) => ({
+        type: "LOCAL_NOTICE" as const,
+        level: "info" as const,
+        message: `n${i}`,
+      })),
+    );
     expect(s.notices.length).toBeLessThanOrEqual(3);
     expect(s.notices.at(-1)?.message).toBe("n5");
   });

@@ -18,7 +18,9 @@ export function CompletedMeeting({ live }: { live: LiveState }) {
   const meeting = live.meeting;
   const dismiss = useHomeUi((s) => s.dismissCompleted);
   const [exportOpen, setExportOpen] = useState(false);
-  const [summaryError, setSummaryError] = useState<{ meetingId: string; error: string } | null>(null);
+  const [summaryError, setSummaryError] = useState<{ meetingId: string; error: string } | null>(
+    null,
+  );
   const meetingId = meeting?.id ?? null;
 
   useMeetingEvents((ev) => {
@@ -33,7 +35,8 @@ export function CompletedMeeting({ live }: { live: LiveState }) {
 
   if (!meeting || !meetingId) return null;
 
-  const summary = live.lastSummary && live.lastSummary.meetingId === meeting.id ? live.lastSummary : null;
+  const summary =
+    live.lastSummary && live.lastSummary.meetingId === meeting.id ? live.lastSummary : null;
   const failure = summaryError && summaryError.meetingId === meeting.id ? summaryError.error : null;
   const badge = meetingStateBadge(live.state, false, null);
   const isDemo = meeting.title.startsWith("Demo:");
@@ -76,7 +79,10 @@ export function CompletedMeeting({ live }: { live: LiveState }) {
         </Banner>
       )}
 
-      <section aria-labelledby="om-completed-summary" className="mb-5 rounded-lg border border-border bg-surface px-5 py-4">
+      <section
+        aria-labelledby="om-completed-summary"
+        className="mb-5 rounded-lg border border-border bg-surface px-5 py-4"
+      >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 id="om-completed-summary" className="text-[0.92rem] font-semibold text-fg">
             Summary
@@ -107,7 +113,11 @@ export function CompletedMeeting({ live }: { live: LiveState }) {
       </div>
 
       {exportOpen && (
-        <ExportDialog meetingId={meeting.id} meetingTitle={meeting.title} onClose={() => setExportOpen(false)} />
+        <ExportDialog
+          meetingId={meeting.id}
+          meetingTitle={meeting.title}
+          onClose={() => setExportOpen(false)}
+        />
       )}
     </div>
   );

@@ -43,14 +43,26 @@ struct Captured {
     errors: usize,
 }
 
-fn capture_for(source: AudioSourceKind, dur: Duration, during: impl FnOnce()) -> Result<Captured, String> {
+fn capture_for(
+    source: AudioSourceKind,
+    dur: Duration,
+    during: impl FnOnce(),
+) -> Result<Captured, String> {
     let samples = Arc::new(AtomicUsize::new(0));
     let frames = Arc::new(AtomicUsize::new(0));
     let errors = Arc::new(AtomicUsize::new(0));
     let last_ts = Arc::new(Mutex::new((i64::MIN, true)));
-    let (s, f, e, l) = (samples.clone(), frames.clone(), errors.clone(), last_ts.clone());
+    let (s, f, e, l) = (
+        samples.clone(),
+        frames.clone(),
+        errors.clone(),
+        last_ts.clone(),
+    );
     let cap = AudioCapture::start(
-        AudioCaptureConfig { source, device: None },
+        AudioCaptureConfig {
+            source,
+            device: None,
+        },
         Box::new(move |frame| {
             s.fetch_add(frame.samples.len(), Ordering::Relaxed);
             f.fetch_add(1, Ordering::Relaxed);
@@ -65,7 +77,10 @@ fn capture_for(source: AudioSourceKind, dur: Duration, during: impl FnOnce()) ->
         }),
     )
     .map_err(|e| e.to_string())?;
-    println!("{source:?}: device opened ({} chars in name)", cap.device_name().len());
+    println!(
+        "{source:?}: device opened ({} chars in name)",
+        cap.device_name().len()
+    );
     during();
     std::thread::sleep(dur);
     cap.stop();
@@ -96,14 +111,18 @@ fn lists_audio_devices() {
 #[test]
 #[ignore = "needs a microphone"]
 fn captures_microphone_at_16khz() {
-    let c = capture_for(AudioSourceKind::Microphone, Duration::from_secs(2), || {}).expect("microphone capture");
+    let c = capture_for(AudioSourceKind::Microphone, Duration::from_secs(2), || {})
+        .expect("microphone capture");
     let seconds = c.samples as f64 / PIPELINE_SAMPLE_RATE as f64;
     println!(
         "microphone: {} frames, {:.2} s of audio, errors {}, monotonic {}",
         c.frames, seconds, c.errors, c.monotonic
     );
     assert!(c.frames > 10, "too few frames");
-    assert!((1.5..=2.8).contains(&seconds), "unexpected amount of audio: {seconds:.2}s");
+    assert!(
+        (1.5..=2.8).contains(&seconds),
+        "unexpected amount of audio: {seconds:.2}s"
+    );
     assert!(c.monotonic, "timestamps went backwards");
     assert_eq!(c.errors, 0);
 }
@@ -115,7 +134,11 @@ fn captures_system_audio_loopback_while_a_sound_plays() {
     // WASAPI loopback only delivers packets while something is playing.
     let player = || {
         let wav = r"C:\Windows\Media\Windows Notify System Generic.wav";
-        let wav = if std::path::Path::new(wav).exists() { wav } else { r"C:\Windows\Media\chimes.wav" };
+        let wav = if std::path::Path::new(wav).exists() {
+            wav
+        } else {
+            r"C:\Windows\Media\chimes.wav"
+        };
         std::process::Command::new("powershell")
             .args([
                 "-NoProfile",
@@ -125,10 +148,17 @@ fn captures_system_audio_loopback_while_a_sound_plays() {
             .spawn()
             .ok();
     };
-    let c = capture_for(AudioSourceKind::System, Duration::from_millis(2500), player).expect("loopback capture");
+    let c = capture_for(AudioSourceKind::System, Duration::from_millis(2500), player)
+        .expect("loopback capture");
     let seconds = c.samples as f64 / PIPELINE_SAMPLE_RATE as f64;
-    println!("loopback: {} frames, {:.2} s of audio, errors {}", c.frames, seconds, c.errors);
-    assert!(c.frames > 0, "no loopback audio received while a sound was playing");
+    println!(
+        "loopback: {} frames, {:.2} s of audio, errors {}",
+        c.frames, seconds, c.errors
+    );
+    assert!(
+        c.frames > 0,
+        "no loopback audio received while a sound was playing"
+    );
     assert_eq!(c.errors, 0);
 }
 
@@ -136,12 +166,22 @@ fn captures_system_audio_loopback_while_a_sound_plays() {
 #[ignore = "needs a display"]
 fn lists_screen_sources_and_captures_primary_display() {
     let sources = screen::list_sources(&[]).expect("list sources");
-    let displays = sources.iter().filter(|s| s.kind == ScreenSourceKind::Display).count();
-    let windows = sources.iter().filter(|s| s.kind == ScreenSourceKind::Window).count();
-    println!("displays: {displays}, windows: {windows}, total sources: {}", sources.len());
+    let displays = sources
+        .iter()
+        .filter(|s| s.kind == ScreenSourceKind::Display)
+        .count();
+    let windows = sources
+        .iter()
+        .filter(|s| s.kind == ScreenSourceKind::Window)
+        .count();
+    println!(
+        "displays: {displays}, windows: {windows}, total sources: {}",
+        sources.len()
+    );
     assert!(displays >= 1);
     let started = Instant::now();
-    let frame = screen::capture_once(&primary_display(), &[], 1280).expect("capture primary display");
+    let frame =
+        screen::capture_once(&primary_display(), &[], 1280).expect("capture primary display");
     println!(
         "captured {}x{} PNG of {} KB in {} ms",
         frame.width,
@@ -213,7 +253,10 @@ fn windows_ocr_reads_the_screen() {
         out.text.chars().count(),
         started.elapsed().as_millis()
     );
-    assert!(!out.lines.is_empty(), "a desktop screenshot should contain some text");
+    assert!(
+        !out.lines.is_empty(),
+        "a desktop screenshot should contain some text"
+    );
 }
 
 #[cfg(windows)]
@@ -243,7 +286,8 @@ fn capture_exclusion_on_a_real_window() {
         )
     }
     .expect("create window");
-    let handle = Win32WindowHandle::new(std::num::NonZeroIsize::new(hwnd.0 as isize).expect("hwnd"));
+    let handle =
+        Win32WindowHandle::new(std::num::NonZeroIsize::new(hwnd.0 as isize).expect("hwnd"));
     let privacy = openmeet_platform::privacy::for_window(RawWindowHandle::Win32(handle));
     let (supported, mechanism, _) = openmeet_platform::privacy::platform_support();
     println!("supported: {supported}, mechanism: {mechanism}");
@@ -263,7 +307,11 @@ fn capture_exclusion_on_a_real_window() {
 fn meeting_app_detection_and_focus_queries() {
     let started = Instant::now();
     let apps = openmeet_platform::apps::detect_meeting_apps();
-    println!("meeting apps detected: {} in {} ms", apps.len(), started.elapsed().as_millis());
+    println!(
+        "meeting apps detected: {} in {} ms",
+        apps.len(),
+        started.elapsed().as_millis()
+    );
     println!(
         "foreground window known: {}",
         openmeet_platform::focus::foreground_window_id().is_some()

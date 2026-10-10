@@ -30,7 +30,12 @@ export const DEFAULT_LOCAL_AI_URL = "http://127.0.0.1:8765";
 export const DEFAULT_OPENAI_URL = "https://api.openai.com";
 export const DEFAULT_ANTHROPIC_URL = "https://api.anthropic.com";
 
-const WELL_KNOWN_DEFAULTS = [DEFAULT_OPENAI_URL, DEFAULT_ANTHROPIC_URL, DEFAULT_OLLAMA_URL, DEFAULT_LOCAL_AI_URL];
+const WELL_KNOWN_DEFAULTS = [
+  DEFAULT_OPENAI_URL,
+  DEFAULT_ANTHROPIC_URL,
+  DEFAULT_OLLAMA_URL,
+  DEFAULT_LOCAL_AI_URL,
+];
 
 export const DEFAULT_LLM_MODEL: Record<LlmProviderKind, string> = {
   openai: "gpt-5-mini",
@@ -78,7 +83,8 @@ export const LLM_PROVIDERS: ReadonlyArray<ProviderChoice<LlmProviderKind>> = [
   {
     value: "openai",
     label: "OpenAI",
-    description: "GPT models through the OpenAI API. Requires an API key; meeting context is sent to OpenAI.",
+    description:
+      "GPT models through the OpenAI API. Requires an API key; meeting context is sent to OpenAI.",
     location: "cloud",
     secret: "openai",
     defaultBaseUrl: DEFAULT_OPENAI_URL,
@@ -86,7 +92,8 @@ export const LLM_PROVIDERS: ReadonlyArray<ProviderChoice<LlmProviderKind>> = [
   {
     value: "anthropic",
     label: "Anthropic",
-    description: "Claude models through the Anthropic API. Requires an API key; meeting context is sent to Anthropic.",
+    description:
+      "Claude models through the Anthropic API. Requires an API key; meeting context is sent to Anthropic.",
     location: "cloud",
     secret: "anthropic",
     defaultBaseUrl: DEFAULT_ANTHROPIC_URL,
@@ -94,7 +101,8 @@ export const LLM_PROVIDERS: ReadonlyArray<ProviderChoice<LlmProviderKind>> = [
   {
     value: "openai_compatible",
     label: "OpenAI-compatible server",
-    description: "LM Studio, llama.cpp, vLLM or any server with the OpenAI chat API. Local or cloud depending on its address.",
+    description:
+      "LM Studio, llama.cpp, vLLM or any server with the OpenAI chat API. Local or cloud depending on its address.",
     location: "configurable",
     secret: "openai_compatible",
     defaultBaseUrl: null,
@@ -105,7 +113,8 @@ export const TRANSCRIPTION_PROVIDERS: ReadonlyArray<ProviderChoice<Transcription
   {
     value: "local_ai",
     label: "Local AI (faster-whisper)",
-    description: "Speech recognition on this computer through the optional OpenMeet local AI sidecar.",
+    description:
+      "Speech recognition on this computer through the optional OpenMeet local AI sidecar.",
     location: "local",
     secret: null,
     defaultBaseUrl: DEFAULT_LOCAL_AI_URL,
@@ -121,7 +130,8 @@ export const TRANSCRIPTION_PROVIDERS: ReadonlyArray<ProviderChoice<Transcription
   {
     value: "openai_compatible",
     label: "OpenAI-compatible server",
-    description: "Any server implementing /v1/audio/transcriptions. Local or cloud depending on its address.",
+    description:
+      "Any server implementing /v1/audio/transcriptions. Local or cloud depending on its address.",
     location: "configurable",
     secret: "openai_compatible",
     defaultBaseUrl: null,
@@ -140,7 +150,8 @@ export const VISION_PROVIDERS: ReadonlyArray<ProviderChoice<VisionProviderKind>>
   {
     value: "ocr_only",
     label: "Text recognition only",
-    description: "Reads on-screen text with the operating system's built-in OCR where available. Nothing leaves this device.",
+    description:
+      "Reads on-screen text with the operating system's built-in OCR where available. Nothing leaves this device.",
     location: "local",
     secret: null,
     defaultBaseUrl: null,
@@ -183,7 +194,8 @@ export const EMBEDDING_PROVIDERS: ReadonlyArray<ProviderChoice<EmbeddingProvider
   {
     value: "local_hash",
     label: "Built-in",
-    description: "Fast keyword-style embeddings computed inside OpenMeet. No model or server needed.",
+    description:
+      "Fast keyword-style embeddings computed inside OpenMeet. No model or server needed.",
     location: "local",
     secret: null,
     defaultBaseUrl: null,
@@ -214,7 +226,10 @@ export const EMBEDDING_PROVIDERS: ReadonlyArray<ProviderChoice<EmbeddingProvider
   },
 ];
 
-export function choiceFor<T extends string>(choices: ReadonlyArray<ProviderChoice<T>>, value: T): ProviderChoice<T> {
+export function choiceFor<T extends string>(
+  choices: ReadonlyArray<ProviderChoice<T>>,
+  value: T,
+): ProviderChoice<T> {
   const found = choices.find((c) => c.value === value);
   if (found) return found;
   const first = choices[0];
@@ -237,7 +252,9 @@ export function cleanUrl(url: string | null | undefined): string | null {
 export function locationForUrl(url: string): "local" | "remote" {
   const rest = url.includes("://") ? url.slice(url.indexOf("://") + 3) : url;
   const authority = rest.split("/")[0] ?? "";
-  const hostPart = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority;
+  const hostPart = authority.includes("@")
+    ? authority.slice(authority.lastIndexOf("@") + 1)
+    : authority;
   let host: string;
   if (hostPart.startsWith("[")) {
     host = hostPart.slice(1).split("]")[0] ?? "";
@@ -245,7 +262,11 @@ export function locationForUrl(url: string): "local" | "remote" {
     host = hostPart.split(":")[0] ?? "";
   }
   host = host.toLowerCase();
-  const loopback = host === "localhost" || host === "::1" || host.startsWith("127.") || host.endsWith(".localhost");
+  const loopback =
+    host === "localhost" ||
+    host === "::1" ||
+    host.startsWith("127.") ||
+    host.endsWith(".localhost");
   return loopback ? "local" : "remote";
 }
 
@@ -263,7 +284,9 @@ export function displayHost(url: string): string {
 export function resolvedBaseUrl(defaultUrl: string | null, configured: string | null): string {
   const url = cleanUrl(configured);
   if (url && defaultUrl) {
-    const stale = WELL_KNOWN_DEFAULTS.some((d) => d !== defaultUrl && d.toLowerCase() === url.toLowerCase());
+    const stale = WELL_KNOWN_DEFAULTS.some(
+      (d) => d !== defaultUrl && d.toLowerCase() === url.toLowerCase(),
+    );
     return stale ? defaultUrl : url;
   }
   if (url) return url;
@@ -296,29 +319,37 @@ export function effectiveEndpoint(
   switch (component) {
     case "llm": {
       const llm = settings.ai.llm;
-      return endpoint(resolvedBaseUrl(choiceFor(LLM_PROVIDERS, llm.provider).defaultBaseUrl, llm.baseUrl));
+      return endpoint(
+        resolvedBaseUrl(choiceFor(LLM_PROVIDERS, llm.provider).defaultBaseUrl, llm.baseUrl),
+      );
     }
     case "transcription": {
       const t = settings.transcription;
-      return endpoint(resolvedBaseUrl(choiceFor(TRANSCRIPTION_PROVIDERS, t.provider).defaultBaseUrl, t.baseUrl));
+      return endpoint(
+        resolvedBaseUrl(choiceFor(TRANSCRIPTION_PROVIDERS, t.provider).defaultBaseUrl, t.baseUrl),
+      );
     }
     case "vision": {
       const v = settings.ai.vision;
       const kind = VISION_AS_LLM[v.provider];
       if (!kind) return { url: "", location: v.provider === "disabled" ? "disabled" : "local" };
       const configured =
-        cleanUrl(v.baseUrl) ?? (settings.ai.llm.provider === kind ? cleanUrl(settings.ai.llm.baseUrl) : null);
+        cleanUrl(v.baseUrl) ??
+        (settings.ai.llm.provider === kind ? cleanUrl(settings.ai.llm.baseUrl) : null);
       return endpoint(resolvedBaseUrl(choiceFor(LLM_PROVIDERS, kind).defaultBaseUrl, configured));
     }
     case "embeddings": {
       const e = settings.ai.embeddings;
       if (e.provider === "local_hash") return { url: "", location: "local" };
       let inherited: string | null = null;
-      if (e.provider === "ollama" && settings.ai.llm.provider === "ollama") inherited = cleanUrl(settings.ai.llm.baseUrl);
+      if (e.provider === "ollama" && settings.ai.llm.provider === "ollama")
+        inherited = cleanUrl(settings.ai.llm.baseUrl);
       if (e.provider === "local_ai" && settings.transcription.provider === "local_ai")
         inherited = cleanUrl(settings.transcription.baseUrl);
       const configured = cleanUrl(e.baseUrl) ?? inherited;
-      return endpoint(resolvedBaseUrl(choiceFor(EMBEDDING_PROVIDERS, e.provider).defaultBaseUrl, configured));
+      return endpoint(
+        resolvedBaseUrl(choiceFor(EMBEDDING_PROVIDERS, e.provider).defaultBaseUrl, configured),
+      );
     }
   }
 }
@@ -356,12 +387,14 @@ export const MODE_OPTIONS: ReadonlyArray<{ value: Mode; label: string; descripti
   {
     value: "candidate",
     label: "Candidate",
-    description: "You are being interviewed. OpenMeet detects questions and suggests grounded answers.",
+    description:
+      "You are being interviewed. OpenMeet detects questions and suggests grounded answers.",
   },
   {
     value: "interviewer",
     label: "Interviewer",
-    description: "You are interviewing. OpenMeet suggests follow-up questions and tracks covered topics.",
+    description:
+      "You are interviewing. OpenMeet suggests follow-up questions and tracks covered topics.",
   },
 ];
 
@@ -394,12 +427,36 @@ export const SCREEN_FREQUENCY_OPTIONS: ReadonlyArray<{ value: ScreenFrequency; l
   { value: "fps5", label: "5 frames per second" },
 ];
 
-export const RETENTION_OPTIONS: ReadonlyArray<{ value: RetentionPolicy; label: string; description: string }> = [
-  { value: "none", label: "Don't keep meetings", description: "Transcripts and summaries are deleted when a meeting ends." },
-  { value: "one_day", label: "1 day", description: "Meetings are deleted 24 hours after they end." },
-  { value: "seven_days", label: "7 days", description: "Meetings are deleted a week after they end." },
-  { value: "thirty_days", label: "30 days", description: "Meetings are deleted 30 days after they end." },
-  { value: "forever", label: "Keep until I delete them", description: "Meetings stay on this device until you delete them." },
+export const RETENTION_OPTIONS: ReadonlyArray<{
+  value: RetentionPolicy;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "none",
+    label: "Don't keep meetings",
+    description: "Transcripts and summaries are deleted when a meeting ends.",
+  },
+  {
+    value: "one_day",
+    label: "1 day",
+    description: "Meetings are deleted 24 hours after they end.",
+  },
+  {
+    value: "seven_days",
+    label: "7 days",
+    description: "Meetings are deleted a week after they end.",
+  },
+  {
+    value: "thirty_days",
+    label: "30 days",
+    description: "Meetings are deleted 30 days after they end.",
+  },
+  {
+    value: "forever",
+    label: "Keep until I delete them",
+    description: "Meetings stay on this device until you delete them.",
+  },
 ];
 
 export const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string }> = [
@@ -413,8 +470,16 @@ export const DENSITY_OPTIONS: ReadonlyArray<{ value: Density; label: string }> =
   { value: "compact", label: "Compact" },
 ];
 
-export const LAYOUT_OPTIONS: ReadonlyArray<{ value: DisplayLayout; label: string; description: string }> = [
-  { value: "same_display", label: "Same display", description: "The overlay floats over the meeting window." },
+export const LAYOUT_OPTIONS: ReadonlyArray<{
+  value: DisplayLayout;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "same_display",
+    label: "Same display",
+    description: "The overlay floats over the meeting window.",
+  },
   {
     value: "separate_display",
     label: "Separate display",

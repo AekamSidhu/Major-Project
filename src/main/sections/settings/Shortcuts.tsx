@@ -6,7 +6,12 @@ import { useState, type KeyboardEvent } from "react";
 import type { ShortcutAction, ShortcutStatus } from "@/bindings";
 import { api, errorMessage } from "@/lib/ipc";
 import { formatAccelerator, shortcutLabel } from "@/lib/format";
-import { IS_MAC, acceleratorFromEvent, conflictsFor, validateAccelerator } from "../../components/accelerator";
+import {
+  IS_MAC,
+  acceleratorFromEvent,
+  conflictsFor,
+  validateAccelerator,
+} from "../../components/accelerator";
 import { useLoader } from "../../components/useLoader";
 import { Badge, Banner, Button, ConfirmDialog, Kbd, PageHeader, Spinner, cx } from "../../ui";
 
@@ -100,7 +105,11 @@ function Recorder({
         className="flex h-8 min-w-48 items-center gap-2 rounded-md border border-accent bg-accent-soft px-2.5 text-[0.84rem] text-fg focus:outline-none"
       >
         {busy && <Spinner />}
-        {preview ? <Kbd>{formatAccelerator(preview)}</Kbd> : <span className="text-muted">Press keys… (Esc to cancel)</span>}
+        {preview ? (
+          <Kbd>{formatAccelerator(preview)}</Kbd>
+        ) : (
+          <span className="text-muted">Press keys… (Esc to cancel)</span>
+        )}
       </button>
       {error && (
         <p role="alert" className="text-[0.76rem] text-danger">
@@ -138,7 +147,9 @@ function Row({
     <li className="flex items-start gap-4 py-3">
       <div className="min-w-0 flex-1">
         <div className="text-[0.86rem] font-medium text-fg">{shortcutLabel(status.action)}</div>
-        {DESCRIPTIONS[status.action] && <div className="mt-0.5 text-[0.76rem] text-muted">{DESCRIPTIONS[status.action]}</div>}
+        {DESCRIPTIONS[status.action] && (
+          <div className="mt-0.5 text-[0.76rem] text-muted">{DESCRIPTIONS[status.action]}</div>
+        )}
         {!unassigned && status.error && (
           <div className="mt-0.5 text-[0.76rem] text-danger" role="alert">
             {status.error}
@@ -166,9 +177,18 @@ function Row({
             {unassigned ? (
               <Badge>Not assigned</Badge>
             ) : (
-              <span className={cx("inline-flex items-center gap-1.5", !status.registered && "opacity-70")}>
+              <span
+                className={cx(
+                  "inline-flex items-center gap-1.5",
+                  !status.registered && "opacity-70",
+                )}
+              >
                 <Kbd>{formatAccelerator(status.accelerator)}</Kbd>
-                {status.registered ? <Badge tone="ok">Active</Badge> : <Badge tone="danger">Not active</Badge>}
+                {status.registered ? (
+                  <Badge tone="ok">Active</Badge>
+                ) : (
+                  <Badge tone="danger">Not active</Badge>
+                )}
               </span>
             )}
             <Button size="sm" onClick={() => onRecord(true)}>

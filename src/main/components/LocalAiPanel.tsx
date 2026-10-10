@@ -10,7 +10,11 @@ import { CheckIcon, CopyIcon, RefreshIcon } from "./icons";
 import { useLoader } from "./useLoader";
 
 function summary(s: LocalAiStatus): { tone: "ok" | "warn" | "neutral"; text: string } {
-  if (s.running) return { tone: "ok", text: s.managed ? "Running (started by OpenMeet)" : "Running (started outside OpenMeet)" };
+  if (s.running)
+    return {
+      tone: "ok",
+      text: s.managed ? "Running (started by OpenMeet)" : "Running (started outside OpenMeet)",
+    };
   if (s.installed) return { tone: "warn", text: "Installed, not running" };
   return { tone: "neutral", text: "Not installed" };
 }
@@ -27,7 +31,8 @@ export function LocalAiPanel({ compact = false }: { compact?: boolean }) {
     try {
       const next = kind === "start" ? await api.startLocalAi() : await api.stopLocalAi();
       status.setData(next);
-      if (kind === "start" && !next.running) setError(next.message || "The local AI server did not start.");
+      if (kind === "start" && !next.running)
+        setError(next.message || "The local AI server did not start.");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -53,12 +58,17 @@ export function LocalAiPanel({ compact = false }: { compact?: boolean }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[0.86rem] font-medium text-fg">Local AI sidecar</div>
-          <div role="status" className="mt-0.5 flex items-center gap-1.5 text-[0.8rem] text-fg-soft">
+          <div
+            role="status"
+            className="mt-0.5 flex items-center gap-1.5 text-[0.8rem] text-fg-soft"
+          >
             {sum ? (
               <>
                 <StatusDot tone={sum.tone} />
                 {sum.text}
-                {s?.running && <span className="font-mono text-[0.74rem] text-muted">{s.baseUrl}</span>}
+                {s?.running && (
+                  <span className="font-mono text-[0.74rem] text-muted">{s.baseUrl}</span>
+                )}
               </>
             ) : status.error ? (
               <span className="text-danger">Status unavailable: {status.error}</span>
@@ -69,16 +79,33 @@ export function LocalAiPanel({ compact = false }: { compact?: boolean }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {s?.installed && !s.running && (
-            <Button variant="primary" size="sm" busy={busy === "start"} disabled={busy !== null} onClick={() => void act("start")}>
+            <Button
+              variant="primary"
+              size="sm"
+              busy={busy === "start"}
+              disabled={busy !== null}
+              onClick={() => void act("start")}
+            >
               Start
             </Button>
           )}
           {s?.running && s.managed && (
-            <Button size="sm" busy={busy === "stop"} disabled={busy !== null} onClick={() => void act("stop")}>
+            <Button
+              size="sm"
+              busy={busy === "stop"}
+              disabled={busy !== null}
+              onClick={() => void act("stop")}
+            >
               Stop
             </Button>
           )}
-          <Button variant="ghost" size="sm" aria-label="Refresh local AI status" disabled={status.loading || busy !== null} onClick={status.reload}>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Refresh local AI status"
+            disabled={status.loading || busy !== null}
+            onClick={status.reload}
+          >
             <RefreshIcon />
           </Button>
         </div>
@@ -105,11 +132,19 @@ export function LocalAiPanel({ compact = false }: { compact?: boolean }) {
       {s && !s.installed && s.setupHint && (
         <div className="mt-2.5 rounded-md border border-border bg-surface-2 px-3 py-2">
           <p className="text-[0.78rem] text-fg-soft">
-            Install it once with this command (requires Python). Speech and embedding models then run entirely on this computer:
+            Install it once with this command (requires Python). Speech and embedding models then
+            run entirely on this computer:
           </p>
           <div className="mt-1.5 flex items-start gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto font-mono text-[0.76rem] whitespace-pre text-fg">{s.setupHint}</code>
-            <Button size="sm" variant="ghost" aria-label="Copy setup command" onClick={() => void copyHint(s.setupHint)}>
+            <code className="min-w-0 flex-1 overflow-x-auto font-mono text-[0.76rem] whitespace-pre text-fg">
+              {s.setupHint}
+            </code>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="Copy setup command"
+              onClick={() => void copyHint(s.setupHint)}
+            >
               {copied ? <CheckIcon /> : <CopyIcon />}
               {copied ? "Copied" : "Copy"}
             </Button>

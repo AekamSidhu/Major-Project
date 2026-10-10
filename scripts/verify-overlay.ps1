@@ -34,6 +34,7 @@ public static class OmWin32 {
     [DllImport("user32.dll")] public static extern bool GetWindowDisplayAffinity(IntPtr hWnd, out uint affinity);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT r);
     [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 
@@ -48,7 +49,6 @@ public static class OmWin32 {
 
 $GWL_STYLE = -16
 $GWL_EXSTYLE = -20
-$WS_CAPTION = 0x00C00000
 $WS_EX_TOPMOST = 0x00000008
 $WS_EX_NOACTIVATE = 0x08000000
 $WS_EX_TRANSPARENT = 0x00000020
@@ -75,7 +75,15 @@ Check "Main window exists" ($null -ne $main)
 if ($overlay) {
     $style = [int64][OmWin32]::GetWindowLongPtr($overlay, $GWL_STYLE)
     $ex = [int64][OmWin32]::GetWindowLongPtr($overlay, $GWL_EXSTYLE)
-    Check "Overlay is frameless" (($style -band $WS_CAPTION) -ne $WS_CAPTION) ("style=0x{0:X}" -f $style)
+    # tao keeps WS_CAPTION on undecorated windows and removes the frame in
+    # WM_NCCALCSIZE, so compare the client area with the window rectangle.
+    $wr = New-Object OmWin32+RECT
+    $cr = New-Object OmWin32+RECT
+    [void][OmWin32]::GetWindowRect($overlay, [ref]$wr)
+    [void][OmWin32]::GetClientRect($overlay, [ref]$cr)
+    $frameW = ($wr.Right - $wr.Left) - ($cr.Right - $cr.Left)
+    $frameH = ($wr.Bottom - $wr.Top) - ($cr.Bottom - $cr.Top)
+    Check "Overlay is frameless" (($frameW -eq 0) -and ($frameH -eq 0)) ("non-client frame={0}x{1}px" -f $frameW, $frameH)
     Check "Overlay is always on top" (($ex -band $WS_EX_TOPMOST) -ne 0) ("exstyle=0x{0:X}" -f $ex)
     Check "Overlay is non-activating" (($ex -band $WS_EX_NOACTIVATE) -ne 0)
     $affinity = 0

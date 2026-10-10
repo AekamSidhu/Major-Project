@@ -60,12 +60,24 @@ function TestResult({ result }: { result: ProviderTestResult }) {
   const info = result.info;
   return (
     <span className="flex flex-col gap-0.5">
-      <span className={result.ok ? "flex items-center gap-1.5 font-medium text-ok" : "flex items-center gap-1.5 font-medium text-danger"}>
+      <span
+        className={
+          result.ok
+            ? "flex items-center gap-1.5 font-medium text-ok"
+            : "flex items-center gap-1.5 font-medium text-danger"
+        }
+      >
         <StatusDot tone={result.ok ? "ok" : "danger"} />
         {result.ok ? "Connected" : "Connection failed"}
-        {result.latencyMs !== null && <span className="font-normal text-muted tabular-nums">· {Math.round(result.latencyMs)} ms</span>}
+        {result.latencyMs !== null && (
+          <span className="font-normal text-muted tabular-nums">
+            · {Math.round(result.latencyMs)} ms
+          </span>
+        )}
       </span>
-      {result.message && <span className={result.ok ? "text-fg-soft" : "text-danger"}>{result.message}</span>}
+      {result.message && (
+        <span className={result.ok ? "text-fg-soft" : "text-danger"}>{result.message}</span>
+      )}
       {info && (
         <span className="flex flex-wrap items-center gap-1.5 text-muted">
           {info.displayName}

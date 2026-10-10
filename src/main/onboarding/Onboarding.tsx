@@ -5,18 +5,30 @@
 import { useState, type ReactNode } from "react";
 import type { Mode } from "@/bindings";
 import { api, errorMessage } from "@/lib/ipc";
-import { AudioDevicesError, AudioDevicesStatus, AudioSourceSettings, useAudioDevices } from "../components/AudioDevicePicker";
+import {
+  AudioDevicesError,
+  AudioDevicesStatus,
+  AudioSourceSettings,
+  useAudioDevices,
+} from "../components/AudioDevicePicker";
 import { ChoiceCards } from "../components/fields";
 import { LlmProviderForm } from "../components/LlmProviderForm";
 import { saveSettings, settleSettings } from "../components/save";
-import { LLM_PROVIDERS, MODE_OPTIONS, RETENTION_OPTIONS, TRANSCRIPTION_PROVIDERS, choiceFor } from "../components/settingsMeta";
+import {
+  LLM_PROVIDERS,
+  MODE_OPTIONS,
+  RETENTION_OPTIONS,
+  TRANSCRIPTION_PROVIDERS,
+  choiceFor,
+} from "../components/settingsMeta";
 import { TranscriptionProviderForm } from "../components/TranscriptionProviderForm";
 import { useSettings } from "../components/useSettings";
 import { ScreenSourcePicker } from "../sections/home/ScreenSourcePicker";
 import { useMain } from "../store";
 import { Banner, Button, Field, Select, ToggleField, cx } from "../ui";
 
-type StepId = "welcome" | "mode" | "ai" | "transcription" | "microphone" | "screen" | "privacy" | "finish";
+type StepId =
+  "welcome" | "mode" | "ai" | "transcription" | "microphone" | "screen" | "privacy" | "finish";
 
 const STEPS: ReadonlyArray<{ id: StepId; label: string }> = [
   { id: "welcome", label: "Welcome" },
@@ -33,7 +45,9 @@ function StepTitle({ title, children }: { title: string; children?: ReactNode })
   return (
     <div className="mb-4">
       <h1 className="text-[1.35rem] font-semibold tracking-tight text-fg">{title}</h1>
-      {children && <p className="mt-1.5 max-w-xl text-[0.88rem] leading-relaxed text-muted">{children}</p>}
+      {children && (
+        <p className="mt-1.5 max-w-xl text-[0.88rem] leading-relaxed text-muted">{children}</p>
+      )}
     </div>
   );
 }
@@ -42,20 +56,27 @@ function Welcome() {
   return (
     <>
       <StepTitle title="Welcome to OpenMeet">
-        A real-time assistant for interviews and meetings. It listens only when you start a meeting, shows suggestions
-        in a small overlay, and never speaks or acts on your behalf.
+        A real-time assistant for interviews and meetings. It listens only when you start a meeting,
+        shows suggestions in a small overlay, and never speaks or acts on your behalf.
       </StepTitle>
       <ul className="max-w-xl space-y-2 text-[0.86rem] text-fg-soft">
         <li>• Runs locally by default. Cloud AI providers are optional and clearly labeled.</li>
-        <li>• No telemetry or analytics. API keys stay in your operating system's credential store.</li>
-        <li>• Suggestions use only what is said in the meeting and what you tell OpenMeet — never invented experience.</li>
+        <li>
+          • No telemetry or analytics. API keys stay in your operating system's credential store.
+        </li>
+        <li>
+          • Suggestions use only what is said in the meeting and what you tell OpenMeet — never
+          invented experience.
+        </li>
         <li>• Screen context is off unless you turn it on.</li>
       </ul>
       <p className="mt-4 max-w-xl text-[0.8rem] text-muted">
-        Recording laws differ by place. Tell the other participants when you use transcription or an AI assistant, and
-        follow the rules of the interview or meeting you are in.
+        Recording laws differ by place. Tell the other participants when you use transcription or an
+        AI assistant, and follow the rules of the interview or meeting you are in.
       </p>
-      <p className="mt-2 max-w-xl text-[0.8rem] text-muted">Each step saves as you go and none is required.</p>
+      <p className="mt-2 max-w-xl text-[0.8rem] text-muted">
+        Each step saves as you go and none is required.
+      </p>
     </>
   );
 }
@@ -74,13 +95,21 @@ function ModeStep() {
     );
   return (
     <>
-      <StepTitle title="How will you use OpenMeet?">You can switch at any time with a hotkey or from the overlay.</StepTitle>
+      <StepTitle title="How will you use OpenMeet?">
+        You can switch at any time with a hotkey or from the overlay.
+      </StepTitle>
       {error && <Banner tone="danger">{error}</Banner>}
-      <ChoiceCards label="Mode" hideLabel value={settings.mode} options={MODE_OPTIONS} onChange={choose} />
+      <ChoiceCards
+        label="Mode"
+        hideLabel
+        value={settings.mode}
+        options={MODE_OPTIONS}
+        onChange={choose}
+      />
       {settings.mode === "interviewer" && (
         <p className="mt-2 max-w-xl text-[0.8rem] text-muted">
-          Interviewer mode suggests follow-up questions and tracks topics. It does not score candidates or make hiring
-          recommendations.
+          Interviewer mode suggests follow-up questions and tracks topics. It does not score
+          candidates or make hiring recommendations.
         </p>
       )}
     </>
@@ -91,9 +120,9 @@ function AiStep() {
   return (
     <>
       <StepTitle title="Choose an AI provider">
-        Ollama runs models on this computer, so nothing leaves it — install it from ollama.com and run{" "}
-        <code className="font-mono text-fg-soft">ollama pull llama3.2</code>. Cloud providers need an API key and receive
-        the parts of the conversation needed for each suggestion.
+        Ollama runs models on this computer, so nothing leaves it — install it from ollama.com and
+        run <code className="font-mono text-fg-soft">ollama pull llama3.2</code>. Cloud providers
+        need an API key and receive the parts of the conversation needed for each suggestion.
       </StepTitle>
       <LlmProviderForm variant="compact" />
     </>
@@ -104,8 +133,8 @@ function TranscriptionStep() {
   return (
     <>
       <StepTitle title="Choose speech-to-text">
-        The local AI sidecar transcribes on this computer with Whisper. A cloud provider can be faster on computers
-        without a GPU, but receives meeting audio.
+        The local AI sidecar transcribes on this computer with Whisper. A cloud provider can be
+        faster on computers without a GPU, but receives meeting audio.
       </StepTitle>
       <TranscriptionProviderForm variant="compact" />
     </>
@@ -118,8 +147,8 @@ function MicrophoneStep() {
   return (
     <>
       <StepTitle title="Check your microphone">
-        Choose the microphone you speak into and run the level test. The test listens for a few seconds and nothing is
-        saved.
+        Choose the microphone you speak into and run the level test. The test listens for a few
+        seconds and nothing is saved.
       </StepTitle>
       <AudioDevicesError error={devices.error} />
       <AudioSourceSettings source="microphone" devices={devices.data} hideToggle />
@@ -147,14 +176,18 @@ function ScreenStep() {
   const apply = (enabled: boolean, source: Parameters<typeof api.setScreenCapture>[1]) =>
     void api
       .setScreenCapture(enabled, source)
-      .then(() => setError(null), (e: unknown) => setError(errorMessage(e)))
+      .then(
+        () => setError(null),
+        (e: unknown) => setError(errorMessage(e)),
+      )
       .finally(() => void reloadSettings());
 
   return (
     <>
       <StepTitle title="Screen context (optional)">
-        When on, OpenMeet looks at the window or display you choose during meetings, so suggestions can refer to shared
-        code or slides. It stays off unless you turn it on here or when starting a meeting.
+        When on, OpenMeet looks at the window or display you choose during meetings, so suggestions
+        can refer to shared code or slides. It stays off unless you turn it on here or when starting
+        a meeting.
       </StepTitle>
       {error && <Banner tone="danger">{error}</Banner>}
       <ToggleField
@@ -174,7 +207,9 @@ function ScreenStep() {
             }}
           />
           {settings.screen.enabled && settings.screen.source && (
-            <p className="mt-2 text-[0.8rem] text-ok">Screen context will use: {settings.screen.source.label}</p>
+            <p className="mt-2 text-[0.8rem] text-ok">
+              Screen context will use: {settings.screen.source.label}
+            </p>
           )}
         </div>
       )}
@@ -188,7 +223,13 @@ function PrivacyStep() {
   return (
     <>
       <StepTitle title="Privacy">You can change all of this later in Privacy &amp; data.</StepTitle>
-      <Field label="Keep meetings for" description={RETENTION_OPTIONS.find((o) => o.value === settings.privacy.retention)?.description} inline>
+      <Field
+        label="Keep meetings for"
+        description={
+          RETENTION_OPTIONS.find((o) => o.value === settings.privacy.retention)?.description
+        }
+        inline
+      >
         <Select
           value={settings.privacy.retention}
           className="w-56"
@@ -231,16 +272,24 @@ function Finish() {
   const rows: Array<[string, string]> = [
     ["Mode", s.mode === "candidate" ? "Candidate" : "Interviewer"],
     ["AI provider", `${choiceFor(LLM_PROVIDERS, s.ai.llm.provider).label} · ${s.ai.llm.model}`],
-    ["Transcription", `${choiceFor(TRANSCRIPTION_PROVIDERS, s.transcription.provider).label} · ${s.transcription.model}`],
-    ["Audio", [s.audio.microphoneEnabled && "Microphone", s.audio.systemAudioEnabled && "System audio"].filter(Boolean).join(" + ") || "Off"],
+    [
+      "Transcription",
+      `${choiceFor(TRANSCRIPTION_PROVIDERS, s.transcription.provider).label} · ${s.transcription.model}`,
+    ],
+    [
+      "Audio",
+      [s.audio.microphoneEnabled && "Microphone", s.audio.systemAudioEnabled && "System audio"]
+        .filter(Boolean)
+        .join(" + ") || "Off",
+    ],
     ["Screen context", s.screen.enabled && s.screen.source ? s.screen.source.label : "Off"],
     ["Local-only", s.privacy.localOnly ? "On" : "Off"],
   ];
   return (
     <>
       <StepTitle title="You're set">
-        Start a meeting from Home when you are ready. Try a demo meeting first to see the overlay in action without
-        using your microphone.
+        Start a meeting from Home when you are ready. Try a demo meeting first to see the overlay in
+        action without using your microphone.
       </StepTitle>
       <dl className="max-w-md divide-y divide-border rounded-lg border border-border bg-surface px-4 text-[0.84rem]">
         {rows.map(([k, v]) => (
@@ -289,7 +338,11 @@ export function Onboarding() {
                 aria-current={i === index ? "step" : undefined}
                 className={cx(
                   "rounded-full px-2 py-0.5 text-[0.74rem] transition-colors",
-                  i === index ? "bg-accent text-accent-fg" : i < index ? "text-fg-soft hover:text-fg" : "text-muted hover:text-fg-soft",
+                  i === index
+                    ? "bg-accent text-accent-fg"
+                    : i < index
+                      ? "text-fg-soft hover:text-fg"
+                      : "text-muted hover:text-fg-soft",
                 )}
               >
                 {s.label}

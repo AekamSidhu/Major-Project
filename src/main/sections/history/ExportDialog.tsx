@@ -8,7 +8,13 @@ import { useMain } from "@/main/store";
 import { Button, Dialog, cx } from "@/main/ui";
 import { Checkbox, InlineError } from "@/main/sections/home/controls";
 import { Icon } from "@/main/sections/home/icons";
-import { buildExportRequest, DEFAULT_EXPORT_PARTS, EXPORT_FORMATS, EXPORT_PARTS, formatBytes } from "./helpers";
+import {
+  buildExportRequest,
+  DEFAULT_EXPORT_PARTS,
+  EXPORT_FORMATS,
+  EXPORT_PARTS,
+  formatBytes,
+} from "./helpers";
 
 export interface ExportDialogProps {
   meetingId: string;
@@ -57,7 +63,12 @@ export function ExportDialog({ meetingId, meetingTitle, onClose }: ExportDialogP
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" busy={busy} disabled={!built.request} onClick={() => void submit()}>
+          <Button
+            variant="primary"
+            busy={busy}
+            disabled={!built.request}
+            onClick={() => void submit()}
+          >
             <Icon name="download" />
             Export…
           </Button>
@@ -75,7 +86,9 @@ export function ExportDialog({ meetingId, meetingTitle, onClose }: ExportDialogP
               key={f.value}
               className={cx(
                 "flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-1.5",
-                format === f.value ? "border-accent bg-accent-soft" : "border-border hover:border-border-strong",
+                format === f.value
+                  ? "border-accent bg-accent-soft"
+                  : "border-border hover:border-border-strong",
               )}
             >
               <input

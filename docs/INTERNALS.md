@@ -688,9 +688,9 @@ pub mod audio {
 ```
 System audio: Windows → WASAPI loopback (build an *input* stream on the
 *output* device; verify cpal's current API for loopback). Linux → PulseAudio /
-PipeWire "Monitor of …" input devices. macOS → only if the current cpal
-version supports system-audio capture; otherwise `Unsupported("System audio
-capture requires a virtual audio device such as BlackHole on macOS")`.
+PipeWire "Monitor of …" input devices. macOS → cpal's Core Audio process tap
+on macOS 14.6+ (System Audio Recording permission); on older versions
+`supported: false` with a note to use a virtual audio device such as BlackHole.
 Device disconnects and stream errors go to `on_error`, never panic.
 
 ```rust

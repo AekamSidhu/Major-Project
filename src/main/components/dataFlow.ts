@@ -67,7 +67,13 @@ function find(report: DataFlowReport, component: Component): DataFlowNode | null
 function stepFor(report: DataFlowReport, component: Component, fallbackLabel: string): FlowStep {
   const node = find(report, component);
   if (!node) {
-    return { key: component, label: fallbackLabel, node: null, location: "unknown", detail: "Not reported" };
+    return {
+      key: component,
+      label: fallbackLabel,
+      node: null,
+      location: "unknown",
+      detail: "Not reported",
+    };
   }
   const detail =
     node.location === "disabled"
@@ -75,11 +81,23 @@ function stepFor(report: DataFlowReport, component: Component, fallbackLabel: st
       : node.endpoint
         ? `${node.provider} · ${node.endpoint}`
         : node.provider;
-  return { key: component, label: node.label || fallbackLabel, node, location: node.location, detail };
+  return {
+    key: component,
+    label: node.label || fallbackLabel,
+    node,
+    location: node.location,
+    detail,
+  };
 }
 
 function inApp(key: keyof typeof IN_APP_LABELS): FlowStep {
-  return { key, label: IN_APP_LABELS[key], node: null, location: "local", detail: "Inside OpenMeet" };
+  return {
+    key,
+    label: IN_APP_LABELS[key],
+    node: null,
+    location: "local",
+    detail: "Inside OpenMeet",
+  };
 }
 
 /** Audio input step: microphone and system audio combined. */
@@ -89,7 +107,12 @@ function audioStep(report: DataFlowReport): FlowStep {
   if (!mic && !sys) return stepFor(report, "microphone", "Microphone");
   const active = [mic, sys].filter((n): n is DataFlowNode => !!n && n.location !== "disabled");
   const names = active.map((n) => n.label);
-  const location: DataLocation = active.length === 0 ? "disabled" : active.some((n) => n.location === "remote") ? "remote" : "local";
+  const location: DataLocation =
+    active.length === 0
+      ? "disabled"
+      : active.some((n) => n.location === "remote")
+        ? "remote"
+        : "local";
   return {
     key: "audio",
     label: "Audio input",
@@ -120,7 +143,15 @@ export function screenFlow(report: DataFlowReport): FlowStep[] {
   ];
 }
 
-const SHOWN_IN_FLOWS: ReadonlyArray<Component> = ["microphone", "system_audio", "transcription", "llm", "screen", "vision", "overlay"];
+const SHOWN_IN_FLOWS: ReadonlyArray<Component> = [
+  "microphone",
+  "system_audio",
+  "transcription",
+  "llm",
+  "screen",
+  "vision",
+  "overlay",
+];
 
 /** Report nodes not drawn in the two flows (embeddings, storage, …). */
 export function otherNodes(report: DataFlowReport): DataFlowNode[] {

@@ -9,9 +9,22 @@ import { formatDateTime, formatDuration } from "@/lib/format";
 import { useLoader } from "../components/useLoader";
 import { useMain } from "../store";
 import { Badge, Banner, Button, ConfirmDialog, EmptyState, PageHeader, Spinner, Tabs } from "../ui";
-import { FollowupsTab, QaTab, ScreenTab, SummaryTab, TopicsTab, TranscriptTab } from "./history/DetailTabs";
+import {
+  FollowupsTab,
+  QaTab,
+  ScreenTab,
+  SummaryTab,
+  TopicsTab,
+  TranscriptTab,
+} from "./history/DetailTabs";
 import { ExportDialog } from "./history/ExportDialog";
-import { countLabel, listStateBadge, pageRangeLabel, pageRequest, splitPage } from "./history/helpers";
+import {
+  countLabel,
+  listStateBadge,
+  pageRangeLabel,
+  pageRequest,
+  splitPage,
+} from "./history/helpers";
 import { useHistoryNav } from "./history/historyNav";
 
 type DetailTab = "summary" | "transcript" | "qa" | "followups" | "topics" | "screen";
@@ -43,7 +56,15 @@ function MeetingList() {
   return (
     <>
       {error && (
-        <Banner tone="danger" title="Could not load your meetings" actions={<Button size="sm" onClick={loader.reload}>Retry</Button>}>
+        <Banner
+          tone="danger"
+          title="Could not load your meetings"
+          actions={
+            <Button size="sm" onClick={loader.reload}>
+              Retry
+            </Button>
+          }
+        >
           {error}
         </Banner>
       )}
@@ -73,10 +94,13 @@ function MeetingList() {
                     </div>
                     <div className="mt-0.5 text-[0.78rem] text-muted">
                       {formatDateTime(m.startedAt)} · {formatDuration(m.startedAt, m.endedAt)} ·{" "}
-                      {countLabel(m.questionCount, "question")} · {countLabel(m.segmentCount, "transcript line")}
+                      {countLabel(m.questionCount, "question")} ·{" "}
+                      {countLabel(m.segmentCount, "transcript line")}
                     </div>
                   </div>
-                  <span aria-hidden className="text-muted">›</span>
+                  <span aria-hidden className="text-muted">
+                    ›
+                  </span>
                 </button>
               </li>
             );
@@ -101,7 +125,9 @@ function MeetingList() {
 function MeetingDetail({ meetingId }: { meetingId: string }) {
   const closeMeeting = useHistoryNav((s) => s.closeMeeting);
   const notify = useMain((s) => s.notify);
-  const liveSummary = useMain((s) => (s.live.meeting?.id === meetingId ? s.live.lastSummary : null));
+  const liveSummary = useMain((s) =>
+    s.live.meeting?.id === meetingId ? s.live.lastSummary : null,
+  );
   const fetchMeeting = useCallback(() => api.getMeeting(meetingId), [meetingId]);
   const loader = useLoader(fetchMeeting);
   const record: MeetingRecord | null = loader.data;
@@ -134,7 +160,15 @@ function MeetingDetail({ meetingId }: { meetingId: string }) {
         <Button variant="ghost" size="sm" onClick={closeMeeting}>
           ← All meetings
         </Button>
-        <Banner tone="danger" title="Could not open this meeting" actions={<Button size="sm" onClick={loader.reload}>Retry</Button>}>
+        <Banner
+          tone="danger"
+          title="Could not open this meeting"
+          actions={
+            <Button size="sm" onClick={loader.reload}>
+              Retry
+            </Button>
+          }
+        >
           {error}
         </Banner>
       </>
@@ -181,13 +215,17 @@ function MeetingDetail({ meetingId }: { meetingId: string }) {
         }
       />
       <Tabs label="Meeting details" value={tab} tabs={tabs} onChange={setTab} />
-      {tab === "summary" && <SummaryTab record={record} summary={shownSummary} onSummary={setSummary} />}
+      {tab === "summary" && (
+        <SummaryTab record={record} summary={shownSummary} onSummary={setSummary} />
+      )}
       {tab === "transcript" && <TranscriptTab record={record} />}
       {tab === "qa" && <QaTab record={record} />}
       {tab === "followups" && <FollowupsTab record={record} />}
       {tab === "topics" && <TopicsTab record={record} />}
       {tab === "screen" && <ScreenTab record={record} />}
-      {exporting && <ExportDialog meetingId={m.id} meetingTitle={m.title} onClose={() => setExporting(false)} />}
+      {exporting && (
+        <ExportDialog meetingId={m.id} meetingTitle={m.title} onClose={() => setExporting(false)} />
+      )}
       <ConfirmDialog
         open={confirmDelete}
         title="Delete this meeting?"

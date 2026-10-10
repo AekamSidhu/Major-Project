@@ -108,7 +108,10 @@ export const useOverlay = create<OverlayStore>((set, get) => ({
         set({ clickThrough: cmd.enabled });
         break;
       case "OVERLAY_VISIBILITY_CHANGED":
-        set((s) => ({ visible: cmd.visible, resizeNonce: cmd.visible ? s.resizeNonce + 1 : s.resizeNonce }));
+        set((s) => ({
+          visible: cmd.visible,
+          resizeNonce: cmd.visible ? s.resizeNonce + 1 : s.resizeNonce,
+        }));
         if (!cmd.visible && get().askOpen) void get().closeAsk();
         break;
       case "SETTINGS_CHANGED":

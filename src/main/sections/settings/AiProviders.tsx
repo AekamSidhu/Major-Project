@@ -29,7 +29,11 @@ function Endpoint({ component }: { component: "vision" | "embeddings" }) {
   return (
     <div className="flex items-center gap-2 py-1 text-[0.8rem] text-muted" aria-live="polite">
       <span>{ep.url ? "Requests go to" : "Runs"}</span>
-      {ep.url ? <span className="font-mono text-fg-soft">{displayHost(ep.url)}</span> : <span>inside OpenMeet</span>}
+      {ep.url ? (
+        <span className="font-mono text-fg-soft">{displayHost(ep.url)}</span>
+      ) : (
+        <span>inside OpenMeet</span>
+      )}
       <LocationBadge location={ep.location} endpoint={ep.url ? displayHost(ep.url) : null} />
     </div>
   );
@@ -37,10 +41,12 @@ function Endpoint({ component }: { component: "vision" | "embeddings" }) {
 
 function LocalOnlyWarning({ component }: { component: "vision" | "embeddings" }) {
   const settings = useSettings();
-  if (!settings.privacy.localOnly || effectiveEndpoint(settings, component).location !== "remote") return null;
+  if (!settings.privacy.localOnly || effectiveEndpoint(settings, component).location !== "remote")
+    return null;
   return (
     <Banner tone="warn" title="Blocked by local-only mode">
-      This provider sends data off this device, so OpenMeet will not use it while local-only mode is on.
+      This provider sends data off this device, so OpenMeet will not use it while local-only mode is
+      on.
     </Banner>
   );
 }
@@ -64,10 +70,12 @@ function VisionForm() {
   };
 
   let modelHint: ReactNode;
-  if (models.error) modelHint = <span className="text-danger">Could not load models: {models.error}</span>;
+  if (models.error)
+    modelHint = <span className="text-danger">Could not load models: {models.error}</span>;
   else if (models.status) modelHint = models.status;
   else if (sameAsLlm && selfHosted)
-    modelHint = "Leave empty to use the language model if it accepts images; otherwise name a vision model (e.g. llava, qwen2.5vl).";
+    modelHint =
+      "Leave empty to use the language model if it accepts images; otherwise name a vision model (e.g. llava, qwen2.5vl).";
   else if (sameAsLlm) modelHint = "Leave empty to use the same model as the language model.";
   else if (selfHosted) modelHint = "A vision-capable model, e.g. llava or qwen2.5vl.";
   else modelHint = "Leave empty to use the provider's default model.";
@@ -82,7 +90,12 @@ function VisionForm() {
         value={v.provider}
         onChange={select}
         columns={3}
-        options={VISION_PROVIDERS.map((p) => ({ value: p.value, label: p.label, description: p.description, location: p.location }))}
+        options={VISION_PROVIDERS.map((p) => ({
+          value: p.value,
+          label: p.label,
+          description: p.description,
+          location: p.location,
+        }))}
       />
       <Endpoint component="vision" />
       <LocalOnlyWarning component="vision" />
@@ -133,14 +146,17 @@ function VisionForm() {
               })
             }
           />
-          {choice.secret && <ApiKeyField provider={choice.secret} optional={v.provider === "openai_compatible"} />}
+          {choice.secret && (
+            <ApiKeyField provider={choice.secret} optional={v.provider === "openai_compatible"} />
+          )}
           <TestConnection component="vision" />
         </>
       )}
       {v.provider === "ocr_only" && (
         <p className="py-2.5 text-[0.8rem] text-muted">
-          OpenMeet reads text from the shared screen with the operating system's built-in text recognition (Windows) and
-          summarizes it without an AI model. Diagrams and images are not interpreted.
+          OpenMeet reads text from the shared screen with the operating system's built-in text
+          recognition (Windows) and summarizes it without an AI model. Diagrams and images are not
+          interpreted.
         </p>
       )}
     </Section>
@@ -164,7 +180,8 @@ function EmbeddingsForm() {
   };
 
   let modelHint: ReactNode;
-  if (models.error) modelHint = <span className="text-danger">Could not load models: {models.error}</span>;
+  if (models.error)
+    modelHint = <span className="text-danger">Could not load models: {models.error}</span>;
   else if (models.status) modelHint = models.status;
   else if (e.provider === "ollama") modelHint = "Pull it first, e.g. ollama pull nomic-embed-text.";
 
@@ -177,7 +194,12 @@ function EmbeddingsForm() {
         label="Embeddings provider"
         value={e.provider}
         onChange={select}
-        options={EMBEDDING_PROVIDERS.map((p) => ({ value: p.value, label: p.label, description: p.description, location: p.location }))}
+        options={EMBEDDING_PROVIDERS.map((p) => ({
+          value: p.value,
+          label: p.label,
+          description: p.description,
+          location: p.location,
+        }))}
       />
       <Endpoint component="embeddings" />
       <LocalOnlyWarning component="embeddings" />
@@ -229,7 +251,10 @@ export function AiProvidersSection() {
         title="AI providers"
         description="Choose where suggestions are generated. Local providers keep meeting data on this computer; cloud providers receive the transcript excerpts needed for each request."
       />
-      <Section title="Language model" description="Generates answers, follow-up questions and summaries.">
+      <Section
+        title="Language model"
+        description="Generates answers, follow-up questions and summaries."
+      >
         <LlmProviderForm />
       </Section>
       <VisionForm />

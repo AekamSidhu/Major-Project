@@ -118,12 +118,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 |---|---|---|---|
 | Overlay, hotkeys, tray | ✅ | ✅ | ✅ (depends on window manager for always-on-top / focus behaviour) |
 | Microphone | ✅ | ✅ | ✅ |
-| System / meeting audio | ✅ WASAPI loopback | ⚠️ where the OS allows; otherwise via a virtual device such as BlackHole | ✅ PulseAudio / PipeWire monitor sources |
+| System / meeting audio | ✅ WASAPI loopback | ⚠️ macOS 14.6+ (Core Audio process tap, System Audio Recording permission); older versions need a virtual device such as BlackHole | ✅ PulseAudio / PipeWire monitor sources |
 | Screen context | ✅ | ✅ (Screen Recording permission) | ✅ X11; Wayland via portal where supported |
 | Local OCR | ✅ Windows.Media.Ocr | ➖ use a vision model | ➖ use a vision model |
 | Capture exclusion | ✅ Windows 10 2004+ | ⚠️ best effort | ❌ not supported |
 
-Windows is the primary development and test platform.
+Windows is the primary development platform and the only one verified on real hardware so far (capture, loopback audio, OCR, capture exclusion, hotkeys). CI compiles and runs the test suites on Windows, macOS and Linux; platform-specific behaviour on macOS and Linux still needs hands-on testing — reports are welcome.
 
 ## Installation
 

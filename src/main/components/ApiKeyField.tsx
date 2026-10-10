@@ -9,7 +9,13 @@ import { Button, Field, StatusDot, TextInput } from "../ui";
 import { SECRET_LABELS, useApiKeys } from "./apiKeys";
 import { validateApiKey } from "./validation";
 
-export function ApiKeyField({ provider, optional = false }: { provider: SecretProvider; optional?: boolean }) {
+export function ApiKeyField({
+  provider,
+  optional = false,
+}: {
+  provider: SecretProvider;
+  optional?: boolean;
+}) {
   const id = useId();
   const statusId = `${id}-status`;
   const status = useApiKeys((s) => s.statuses[provider]);
@@ -65,7 +71,8 @@ export function ApiKeyField({ provider, optional = false }: { provider: SecretPr
 
   let statusLine: ReactNode;
   if (!loaded) statusLine = <span className="text-muted">Checking…</span>;
-  else if (loadError && !status) statusLine = <span className="text-danger">Key status unavailable: {loadError}</span>;
+  else if (loadError && !status)
+    statusLine = <span className="text-danger">Key status unavailable: {loadError}</span>;
   else if (status?.source === "keychain")
     statusLine = (
       <span className="inline-flex items-center gap-1.5 text-fg-soft">
@@ -75,7 +82,8 @@ export function ApiKeyField({ provider, optional = false }: { provider: SecretPr
   else if (status?.source === "environment")
     statusLine = (
       <span className="inline-flex items-center gap-1.5 text-fg-soft">
-        <StatusDot tone="ok" /> Read from the environment variable <code className="font-mono">{status.envVar}</code>
+        <StatusDot tone="ok" /> Read from the environment variable{" "}
+        <code className="font-mono">{status.envVar}</code>
       </span>
     );
   else
@@ -125,11 +133,21 @@ export function ApiKeyField({ provider, optional = false }: { provider: SecretPr
           }}
           className="font-mono"
         />
-        <Button type="submit" variant="secondary" busy={busy === "save"} disabled={key.trim() === "" || busy !== null}>
+        <Button
+          type="submit"
+          variant="secondary"
+          busy={busy === "save"}
+          disabled={key.trim() === "" || busy !== null}
+        >
           Save key
         </Button>
         {status?.source === "keychain" && (
-          <Button variant="ghost" busy={busy === "clear"} disabled={busy !== null} onClick={() => void onClear()}>
+          <Button
+            variant="ghost"
+            busy={busy === "clear"}
+            disabled={busy !== null}
+            onClick={() => void onClear()}
+          >
             Remove
           </Button>
         )}

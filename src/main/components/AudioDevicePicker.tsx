@@ -22,7 +22,15 @@ export function useAudioDevices() {
 }
 
 /** Horizontal level meter (0..1). */
-export function LevelMeter({ level, label, active }: { level: number; label: string; active: boolean }) {
+export function LevelMeter({
+  level,
+  label,
+  active,
+}: {
+  level: number;
+  label: string;
+  active: boolean;
+}) {
   const clamped = Math.max(0, Math.min(1, level));
   // Perceptual scaling: speech sits around 0.05–0.3 linear.
   const shown = active ? Math.sqrt(clamped) : 0;
@@ -38,7 +46,10 @@ export function LevelMeter({ level, label, active }: { level: number; label: str
       className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2"
     >
       <div
-        className={cx("h-full rounded-full transition-[width] duration-100", clamped > 0.9 ? "bg-warn" : "bg-ok")}
+        className={cx(
+          "h-full rounded-full transition-[width] duration-100",
+          clamped > 0.9 ? "bg-warn" : "bg-ok",
+        )}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -53,7 +64,10 @@ function LevelTest({ source, device }: { source: AudioSourceKind; device: string
   const [error, setError] = useState<string | null>(null);
   const [silent, setSilent] = useState(false);
   const heard = useRef(false);
-  const timers = useRef<{ stop: number | null; silence: number | null }>({ stop: null, silence: null });
+  const timers = useRef<{ stop: number | null; silence: number | null }>({
+    stop: null,
+    silence: null,
+  });
 
   useEffect(() => {
     if (testing && level > 0.02) heard.current = true;
@@ -67,7 +81,11 @@ function LevelTest({ source, device }: { source: AudioSourceKind; device: string
       if (t.silence !== null) window.clearTimeout(t.silence);
       if (useAudioTest.getState().testing === source) {
         useAudioTest.setState({ testing: null });
-        api.stopAudioTest().catch((e: unknown) => useMain.getState().notify("error", `Audio test: ${errorMessage(e)}`));
+        api
+          .stopAudioTest()
+          .catch((e: unknown) =>
+            useMain.getState().notify("error", `Audio test: ${errorMessage(e)}`),
+          );
       }
     };
   }, [source]);
@@ -139,14 +157,23 @@ function LevelTest({ source, device }: { source: AudioSourceKind; device: string
         )}
       </div>
       <div role="status" aria-live="polite" className="mt-1 text-[0.76rem] text-muted">
-        {testing && !silent && (source === "microphone" ? "Speak normally — the bar should move." : "Play some audio — the bar should move.")}
+        {testing &&
+          !silent &&
+          (source === "microphone"
+            ? "Speak normally — the bar should move."
+            : "Play some audio — the bar should move.")}
         {testing && silent && (
           <span className="text-warn">
-            No sound detected yet. Check that the right device is selected and that OpenMeet may use it in your system's privacy settings.
+            No sound detected yet. Check that the right device is selected and that OpenMeet may use
+            it in your system's privacy settings.
           </span>
         )}
       </div>
-      {error && <p role="alert" className="mt-1 text-[0.78rem] text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-1 text-[0.78rem] text-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -215,7 +242,15 @@ export function AudioSourceSettings({ source, devices, hideToggle }: AudioSource
               id={selectId}
               value={device ?? ""}
               disabled={!devices || (!enabled && !hideToggle)}
-              options={devices ? deviceOptions(list, device, isMic ? "System default microphone" : "System default output") : [{ value: device ?? "", label: "Loading devices…" }]}
+              options={
+                devices
+                  ? deviceOptions(
+                      list,
+                      device,
+                      isMic ? "System default microphone" : "System default output",
+                    )
+                  : [{ value: device ?? "", label: "Loading devices…" }]
+              }
               onChange={(v) =>
                 void saveSettings((d) => {
                   if (isMic) d.audio.microphoneDevice = v === "" ? null : v;
@@ -256,5 +291,9 @@ export function AudioDevicesStatus({ loader }: { loader: ReturnType<typeof useAu
 
 export function AudioDevicesError({ error }: { error: string | null }) {
   if (!error) return null;
-  return <Banner tone="danger" title="Audio devices unavailable">{error}</Banner>;
+  return (
+    <Banner tone="danger" title="Audio devices unavailable">
+      {error}
+    </Banner>
+  );
 }

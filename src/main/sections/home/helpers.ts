@@ -30,7 +30,12 @@ export type Tone = "neutral" | "accent" | "ok" | "warn" | "danger";
 // Meeting state
 // ---------------------------------------------------------------------------
 
-const LIVE_STATES: ReadonlySet<MeetingState> = new Set<MeetingState>(["starting", "active", "paused", "stopping"]);
+const LIVE_STATES: ReadonlySet<MeetingState> = new Set<MeetingState>([
+  "starting",
+  "active",
+  "paused",
+  "stopping",
+]);
 
 /** The meeting is running (capture may be on or paused). */
 export function isLiveState(state: MeetingState): boolean {
@@ -43,10 +48,15 @@ export type HomeView = "start" | "live" | "completed";
  * Which Home page to show: the live meeting, the summary of the meeting that
  * just ended (until dismissed), or the start flow.
  */
-export function homeView(meeting: Meeting | null, state: MeetingState, dismissedId: string | null): HomeView {
+export function homeView(
+  meeting: Meeting | null,
+  state: MeetingState,
+  dismissedId: string | null,
+): HomeView {
   if (!meeting) return "start";
   if (isLiveState(state)) return "live";
-  if ((state === "summarizing" || state === "completed") && meeting.id !== dismissedId) return "completed";
+  if ((state === "summarizing" || state === "completed") && meeting.id !== dismissedId)
+    return "completed";
   return "start";
 }
 
@@ -60,7 +70,8 @@ export function meetingStateBadge(
   processingStopped: boolean,
   pausedReason: PauseReason | null,
 ): { label: string; tone: Tone } {
-  if (processingStopped || pausedReason === "emergency") return { label: "Processing stopped", tone: "danger" };
+  if (processingStopped || pausedReason === "emergency")
+    return { label: "Processing stopped", tone: "danger" };
   switch (state) {
     case "starting":
       return { label: "Starting…", tone: "neutral" };
@@ -109,7 +120,8 @@ export function speakerLabel(role: SpeakerRole, mode: Mode): string {
  * timestamps so the UI never shows absurd offsets.
  */
 export function segmentOffset(time: number, meetingStartedAt: number | null): number {
-  if (meetingStartedAt !== null && time >= 1e12 && time >= meetingStartedAt) return time - meetingStartedAt;
+  if (meetingStartedAt !== null && time >= 1e12 && time >= meetingStartedAt)
+    return time - meetingStartedAt;
   return Math.max(0, time);
 }
 
@@ -132,7 +144,10 @@ export const GROUP_GAP_MS = 45_000;
  * speaker into blocks (one label per block). Partials stay in place so the
  * in-progress utterance is shown where it started.
  */
-export function groupTranscript(segments: ReadonlyArray<TranscriptSegment>, mode: Mode): TranscriptGroup[] {
+export function groupTranscript(
+  segments: ReadonlyArray<TranscriptSegment>,
+  mode: Mode,
+): TranscriptGroup[] {
   const ordered = segments
     .map((s, i) => ({ s, i }))
     .sort((a, b) => a.s.startTime - b.s.startTime || a.i - b.i)
@@ -176,7 +191,9 @@ export function isNearBottom(
  * hiding questions that a later detection extended (`supersedes`).
  */
 export function visibleQuestions(questions: ReadonlyArray<DetectedQuestion>): DetectedQuestion[] {
-  const superseded = new Set(questions.map((q) => q.supersedes).filter((id): id is string => id !== null));
+  const superseded = new Set(
+    questions.map((q) => q.supersedes).filter((id): id is string => id !== null),
+  );
   return questions
     .filter((q) => q.isQuestion && !superseded.has(q.id))
     .slice()
@@ -233,7 +250,11 @@ export function componentSection(c: Component): SectionId {
   }
 }
 
-const WARNING_RANK: Partial<Record<ComponentStatus, number>> = { error: 0, degraded: 1, unsupported: 2 };
+const WARNING_RANK: Partial<Record<ComponentStatus, number>> = {
+  error: 0,
+  degraded: 1,
+  unsupported: 2,
+};
 
 /** Components in error / degraded / unsupported state, most severe first. */
 export function componentWarnings(list: ReadonlyArray<ComponentHealth>): ComponentHealth[] {
@@ -247,7 +268,10 @@ export function componentWarnings(list: ReadonlyArray<ComponentHealth>): Compone
     );
 }
 
-export function healthOf(list: ReadonlyArray<ComponentHealth>, c: Component): ComponentHealth | undefined {
+export function healthOf(
+  list: ReadonlyArray<ComponentHealth>,
+  c: Component,
+): ComponentHealth | undefined {
   return list.find((h) => h.component === c);
 }
 
@@ -283,7 +307,10 @@ const SCREEN_ON: ReadonlySet<ComponentStatus> = new Set<ComponentStatus>([
 ]);
 
 /** Screen context is on for the running meeting (health wins over the saved setting). */
-export function screenContextOn(components: ReadonlyArray<ComponentHealth>, settings: Settings): boolean {
+export function screenContextOn(
+  components: ReadonlyArray<ComponentHealth>,
+  settings: Settings,
+): boolean {
   const h = healthOf(components, "screen");
   if (h) return SCREEN_ON.has(h.status);
   return settings.screen.enabled;
@@ -343,7 +370,10 @@ export function retentionLabel(r: RetentionPolicy): string {
 // Screen source selection
 // ---------------------------------------------------------------------------
 
-export const SCREEN_KINDS: ReadonlyArray<{ value: Exclude<ScreenSourceKind, "region">; label: string }> = [
+export const SCREEN_KINDS: ReadonlyArray<{
+  value: Exclude<ScreenSourceKind, "region">;
+  label: string;
+}> = [
   { value: "display", label: "Display" },
   { value: "window", label: "Window" },
   { value: "application", label: "Application" },
@@ -373,8 +403,14 @@ export function parseRegion(
     return { rect: null, error: "Enter the region as four whole numbers: x, y, width, height." };
   }
   const [x, y, width, height] = parts.map(Number) as [number, number, number, number];
-  if (width < 16 || height < 16) return { rect: null, error: "The region must be at least 16 × 16 pixels." };
-  if (bounds && bounds.width > 0 && bounds.height > 0 && (x + width > bounds.width || y + height > bounds.height)) {
+  if (width < 16 || height < 16)
+    return { rect: null, error: "The region must be at least 16 × 16 pixels." };
+  if (
+    bounds &&
+    bounds.width > 0 &&
+    bounds.height > 0 &&
+    (x + width > bounds.width || y + height > bounds.height)
+  ) {
     return {
       rect: null,
       error: `The region must fit inside the display (${bounds.width} × ${bounds.height}).`,
@@ -402,7 +438,8 @@ export function sourceOptionLabel(info: ScreenSourceInfo): string {
     if (info.application && info.application !== info.title) parts.push(info.application);
   } else {
     parts.push(info.label);
-    if (info.width > 0 && info.height > 0 && info.kind === "display") parts.push(`${info.width} × ${info.height}`);
+    if (info.width > 0 && info.height > 0 && info.kind === "display")
+      parts.push(`${info.width} × ${info.height}`);
     if (info.isPrimary) parts.push("primary");
   }
   if (info.excludedByRule) parts.push("excluded by a privacy rule");
@@ -453,7 +490,10 @@ export function validateStartForm(form: StartForm, systemAudioSupported: boolean
   return null;
 }
 
-export function buildStartRequest(form: StartForm, systemAudioSupported: boolean): StartMeetingRequest {
+export function buildStartRequest(
+  form: StartForm,
+  systemAudioSupported: boolean,
+): StartMeetingRequest {
   const title = form.title.trim();
   return {
     mode: form.mode,

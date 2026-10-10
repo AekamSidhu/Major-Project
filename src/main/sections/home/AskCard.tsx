@@ -16,7 +16,11 @@ interface ShortcutInfo {
   problem: string | null;
 }
 
-function shortcutInfo(action: ShortcutAction, statuses: ShortcutStatus[] | null, settings: Settings): ShortcutInfo {
+function shortcutInfo(
+  action: ShortcutAction,
+  statuses: ShortcutStatus[] | null,
+  settings: Settings,
+): ShortcutInfo {
   const st = statuses?.find((s) => s.action === action);
   if (st) {
     return {
@@ -50,28 +54,35 @@ export function AskCard({ settings }: { settings: Settings }) {
   };
 
   return (
-    <section aria-labelledby={headingId} className="rounded-lg border border-border bg-surface px-4 py-3.5">
+    <section
+      aria-labelledby={headingId}
+      className="rounded-lg border border-border bg-surface px-4 py-3.5"
+    >
       <h2 id={headingId} className="text-[0.92rem] font-semibold text-fg">
         Ask OpenMeet
       </h2>
       <p className="mt-1 text-[0.8rem] leading-relaxed text-fg-soft">
         {ask.accelerator ? (
           <>
-            Press <Kbd>{formatAccelerator(ask.accelerator)}</Kbd> anywhere to ask a question in the overlay — it works
-            without a meeting, too.
+            Press <Kbd>{formatAccelerator(ask.accelerator)}</Kbd> anywhere to ask a question in the
+            overlay — it works without a meeting, too.
           </>
         ) : (
           <>Assign a shortcut to ask questions from anywhere — it works without a meeting, too.</>
         )}
       </p>
-      {ask.problem && <p className="mt-1.5 text-[0.78rem] text-warn">Shortcut unavailable: {ask.problem}</p>}
+      {ask.problem && (
+        <p className="mt-1.5 text-[0.78rem] text-warn">Shortcut unavailable: {ask.problem}</p>
+      )}
       {overlay.accelerator && (
         <p className="mt-2 text-[0.78rem] text-muted">
           Show or hide the overlay with <Kbd>{formatAccelerator(overlay.accelerator)}</Kbd>.
         </p>
       )}
       {statuses.error && (
-        <p className="mt-1.5 text-[0.78rem] text-muted">Shortcut status unavailable: {statuses.error}</p>
+        <p className="mt-1.5 text-[0.78rem] text-muted">
+          Shortcut status unavailable: {statuses.error}
+        </p>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button size="sm" busy={busy} onClick={() => void openOverlay()}>

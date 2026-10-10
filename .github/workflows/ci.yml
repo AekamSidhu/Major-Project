@@ -26,6 +26,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npx prettier --check "src/**/*.{ts,tsx,css}"
       - run: npx tsc -p tsconfig.json --noEmit
       - run: npx tsc -p tsconfig.node.json --noEmit
       - run: npx eslint .
@@ -62,7 +63,11 @@ jobs:
       - run: npm ci && npx vite build
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      # The app crate is tested on its own: on Windows its build script places a
+      # stub msvcrt.lib (static VC runtime) on the link path, and cargo passes
+      # that path to every doctest built in the same invocation.
+      - run: cargo test --workspace --exclude openmeet
+      - run: cargo test -p openmeet
       - name: TypeScript bindings are up to date
         if: runner.os == 'Linux'
         run: |

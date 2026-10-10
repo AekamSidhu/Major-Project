@@ -4,13 +4,23 @@ import { useMemo, type ReactNode } from "react";
 import { parseAnswer } from "@/lib/answer";
 
 function Label({ children }: { children: ReactNode }) {
-  return <div className="mb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">{children}</div>;
+  return (
+    <div className="mb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
+      {children}
+    </div>
+  );
 }
 
 export function SuggestionContent({ content }: { content: string }) {
   const a = useMemo(() => parseAnswer(content), [content]);
   const hasAny =
-    a.answer || a.structure.length || a.keyPoints.length || a.example || a.followUp || a.caveat || a.clarify.length;
+    a.answer ||
+    a.structure.length ||
+    a.keyPoints.length ||
+    a.example ||
+    a.followUp ||
+    a.caveat ||
+    a.clarify.length;
   if (!hasAny && !a.preamble) {
     return <p className="text-[0.82rem] text-muted italic">No text was generated.</p>;
   }
@@ -72,7 +82,9 @@ export function SuggestionContent({ content }: { content: string }) {
       )}
       {a.basis && (
         <details className="group text-[0.8rem]">
-          <summary className="cursor-pointer text-muted select-none hover:text-fg-soft">Reasoning</summary>
+          <summary className="cursor-pointer text-muted select-none hover:text-fg-soft">
+            Reasoning
+          </summary>
           <p className="mt-1 whitespace-pre-line text-fg-soft">{a.basis}</p>
         </details>
       )}

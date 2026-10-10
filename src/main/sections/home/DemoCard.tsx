@@ -30,7 +30,10 @@ export function DemoCard() {
   };
 
   return (
-    <section aria-labelledby={headingId} className="rounded-lg border border-border bg-surface px-4 py-3.5">
+    <section
+      aria-labelledby={headingId}
+      className="rounded-lg border border-border bg-surface px-4 py-3.5"
+    >
       <div className="flex items-center gap-2">
         <Icon name="sparkle" className="text-accent" />
         <h2 id={headingId} className="text-[0.92rem] font-semibold text-fg">
@@ -38,8 +41,8 @@ export function DemoCard() {
         </h2>
       </div>
       <p className="mt-1 text-[0.8rem] text-muted">
-        See the whole experience with a scripted conversation and simulated AI. No microphone, account or network
-        needed — demo meetings are not saved.
+        See the whole experience with a scripted conversation and simulated AI. No microphone,
+        account or network needed — demo meetings are not saved.
       </p>
 
       {scenarios.loading && !scenarios.data && (
@@ -56,7 +59,9 @@ export function DemoCard() {
         </div>
       )}
       {scenarios.data && scenarios.data.length === 0 && (
-        <p className="mt-3 text-[0.8rem] text-muted">No demo scenarios are available in this build.</p>
+        <p className="mt-3 text-[0.8rem] text-muted">
+          No demo scenarios are available in this build.
+        </p>
       )}
       {scenarios.data && scenarios.data.length > 0 && (
         <ul className="mt-2 divide-y divide-border">

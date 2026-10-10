@@ -15,7 +15,7 @@
 
 ## Checklist
 
-- [ ] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+- [ ] `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --exclude openmeet` and `cargo test -p openmeet`
 - [ ] `npx tsc -p tsconfig.json --noEmit`, `npx eslint .`, `npx vitest run`, `npx vite build`
 - [ ] Tests added or updated (no network / keys / hardware required)
 - [ ] TypeScript bindings regenerated if IPC types changed (`npm run bindings`)

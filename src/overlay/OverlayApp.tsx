@@ -110,12 +110,21 @@ function Header() {
     <header
       data-tauri-drag-region
       onMouseDown={onDragStart}
-      className={cx("flex items-center gap-1.5 select-none", PAD_X, "py-[calc(var(--om-space)*0.4rem)]")}
+      className={cx(
+        "flex items-center gap-1.5 select-none",
+        PAD_X,
+        "py-[calc(var(--om-space)*0.4rem)]",
+      )}
     >
       <span data-tauri-drag-region className="cursor-grab text-muted" aria-hidden>
         <GripIcon />
       </span>
-      <span data-tauri-drag-region className="flex min-w-0 items-center gap-1.5" role="status" aria-live="polite">
+      <span
+        data-tauri-drag-region
+        className="flex min-w-0 items-center gap-1.5"
+        role="status"
+        aria-live="polite"
+      >
         <Dot tone={status.tone} pulse={status.pulse} />
         <span data-tauri-drag-region className="truncate text-[0.78rem] font-medium text-fg-soft">
           {expanded ? status.label : hudLabel(core)}
@@ -144,13 +153,18 @@ function Header() {
                 ? "Hidden from screen capture (where the OS supports it)"
                 : "Visible to screen capture"
           }
-          className={cx(privacy.active ? "text-ok" : privacy.supported ? "text-muted" : "text-warn")}
+          className={cx(
+            privacy.active ? "text-ok" : privacy.supported ? "text-muted" : "text-warn",
+          )}
         >
           <ShieldIcon variant={privacy.active ? "on" : privacy.supported ? "off" : "warn"} />
         </span>
       )}
       <IconButton
-        label={withHotkey(clickThrough ? "Click-through is on — turn off" : "Turn on click-through", clickKey)}
+        label={withHotkey(
+          clickThrough ? "Click-through is on — turn off" : "Turn on click-through",
+          clickKey,
+        )}
         tone={clickThrough ? "accent" : "default"}
         onClick={() => void setClickThrough(!clickThrough)}
       >
@@ -184,9 +198,14 @@ function Header() {
 function StoppedBanner() {
   const reason = useOverlay((s) => s.core.stopReason);
   return (
-    <div role="alert" className="space-y-1.5 rounded-md border border-danger/50 bg-danger-soft px-2.5 py-2">
+    <div
+      role="alert"
+      className="space-y-1.5 rounded-md border border-danger/50 bg-danger-soft px-2.5 py-2"
+    >
       <p className="text-[0.78rem] font-semibold tracking-wider text-danger">PROCESSING STOPPED</p>
-      <p className="text-[0.8rem] text-fg-soft">{reason ?? "Audio, screen and AI processing are halted."}</p>
+      <p className="text-[0.8rem] text-fg-soft">
+        {reason ?? "Audio, screen and AI processing are halted."}
+      </p>
       <ActionButton onClick={() => void resumeMeeting()}>
         <PlayIcon /> Resume
       </ActionButton>
@@ -200,7 +219,9 @@ function Notices() {
   useEffect(() => {
     const timers = notices
       .filter((n) => n.level === "info")
-      .map((n) => window.setTimeout(() => dispatch({ type: "LOCAL_DISMISS_NOTICE", id: n.id }), 5000));
+      .map((n) =>
+        window.setTimeout(() => dispatch({ type: "LOCAL_DISMISS_NOTICE", id: n.id }), 5000),
+      );
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [notices, dispatch]);
   if (notices.length === 0) return null;
@@ -212,7 +233,11 @@ function Notices() {
           role={n.level === "error" ? "alert" : "status"}
           className={cx(
             "flex items-start gap-1.5 rounded-md px-2 py-1 text-[0.78rem]",
-            n.level === "error" ? "bg-danger-soft text-danger" : n.level === "warning" ? "text-warn" : "text-fg-soft",
+            n.level === "error"
+              ? "bg-danger-soft text-danger"
+              : n.level === "warning"
+                ? "text-warn"
+                : "text-fg-soft",
           )}
         >
           <span className="min-w-0 flex-1">{n.message}</span>
@@ -240,7 +265,9 @@ function ComponentWarning() {
       <span className="min-w-0 flex-1 truncate" title={worst.message ?? undefined}>
         {componentLabel(worst.component)}: {worst.message ?? worst.status}
       </span>
-      <LinkButton onClick={() => void openMainWindow(componentSection(worst.component))}>Fix</LinkButton>
+      <LinkButton onClick={() => void openMainWindow(componentSection(worst.component))}>
+        Fix
+      </LinkButton>
     </div>
   );
 }
@@ -250,8 +277,12 @@ function Ticker() {
   const mode = useOverlay((s) => s.core.mode);
   if (!ticker) return null;
   return (
-    <p className={cx("truncate text-[0.74rem] text-muted", !ticker.isFinal && "italic")} title={ticker.text}>
-      <span className="font-medium">{speakerLabel(ticker.speakerRole, mode)}:</span> {tickerText(ticker.text, 120)}
+    <p
+      className={cx("truncate text-[0.74rem] text-muted", !ticker.isFinal && "italic")}
+      title={ticker.text}
+    >
+      <span className="font-medium">{speakerLabel(ticker.speakerRole, mode)}:</span>{" "}
+      {tickerText(ticker.text, 120)}
     </p>
   );
 }
@@ -262,7 +293,12 @@ function Pinned() {
   if (pinned.length === 0) return null;
   return (
     <section aria-label="Pinned suggestions">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex items-center gap-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1"
+      >
         <SectionLabel>{`Pinned (${pinned.length}) ${open ? "▾" : "▸"}`}</SectionLabel>
       </button>
       {open && (
@@ -273,7 +309,9 @@ function Pinned() {
             return (
               <li key={s.id} className="rounded-md border border-border px-2 py-1">
                 <div className="flex items-start gap-1">
-                  <p className="min-w-0 flex-1 text-[0.78rem] font-medium text-fg-soft">{suggestionTitle(s)}</p>
+                  <p className="min-w-0 flex-1 text-[0.78rem] font-medium text-fg-soft">
+                    {suggestionTitle(s)}
+                  </p>
                   <button
                     type="button"
                     aria-label="Unpin"
@@ -361,7 +399,13 @@ function Body() {
   const interviewer = core.mode === "interviewer";
 
   return (
-    <div className={cx("min-h-0 flex-1 space-y-[calc(var(--om-space)*0.7rem)] overflow-y-auto", PAD_X, "pb-[calc(var(--om-space)*0.7rem)]")}>
+    <div
+      className={cx(
+        "min-h-0 flex-1 space-y-[calc(var(--om-space)*0.7rem)] overflow-y-auto",
+        PAD_X,
+        "pb-[calc(var(--om-space)*0.7rem)]",
+      )}
+    >
       {core.processingStopped && <StoppedBanner />}
       <Notices />
       {!core.processingStopped && <ComponentWarning />}
@@ -369,13 +413,17 @@ function Body() {
       {core.pendingQuestion && (!p || p.questionId !== core.pendingQuestion.id) && !interviewer && (
         <div className="om-fade-in">
           <SectionLabel>Question detected</SectionLabel>
-          <p className="mt-0.5 text-[0.88rem] font-medium text-fg">“{core.pendingQuestion.question}”</p>
+          <p className="mt-0.5 text-[0.88rem] font-medium text-fg">
+            “{core.pendingQuestion.question}”
+          </p>
           {!core.pendingQuestion.requiresResponse && (
             <p className="mt-0.5 text-[0.74rem] text-muted">Asked by you — no answer suggested.</p>
           )}
           {core.pendingQuestion.requiresResponse && (
             <div className="mt-1">
-              <ActionButton onClick={() => void generateAnswer(core.pendingQuestion?.question ?? null)}>
+              <ActionButton
+                onClick={() => void generateAnswer(core.pendingQuestion?.question ?? null)}
+              >
                 Suggest an answer
               </ActionButton>
             </div>

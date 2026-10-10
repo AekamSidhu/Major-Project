@@ -37,7 +37,8 @@ Run all quality gates (CI runs the same):
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test --workspace --exclude openmeet
+cargo test -p openmeet
 npx tsc -p tsconfig.json --noEmit
 npx eslint .
 npx vitest run

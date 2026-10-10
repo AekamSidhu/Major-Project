@@ -63,7 +63,9 @@ export function ScreenSection() {
       {visionOff && (
         <Banner tone="warn" title="Screen understanding is off">
           Frames would be captured but not interpreted.{" "}
-          <LinkButton onClick={() => setSection("settings/ai")}>Choose a vision provider</LinkButton>
+          <LinkButton onClick={() => setSection("settings/ai")}>
+            Choose a vision provider
+          </LinkButton>
         </Banner>
       )}
       <Section>
@@ -88,7 +90,10 @@ export function ScreenSection() {
           />
         </div>
         {live && screen.enabled && (
-          <Field label="Capture now" description="Grabs one frame immediately, even in manual mode.">
+          <Field
+            label="Capture now"
+            description="Grabs one frame immediately, even in manual mode."
+          >
             <Button onClick={() => void captureNow()} busy={capturing}>
               Capture now
             </Button>
@@ -96,13 +101,17 @@ export function ScreenSection() {
         )}
       </Section>
 
-      <Section title="Sampling" description="Frames are compared first; only meaningful changes are interpreted.">
+      <Section
+        title="Sampling"
+        description="Frames are compared first; only meaningful changes are interpreted."
+      >
         <SelectSetting
           label="Frequency"
           description={
             captureKey ? (
               <>
-                In any mode, <Kbd>{formatAccelerator(captureKey)}</Kbd> captures the screen on demand.
+                In any mode, <Kbd>{formatAccelerator(captureKey)}</Kbd> captures the screen on
+                demand.
               </>
             ) : undefined
           }

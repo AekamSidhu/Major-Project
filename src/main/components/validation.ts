@@ -49,7 +49,9 @@ export function parseIntegerInRange(
 export function validateLanguageCode(code: string): string | null {
   const t = code.trim().toLowerCase();
   if (t === "") return "Enter a language code such as en or de.";
-  return /^[a-z]{2,3}$/.test(t) ? null : "Use a two- or three-letter ISO language code, e.g. en or de.";
+  return /^[a-z]{2,3}$/.test(t)
+    ? null
+    : "Use a two- or three-letter ISO language code, e.g. en or de.";
 }
 
 /** API keys are opaque, but never contain whitespace. */
@@ -65,10 +67,14 @@ export function validateApiKey(key: string): string | null {
 export function parseRegion(raw: string): { ok: true; rect: Rect } | { ok: false; error: string } {
   const parts = raw.split(",").map((p) => p.trim());
   if (parts.length !== 4 || parts.some((p) => !/^\d+$/.test(p))) {
-    return { ok: false, error: "Enter the region as x,y,width,height in pixels, e.g. 0,0,800,600." };
+    return {
+      ok: false,
+      error: "Enter the region as x,y,width,height in pixels, e.g. 0,0,800,600.",
+    };
   }
   const [x, y, width, height] = parts.map(Number) as [number, number, number, number];
-  if (width <= 0 || height <= 0) return { ok: false, error: "Width and height must be greater than zero." };
+  if (width <= 0 || height <= 0)
+    return { ok: false, error: "Width and height must be greater than zero." };
   return { ok: true, rect: { x, y, width, height } };
 }
 
@@ -87,7 +93,8 @@ export function normalizeRuleValue(
   switch (type) {
     case "application":
       if (t === "") return { ok: false, error: "Enter an application name, e.g. 1Password." };
-      if (t.length > 200) return { ok: false, error: "Keep the application name under 200 characters." };
+      if (t.length > 200)
+        return { ok: false, error: "Keep the application name under 200 characters." };
       return { ok: true, value: t };
     case "window":
       if (t === "") return { ok: false, error: "Enter text that appears in the window title." };
@@ -97,7 +104,8 @@ export function normalizeRuleValue(
       if (t === "") return { ok: false, error: "Enter a domain, e.g. bank.example.com." };
       let host = t.toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
       host = (host.split(/[/?#]/)[0] ?? "").replace(/:\d+$/, "").replace(/\.$/, "");
-      if (!DOMAIN_RE.test(host)) return { ok: false, error: "That is not a valid domain, e.g. bank.example.com." };
+      if (!DOMAIN_RE.test(host))
+        return { ok: false, error: "That is not a valid domain, e.g. bank.example.com." };
       return { ok: true, value: host };
     }
     case "region": {

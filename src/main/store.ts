@@ -117,7 +117,9 @@ export function liveFromSnapshot(s: EngineSnapshot): LiveState {
 
 function upsertSegment(list: TranscriptSegment[], seg: TranscriptSegment): TranscriptSegment[] {
   // A final replaces the partial of the same utterance.
-  const idx = list.findIndex((s) => s.utteranceId === seg.utteranceId && (!s.isFinal || s.id === seg.id));
+  const idx = list.findIndex(
+    (s) => s.utteranceId === seg.utteranceId && (!s.isFinal || s.id === seg.id),
+  );
   let next: TranscriptSegment[];
   if (idx >= 0) {
     next = list.slice();
@@ -133,12 +135,25 @@ function upsertSegment(list: TranscriptSegment[], seg: TranscriptSegment): Trans
 export function reduceLive(live: LiveState, ev: MeetingEvent): LiveState {
   switch (ev.type) {
     case "MEETING_STATE_CHANGED":
+      // Idle without a meeting id: the meeting was deleted; forget it.
+      if (ev.state === "idle" && ev.meetingId === null) {
+        return {
+          ...EMPTY_LIVE,
+          mode: ev.mode,
+          style: live.style,
+          components: live.components,
+          processingStopped: live.processingStopped,
+        };
+      }
       return {
         ...live,
         state: ev.state,
         mode: ev.mode,
         pausedReason: ev.pausedReason,
-        meeting: live.meeting && ev.meetingId === live.meeting.id ? { ...live.meeting, state: ev.state } : live.meeting,
+        meeting:
+          live.meeting && ev.meetingId === live.meeting.id
+            ? { ...live.meeting, state: ev.state }
+            : live.meeting,
         processingStopped: ev.state === "active" ? false : live.processingStopped,
       };
     case "MEETING_STARTED":
