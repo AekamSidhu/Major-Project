@@ -5,10 +5,13 @@ detection") signal of OpenMeet's answer-integrity check (cheating detection).
 The other signal, AI-echo answer analysis, is developed separately on
 `feature/echo-detection`. The two are combined only after both are merged.
 
-> Status: research and training. Nothing from this branch is wired into the
-> app yet. The `IntegrityAnalyzer` and `GazeProvider` exist only in the design
-> diagrams (process 11.0 "Assess answer integrity" in the DFDs, steps
-> 11.5–11.6).
+> Status: the code for Phases 0–2 is in place: the environment, the GazeBase
+> loader, webcam simulation, reading features, rule-based and learned
+> detectors, and the MediaPipe video pipeline, covered by 41 tests. **No
+> training has been run yet.** Nothing from this branch is wired into the app.
+> The `IntegrityAnalyzer` and `GazeProvider` exist only in the design diagrams
+> (process 11.0 "Assess answer integrity" in the DFDs, steps 11.5–11.6). See
+> [Getting started](#getting-started).
 
 ## What we're detecting
 
@@ -33,8 +36,8 @@ away when they think. We look specifically for *reading*.
    478 landmarks include the irises, and its blendshape scores include
    eye-look directions, which give a cheap second gaze estimate.
 3. **Gaze direction.** Compute the iris position relative to the eye corners
-   and lids, giving horizontal and vertical gaze ratios. Estimate head pose
-   from the same landmarks (e.g. `solvePnP`) so head turns aren't mistaken
+   and lids, giving horizontal and vertical gaze ratios. Read head pose from
+   MediaPipe's facial transformation matrix, so head turns aren't mistaken
    for eye movement. Drop blink frames.
 4. **Reading pattern.** Build a gaze time series over each answer and
    extract features:
@@ -143,8 +146,8 @@ project deadlines.
 
 ### Phase 0: Set up
 
-- Python environment for this folder (mediapipe, opencv-python, numpy,
-  scipy, pandas, scikit-learn, pymovements, matplotlib).
+- Python environment for this folder (mediapipe, which brings OpenCV, plus
+  numpy, scipy, pandas, scikit-learn and matplotlib).
 - Add `training/*/data/` to `.gitignore`.
 - Write down the evaluation protocol (person-level split, metrics, target
   false-positive rate) **before** looking at any results.
@@ -227,19 +230,127 @@ end, and a live test runs it with the real sidecar.
 Combine the reading and echo scores into one flag, re-tune the threshold on
 the shared recordings, and report how much each signal adds.
 
-## Planned layout
+## Getting started
+
+Python 3.11–3.13. From this folder (`training/gaze-detection`):
+
+```bash
+py -3.13 -m venv .venv              # macOS/Linux: python3 -m venv .venv
+.venv\Scripts\activate              # macOS/Linux: source .venv/bin/activate
+pip install -r requirements-dev.txt
+python download_model.py            # MediaPipe face model, 3.8 MB, into models/
+python -m pytest                    # 41 tests, about 20 s
+```
+
+`.venv/`, `data/` and `models/` are git-ignored. This folder sits inside
+OneDrive, which will try to sync the virtual environment and the 6.7 GB
+dataset. Exclude them from OneDrive, or keep the dataset elsewhere and pass
+`--data`.
+
+### Running the pipeline
+
+```bash
+# Plumbing check on synthetic traces (no download; the numbers mean nothing)
+python prepare.py --synthetic 8
+python train.py --features data/features/synthetic_10fps.csv --out data/smoke
+
+# The real thing
+python download_gazebase.py                # 6.7 GB, resumes if interrupted
+python prepare.py --max-participants 10    # quick first look
+python prepare.py                          # all of GazeBase → data/features/gazebase_10fps.csv
+python train.py                            # → results/cv_report.json, results/model.json
+python prepare.py --noise 3 --out data/features/gazebase_noisy.csv   # robustness runs
+
+# Held-out data (our own recordings, OEP), at the saved threshold
+python evaluate.py --model results/model.json --features data/features/<held-out>.csv
+
+# Try it on a video, e.g. a clip of yourself reading vs. talking
+python extract_video.py clip.mp4                       # rule-based, no training needed
+python extract_video.py meeting.mp4 --roi 640 0 640 360 --model results/model.json
+```
+
+### Code layout
 
 ```
 training/gaze-detection/
-  README.md      this file
-  data/          local only, never committed
-  landmarks/     MediaPipe wrapper, gaze ratios, head pose
-  features/      sweep and fixation features
-  notebooks/     exploration
-  train.py       detector / classifier training
-  evaluate.py    metrics and plots for the report
-  results/       aggregate metrics only
+  readgaze/                 the library
+    trace.py                GazeTrace: the common format; resampling, gap filling, windows
+    simulate.py             lab eye-tracker trace → webcam-quality trace
+    synthetic.py            synthetic traces for tests and smoke runs only
+    datasets/gazebase.py    GazeBase loader (reads the zip directly, nested zips included)
+    features.py             the six reading features, plus sweep times as evidence
+    detector.py             rule-based detector; window scores → one answer score
+    model.py                logistic regression; JSON export for the Rust engine
+    evaluation.py           threshold at a target false-positive rate; metrics
+    pipeline.py             recordings → feature table (one row per window)
+    training.py             person-level cross-validation; final fit
+    landmarks.py            MediaPipe Face Landmarker → iris offsets, blinks, head pose
+    video.py                video file → gaze trace
+  download_gazebase.py      dataset download (into data/, git-ignored)
+  download_model.py         face model download (into models/, git-ignored)
+  prepare.py                build the feature table
+  train.py                  cross-validate and export model.json
+  evaluate.py               score held-out data at the saved threshold
+  extract_video.py          run the detector on a video
+  tests/                    pytest suite
+  results/                  aggregate metrics and model.json (committed)
 ```
+
+## Evaluation protocol
+
+Fixed before any results are seen:
+
+- **Unit of decision: one answer.** Gaze is cut into 10 s windows every 5 s,
+  and the answer's score is the mean of its top half of window scores. On
+  GazeBase, one recording stands in for one answer.
+- **Positives and negatives.** GazeBase's reading task (TEX) is positive.
+  Every other task is negative, and flag rates are reported per task. The
+  horizontal-saccade task (HSS) is the hardest negative.
+- **Split by person.** 5-fold `StratifiedGroupKFold`, grouped by participant
+  ID. GazeBase participants return across rounds, so grouping by round would
+  leak.
+- **Operating point.** The threshold allows at most **5% false positives** on
+  honest recordings. Recall at that threshold is the headline number;
+  ROC-AUC comes second.
+- **Both detectors, every time.** The learned model is only worth keeping if
+  it beats the rule-based one.
+- **Robustness.** Repeat with doubled noise (`--noise 3`) and halved eye
+  movements (`--amplitude 0.5`, text near the camera).
+- **Known gap.** GazeBase is silent reading of a poem with the head on a chin
+  rest. Our case is reading aloud from a chat window with the head free. The
+  simulation narrows that gap but doesn't close it, so only our own
+  recordings (Phase 3) give the real numbers.
+
+## Training in the cloud
+
+Yes, it can be trained in the cloud, but it doesn't need to be. Training is
+logistic regression on a few thousand rows of six numbers, which takes
+seconds on any laptop, and there is no GPU work at all. The slow step is
+`prepare.py` working through the 6.7 GB GazeBase download, which is CPU and
+disk bound. A GPU only matters later, if we try a 1D-CNN or GRU, or run
+MediaPipe over many hours of video.
+
+Free options: Google Colab or Kaggle Notebooks, or a university lab or HPC
+machine. In a Colab notebook:
+
+```bash
+!git clone -b feature/gaze-detection https://github.com/AekamSidhu/Major-Project.git
+%cd Major-Project/training/gaze-detection
+!pip install -q -r requirements-dev.txt
+!python -m pytest -q
+!python download_gazebase.py
+!python prepare.py
+!python train.py
+```
+
+Then download `results/cv_report.json` and `results/model.json` and commit
+them from your own machine.
+
+**Data rule for the cloud:** public datasets (GazeBase is CC BY 4.0) are
+fine. Our own recordings of participants are not, unless the consent form
+explicitly allows cloud processing and the university's data policy permits
+that service. Otherwise, process them locally: everything here runs on a
+laptop.
 
 ## Ground rules
 
@@ -247,14 +358,14 @@ training/gaze-detection/
   comes with evidence (timestamps, the gaze trace), and the human decides.
 - Missing a cheater is better than flagging an honest candidate. Choose
   thresholds accordingly.
-- Frames are processed in memory and discarded. They never go to a cloud
-  provider.
+- In the app, frames are processed in memory and discarded. They never go to
+  a cloud provider.
 
 ## Checklist
 
-- [ ] Phase 0: environment, `.gitignore`, evaluation protocol written
-- [ ] Phase 1: gaze-quality report and minimum tile size
-- [ ] Phase 2: reading detector measured on simulated traces
+- [x] Phase 0: environment, `.gitignore`, evaluation protocol written
+- [ ] Phase 1: gaze-quality report and minimum tile size (MediaPipe pipeline ready)
+- [ ] Phase 2: reading detector measured on simulated traces (code ready, not yet run on GazeBase)
 - [ ] Phase 3: own dataset collected (with the echo branch)
 - [ ] Phase 4: evaluation, threshold and false-positive rate, robustness and bias checks
 - [ ] Phase 5: integrated into the app behind a setting
