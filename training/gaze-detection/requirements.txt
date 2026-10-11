@@ -1,0 +1,9 @@
+# OpenMeet gaze-detection training (Python 3.11 – 3.13)
+# MediaPipe is pinned because the Face Landmarker API changes between
+# releases; it also pulls in opencv-contrib-python, so don't add opencv here.
+mediapipe==0.10.35
+numpy>=2.0,<3
+scipy>=1.13
+pandas>=2.2
+scikit-learn>=1.5
+matplotlib>=3.9
