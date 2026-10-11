@@ -29,12 +29,13 @@ away when they think. We look specifically for *reading*.
    window at about 10 fps. This is the same picture the interviewer already
    sees, and nothing is installed on the candidate's machine. Crop to the
    face.
-2. **Landmarks.** Run MediaPipe Face Mesh with iris refinement (478
-   landmarks, including the irises) in the local AI sidecar.
+2. **Landmarks.** Run MediaPipe Face Landmarker in the local AI sidecar. Its
+   478 landmarks include the irises, and its blendshape scores include
+   eye-look directions, which give a cheap second gaze estimate.
 3. **Gaze direction.** Compute the iris position relative to the eye corners
    and lids, giving horizontal and vertical gaze ratios. Estimate head pose
    from the same landmarks (e.g. `solvePnP`) so head turns aren't mistaken
-   for eye movement.
+   for eye movement. Drop blink frames.
 4. **Reading pattern.** Build a gaze time series over each answer and
    extract features:
    - **return sweeps**: large, fast right-to-left jumps after slower
@@ -65,11 +66,39 @@ Be ready to explain these in the report and the viva:
 - **Text right next to the camera.** A cheater can place the answer just
   under the webcam, which makes the sweeps small. Record this condition and
   report the result honestly.
+- **Finding the right tile.** Meeting apps lay out video differently. Version
+  1 uses the screen-region selection OpenMeet already has: the interviewer
+  marks the candidate's tile.
+- **Capture rate.** The app's screen sampler runs at 1 fps by default with
+  change detection. Gaze needs a separate 10 fps sampler for the tile only,
+  and only while the candidate is answering, to keep CPU use low.
 
-## Data we need
+## Datasets
+
+Public data lets us build the gaze tracker and the reading detector before
+our own recordings exist. None of it shows exactly our case (a candidate in a
+video call reading an AI answer), so our own collection is still required.
+
+| Dataset | What it is | Access | How we use it |
+|---|---|---|---|
+| [OEP (Online Exam Proctoring)](https://cvlab.cse.msu.edu/oep-dataset.html) | 24 people acting out several kinds of cheating in online exams, recorded by webcam, wearable camera and microphone (Atoum et al., *Automated Online Exam Proctoring*) | Download from the MSU page; cite the paper | Closest public match to our task: an external test set on real webcam footage of cheating |
+| [EVE](https://ait.ethz.ch/eve) | Webcam video synchronised with screen recordings and ground-truth gaze, covering natural eye movements ([code](https://github.com/swook/EVE)) | Request form; CC BY-NC-SA 4.0 with extra terms | Check our MediaPipe gaze ratios against true gaze, then degrade the video (smaller, compressed, 10 fps) to see where the signal breaks |
+| [MPIIFaceGaze](https://doi.org/10.18419/darus-3240) | 37,667 face images from laptop webcams in everyday conditions, with gaze labels ([MPI page](https://www.mpi-inf.mpg.de/departments/computer-vision-and-machine-learning/research/gaze-based-human-computer-interaction/its-written-all-over-your-face-full-face-appearance-based-gaze-estimation)) | Open download; CC BY-NC-SA 4.0 | Validate gaze direction across lighting, glasses and real laptop cameras |
+| [GazeBase](https://figshare.com/articles/dataset/GazeBase_Data_Repository/12912257) | 322 people recorded by a 1000 Hz eye tracker on seven tasks, including **reading**, fixation and video viewing | Open download on figshare; also loadable with pymovements | Real reading scanpaths. Downsample to 10 Hz and add webcam-level noise to create realistic "reading" vs. "not reading" traces for the detector |
+| [GECO (Ghent Eye-tracking Corpus)](https://expsy.ugent.be/downloads/geco/) | English monolinguals and Dutch–English bilinguals reading a whole novel, word-level eye-movement measures | Open download (Excel files) | Reading statistics (fixation durations, line timing) and a native vs. non-native reader comparison for the bias check |
+| [MIT Interview Dataset](https://roc-hci.com/past-projects/automated-prediction-of-job-interview-performances/) | 138 recorded mock job interviews (69 students), with video, audio and transcripts | Request form; needs an academic email | Natural gaze while answering interview questions, including looking away to think (hard negatives) |
+
+Tools: [MediaPipe Face Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker)
+([Python guide](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/python)),
+OpenCV (head pose, video re-encoding), and
+[pymovements](https://github.com/aeye-lab/pymovements) (loads eye-tracking
+datasets such as GazeBase, and detects fixations and saccades).
+
+## Our own data
 
 Mock interviews with volunteers, held over a real call so the video goes
-through real compression.
+through real compression. Record the candidate's tile **from the
+interviewer's screen**, exactly what OpenMeet would see.
 
 | Condition | Label |
 |---|---|
@@ -80,6 +109,10 @@ through real compression.
 
 Vary glasses or no glasses, lighting, webcams, and tile size (gallery view
 versus speaker view).
+
+**One collection for both branches.** Each session records the candidate's
+audio as well, so the same recordings and labels feed the echo branch too.
+Plan and run data collection together, once.
 
 **Data rules**
 
@@ -99,8 +132,100 @@ versus speaker view).
   chosen threshold**.
 - Robustness curves: accuracy against face size in pixels and against frame
   rate (5, 10, 15 fps).
-- Per-subgroup results: glasses, lighting, camera position.
+- Per-subgroup results: glasses, lighting, camera position, native vs.
+  non-native readers.
 - Per-frame processing time on a laptop CPU. It must keep up with 10 fps.
+
+## Implementation plan
+
+Each phase ends with something we can show. Dates go in once we know the
+project deadlines.
+
+### Phase 0: Set up
+
+- Python environment for this folder (mediapipe, opencv-python, numpy,
+  scipy, pandas, scikit-learn, pymovements, matplotlib).
+- Add `training/*/data/` to `.gitignore`.
+- Write down the evaluation protocol (person-level split, metrics, target
+  false-positive rate) **before** looking at any results.
+
+*Done when:* the skeleton scripts run end to end on a short test video.
+
+### Phase 1: Gaze from video (MediaPipe; EVE, MPIIFaceGaze)
+
+- Wrap Face Landmarker in video mode. Output per-frame horizontal and
+  vertical gaze ratios for each eye, head pose, and a blink flag.
+- Compare our ratios with ground-truth gaze on EVE and MPIIFaceGaze. We need
+  *relative* movement (left vs. right), not calibrated screen coordinates,
+  so measure correlation, not absolute error.
+- Degradation study: shrink faces to 200, 150, 100 and 75 px wide, re-encode
+  at low bitrate with ffmpeg, and resample to 5, 10 and 15 fps. Find the
+  smallest tile where horizontal sweeps are still visible.
+
+*Done when:* a short gaze-quality report exists, stating the minimum usable
+tile size.
+
+### Phase 2: Reading detector on eye-movement data (GazeBase, GECO)
+
+- Take GazeBase reading and non-reading tasks, downsample from 1000 Hz to
+  10 Hz, and add noise at the level measured in Phase 1. This gives
+  webcam-quality "reading" and "not reading" traces.
+- Build the rule-based sawtooth detector: find return sweeps, count them per
+  minute, and measure the regularity of the gaps between them.
+- Train the learned baseline: windowed features into logistic regression.
+- Use GECO to sanity-check line timing and compare native and non-native
+  readers.
+
+*Done when:* we have a ROC-AUC on the simulated traces and a chosen detector
+configuration.
+
+### Phase 3: Collect our own data (shared with the echo branch)
+
+- Write the protocol, consent form and condition schedule. Randomise the
+  condition order per participant.
+- Pilot with 2–3 teammates, then fix whatever was awkward.
+- Record over a real call from the interviewer's side, and keep a label
+  sheet per answer.
+- Keep OEP aside as an external test set.
+
+*Done when:* the dataset is collected and documented in a data card (in git,
+no raw data).
+
+### Phase 4: Evaluation
+
+- Run the full pipeline (video → landmarks → gaze series → reading score) on
+  our recordings with the person-level split.
+- Choose the threshold for a target false-positive rate (e.g. ≤ 5%).
+- Produce ROC curves, the false-positive rate at the threshold, robustness
+  curves, per-subgroup results, the OEP external-test result, per-frame CPU
+  time, and a look at every false positive.
+
+*Done when:* results and plots in `results/` are ready for the report.
+
+### Phase 5: Integrate into OpenMeet
+
+- `local-ai`: a loopback-only `POST /v1/gaze` endpoint. It takes a face crop
+  and returns landmarks, gaze ratios and head pose, and never logs or stores
+  frames. Add `mediapipe` to `requirements.txt`, with tests on synthetic
+  images.
+- `openmeet-core`: a `GazeProvider` trait and gaze types, alongside the
+  existing provider traits.
+- `openmeet-providers`: a `LocalAiGaze` adapter for the endpoint.
+- `openmeet-platform` / `openmeet-engine`: a 10 fps sampler for the selected
+  candidate tile, running only while the candidate is answering.
+- `openmeet-engine`: the `IntegrityAnalyzer` builds the gaze series and
+  computes the reading score in Rust (rules plus logistic weights from a
+  small JSON file). The sidecar stays stateless.
+- Settings: gaze on/off, **off by default**. The privacy page shows it when
+  it's on.
+
+*Done when:* an engine test with a mock gaze provider covers the flow end to
+end, and a live test runs it with the real sidecar.
+
+### Phase 6: Fuse with the echo signal (joint, after both branches merge)
+
+Combine the reading and echo scores into one flag, re-tune the threshold on
+the shared recordings, and report how much each signal adds.
 
 ## Planned layout
 
@@ -116,20 +241,6 @@ training/gaze-detection/
   results/       aggregate metrics only
 ```
 
-## Where it plugs into the app (later)
-
-- `local-ai/server.py`: a new loopback-only endpoint (e.g. `POST /v1/gaze`)
-  that takes a face crop and returns landmarks and gaze. MediaPipe goes into
-  `local-ai/requirements.txt`.
-- `openmeet-core`: a `GazeProvider` trait, alongside the existing provider
-  traits.
-- `openmeet-providers`: a `LocalAiGaze` adapter for the sidecar endpoint.
-- `openmeet-engine`: the screen worker crops the candidate's tile, and the
-  `IntegrityAnalyzer` builds the gaze series and scores it when the answer
-  turn ends.
-- Off unless the interviewer turns it on (the "gaze on / off" setting in the
-  design).
-
 ## Ground rules
 
 - A flag is a **signal for the interviewer, never a verdict**. It always
@@ -139,12 +250,12 @@ training/gaze-detection/
 - Frames are processed in memory and discarded. They never go to a cloud
   provider.
 
-## Done when
+## Checklist
 
-- [ ] Sidecar gaze endpoint, with tests
-- [ ] Dataset collected under the data rules above
-- [ ] Reading detector with results on held-out participants
-- [ ] Robustness report (face size, frame rate, glasses, lighting)
-- [ ] Threshold chosen and its false-positive rate documented
-- [ ] Integrated into the engine behind a setting
-- [ ] Fused with the echo signal (after both branches are merged)
+- [ ] Phase 0: environment, `.gitignore`, evaluation protocol written
+- [ ] Phase 1: gaze-quality report and minimum tile size
+- [ ] Phase 2: reading detector measured on simulated traces
+- [ ] Phase 3: own dataset collected (with the echo branch)
+- [ ] Phase 4: evaluation, threshold and false-positive rate, robustness and bias checks
+- [ ] Phase 5: integrated into the app behind a setting
+- [ ] Phase 6: fused with the echo signal
