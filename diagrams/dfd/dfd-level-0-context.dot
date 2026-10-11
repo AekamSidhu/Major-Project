@@ -1,30 +1,31 @@
 // DFD Level 0 (context diagram): OpenMeet as a single process and the
 // external entities it exchanges data with. Yourdon–DeMarco notation:
-// rectangle = external entity, circle = process.
+// rectangle = external entity, circle = process. Speech (the interviewer's
+// and the candidate's) and the candidate's video reach OpenMeet only through
+// the operating system's audio devices and displays, so they are flows from
+// the OS entity. Internal data stores (meeting database, settings) are not
+// shown at this level; they appear as D1–D4 in Level 1.
 digraph dfd0 {
   graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.7, ranksep=1.3,
          label="OpenMeet — DFD Level 0 (Context Diagram)", pad=0.3];
   node  [fontname="Segoe UI", fontsize=12];
   edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756"];
 
-  user   [shape=box, style="filled", fillcolor="#FFFFFF", label="User\n(candidate or interviewer)"];
-  remote [shape=box, style="filled", fillcolor="#FFFFFF", label="Other meeting\nparticipants"];
-  os     [shape=box, style="filled", fillcolor="#FFFFFF", label="Operating system\n(audio devices, displays,\nOCR, credential store,\nwindow manager)"];
+  user   [shape=box, style="filled", fillcolor="#FFFFFF", label="User\n(interviewer or\nworkplace team)"];
+  os     [shape=box, style="filled", fillcolor="#FFFFFF", label="Operating system\n(audio devices, displays,\nOCR, credential store,\nwindow manager, hotkeys)"];
   local  [shape=box, style="filled", fillcolor="#FFFFFF", label="Local AI services\n(Ollama, OpenMeet\nlocal AI sidecar)"];
   cloud  [shape=box, style="filled,dashed", fillcolor="#FFFFFF", label="Cloud AI providers\n(OpenAI, Anthropic,\nOpenAI-compatible)\noptional"];
-  files  [shape=box, style="filled", fillcolor="#FFFFFF", label="File system\n(exports, app data)"];
+  files  [shape=box, style="filled", fillcolor="#FFFFFF", label="File system\n(save dialog)"];
 
   sys [shape=circle, style="filled", fillcolor="#E6E9FB", color="#4F5BD5", penwidth=2, label="0\nOpenMeet"];
 
-  user -> sys   [label="voice (microphone), hotkeys,\nAsk prompts, settings, profile,\nAPI keys, start / stop / pause"];
-  sys  -> user  [label="overlay suggestions,\nfollow-ups, transcript,\nsummaries, history, status"];
-  remote -> sys [label="speech (via system audio),\nshared screen content"];
-  os -> sys     [label="audio frames, screen frames,\nOCR text, stored API keys,\ndisplay / window info"];
+  user -> sys   [label="hotkeys, Ask prompts,\nsettings, profile, privacy rules,\nAPI keys, start / stop / pause,\nexport / delete requests"];
+  sys  -> user  [label="follow-up suggestions,\nintegrity flags with evidence,\ntranscript, summaries,\nhistory, status"];
+  os -> sys     [label="audio frames (your microphone,\ncandidate audio via loopback),\nscreen frames incl. candidate video,\nOCR text, stored API keys,\ndisplay / window info"];
   sys -> os     [label="capture requests, keychain writes,\ncapture-exclusion flag,\nhotkey registration"];
-  sys -> local  [label="audio clips, prompts with\nmeeting context, text to embed"];
-  local -> sys  [label="transcripts, streamed answers,\nembeddings"];
-  sys -> cloud  [label="audio / prompts / frames\n(only if selected and\nlocal-only mode is off)", style=dashed];
-  cloud -> sys  [label="transcripts, streamed answers,\nembeddings, frame descriptions", style=dashed];
-  sys -> files  [label="exported Markdown / text / JSON,\nmeeting database"];
-  files -> sys  [label="stored meetings,\nsettings"];
+  sys -> local  [label="audio clips, prompts with\nmeeting context, text to embed,\ncandidate face crops"];
+  local -> sys  [label="transcripts, streamed replies,\nembeddings, gaze landmarks"];
+  sys -> cloud  [label="audio / prompts / frames /\ntext to embed (only if selected\nand local-only mode is off)", style=dashed];
+  cloud -> sys  [label="transcripts, streamed replies,\nembeddings, frame descriptions", style=dashed];
+  sys -> files  [label="exported Markdown /\ntext / JSON"];
 }
