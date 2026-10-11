@@ -2,7 +2,9 @@
 // and the flows between them. Yourdon–DeMarco notation: rectangle = external
 // entity, circle = process, open-ended box = data store. External entities
 // marked * are drawn more than once to keep flows short; double-headed
-// arrows are a request and its response.
+// arrows are a request and its response; dashed arrows are optional flows.
+// Balanced with Level 0 (same external inputs and outputs) and with every
+// Level 2 diagram (each Level 2 boundary flow appears here).
 digraph dfd1 {
   graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.35, ranksep=0.9,
          label="OpenMeet — DFD Level 1", pad=0.3, splines=true];
@@ -11,15 +13,21 @@ digraph dfd1 {
 
   // External entities
   node [shape=box, style=filled, fillcolor="#FFFFFF", color="#3E4756"];
-  os_a   [label="Operating system\n(audio devices)"];
-  os_s   [label="Operating system\n(displays, OCR)"];
+  os_a   [label="Operating system *\n(audio devices)"];
+  os_s   [label="Operating system *\n(displays, OCR)"];
+  os_h   [label="Operating system *\n(hotkey service)"];
   ai_t   [label="AI provider *\n(transcription)"];
   ai_v   [label="AI provider *\n(vision)"];
+  ai_e   [label="AI provider *\n(embeddings)"];
+  ai_c   [label="AI provider *\n(language model)"];
   ai_l   [label="AI provider *\n(language model)"];
+  ai_r   [label="AI provider *\n(language model,\nembeddings)"];
+  ai_g   [label="AI provider *\n(gaze model, local)"];
+  user_c [label="User *"];
   user_u [label="User *"];
   user_s [label="User *"];
   user_h [label="User *"];
-  keych  [label="OS credential store"];
+  keych  [label="OS credential store\n(env vars as dev fallback)"];
   fs     [label="File system"];
 
   // Processes
@@ -34,6 +42,7 @@ digraph dfd1 {
   p8  [label="8.0\nManage\nsettings &\nkeys"];
   p9  [label="9.0\nPersist &\nexport"];
   p10 [label="10.0\nSummarize\nmeeting"];
+  p11 [label="11.0\nAssess\nanswer\nintegrity", penwidth=2.4];
 
   // Data stores
   node [shape=none, width=0, style="", penwidth=1];
@@ -45,46 +54,80 @@ digraph dfd1 {
   // 1-2-3: audio to conversation analysis
   os_a -> p1  [label="PCM frames"];
   p1 -> p2    [label="16 kHz frames"];
+  p1 -> p7    [label="audio level"];
+  d2 -> p2    [label="VAD, language,\nvocabulary"];
   p2 -> ai_t  [dir=both, label="utterance audio /\ntranscript"];
   p2 -> p3    [label="final segments"];
   p2 -> d3    [label="transcript lines"];
+  p2 -> p6    [label="voice command", style=dashed];
+  p2 -> p9    [label="segments"];
+  d3 -> p3    [label="recent turns"];
   p3 -> d3    [label="topics, claims"];
+  p3 -> ai_c  [dir=both, label="classification, topic\nanalysis prompt / JSON"];
+  p3 -> p7    [label="question detected,\ntopics"];
 
   // 4: screen
+  user_c -> p4 [label="source choice,\nmanual capture"];
   os_s -> p4  [label="frames, OCR text"];
   p4 -> ai_v  [dir=both, label="changed frame /\ndescription"];
   p4 -> d3    [label="observations"];
   p4 -> d4    [label="PNG (if enabled)", style=dashed];
+  p4 -> p7    [label="screen updated"];
+  p4 -> p9    [label="observations"];
   d2 -> p4    [label="privacy rules"];
 
   // 5-6-7: suggestions
   p3 -> p6    [label="question /\nfinished turn"];
   d3 -> p5    [label="window, summary,\nsnippets, observations"];
   d2 -> p5    [label="profile"];
+  p5 -> ai_e  [dir=both, label="query / vector"];
+  p5 -> ai_c  [dir=both, label="compression prompt /\nsummary"];
+  p5 -> d3    [label="long-term summary"];
   p6 -> p5    [dir=both, label="query /\nprompt context"];
   p6 -> ai_l  [dir=both, label="prompt /\nstreamed tokens"];
-  p6 -> p7    [label="answers,\nfollow-ups"];
+  p6 -> p7    [label="follow-ups,\nAsk replies"];
+  p6 -> d3    [label="answered /\nsuggested"];
   p2 -> p7    [label="live transcript"];
   user_u -> p7 [dir=both, label="hotkeys, Ask /\noverlay"];
   p7 -> p6    [label="generate, refine,\nask commands"];
 
   // 8: settings & secrets
-  user_s -> p8 [label="settings, keys,\nrules, profile"];
+  user_s -> p8 [dir=both, label="settings, keys, rules, profile /\nvalidation errors, hotkey status"];
   p8 -> d2     [label="sanitized\nsettings"];
   p8 -> keych  [dir=both, label="API key"];
-  p8 -> p6     [label="providers"];
+  p8 -> os_h   [label="hotkey\nregistration"];
+  p8 -> p2     [label="transcriber"];
+  p8 -> p4     [label="vision / OCR\nprovider"];
+  p8 -> p3     [label="fast model"];
+  p8 -> p5     [label="embedder,\nfast model"];
+  p8 -> p6     [label="language\nmodel"];
+  p8 -> p11    [label="LLM, embedder,\ngaze model"];
 
   // 9-10: persistence and summary
   p6 -> p9    [label="suggestions"];
   p3 -> p9    [label="questions, answers,\ntopics, claims"];
   p9 -> d1    [dir=both, label="records"];
+  d2 -> p9    [label="retention policy"];
+  p9 -> d4    [label="delete expired /\ndeleted meetings"];
+  d4 -> p9    [label="screenshot\nfolders"];
   user_h -> p9 [dir=both, label="export, delete /\nhistory"];
   p9 -> fs    [label="exports"];
+  p9 -> p10   [label="cancel summary\n(meeting deleted)"];
   d3 -> p10   [label="meeting record"];
   p10 -> ai_l [dir=both, label="summary prompt /\nsummary"];
   p10 -> p9   [label="summary"];
 
-  { rank=same; os_a; os_s; user_s; }
-  { rank=same; p1; p4; p8; }
-  { rank=same; p9; p10; }
+  // 11: integrity analysis (AI-echo, delivery, reading gaze)
+  p2 -> p11   [label="answer segments\n+ word timing"];
+  p3 -> p11   [label="question +\nanswer turn"];
+  p4 -> p11   [label="candidate video\ntile (10 fps)"];
+  d3 -> p11   [label="delivery baseline"];
+  p11 -> d3   [label="baseline,\nintegrity flags"];
+  d2 -> p11   [label="thresholds,\ngaze on / off"];
+  p11 -> ai_r [dir=both, label="reference-answer prompt /\nanswers; text / vectors"];
+  p11 -> ai_g [dir=both, label="face crops /\ngaze landmarks"];
+  p11 -> p7   [label="integrity flag\n+ evidence"];
+  p11 -> p9   [label="integrity flags"];
+
+  { rank=min; os_a; os_s; user_c; user_s; }
 }
