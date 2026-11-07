@@ -7,11 +7,15 @@ The other signal, AI-echo answer analysis, is developed separately on
 
 > Status: the code for Phases 0–2 is in place: the environment, the GazeBase
 > loader, webcam simulation, reading features, rule-based and learned
-> detectors, and the MediaPipe video pipeline, covered by 41 tests. **No
-> training has been run yet.** Nothing from this branch is wired into the app.
-> The `IntegrityAnalyzer` and `GazeProvider` exist only in the design diagrams
-> (process 11.0 "Assess answer integrity" in the DFDs, steps 11.5–11.6). See
-> [Getting started](#getting-started).
+> detectors, and the MediaPipe video pipeline, covered by 41 tests. The
+> **visual model is trained**: a transfer-learned gaze CNN with 4.54° error
+> on unseen people (MPIIFaceGaze, leave-one-person-out), against 7.18° for the
+> current MediaPipe approach. See
+> [Learned gaze model](#learned-gaze-model-transfer-learning). The reading
+> detector has not been run on GazeBase yet. Nothing from this branch is wired
+> into the app. The `IntegrityAnalyzer` and `GazeProvider` exist only in the
+> design diagrams (process 11.0 "Assess answer integrity" in the DFDs, steps
+> 11.5–11.6). See [Getting started](#getting-started).
 
 ## What we're detecting
 
@@ -292,8 +296,11 @@ training/gaze-detection/
   train.py                  cross-validate and export model.json
   evaluate.py               score held-out data at the saved threshold
   extract_video.py          run the detector on a video
+  notebooks/
+    gaze_transfer_learning.ipynb   the visual model: transfer learning on Kaggle (self-contained)
+  plot_gaze_model.py        redraw results/gaze_model_robustness.png from the results JSON
   tests/                    pytest suite
-  results/                  aggregate metrics and model.json (committed)
+  results/                  aggregate metrics, model.json, gaze-model results (committed)
 ```
 
 ## Evaluation protocol
@@ -320,6 +327,117 @@ Fixed before any results are seen:
   rest. Our case is reading aloud from a chat window with the head free. The
   simulation narrows that gap but doesn't close it, so only our own
   recordings (Phase 3) give the real numbers.
+
+## Learned gaze model (transfer learning)
+
+The visual model. A CNN takes a normalised face crop and returns gaze pitch and
+yaw. It is meant to replace the MediaPipe iris offsets as the input of the
+reading detector, which only needs a clean horizontal gaze trace.
+
+- Notebook: [notebooks/gaze_transfer_learning.ipynb](notebooks/gaze_transfer_learning.ipynb)
+  (Kaggle, *GPU T4 x2*, *Internet on*; about 4.5 GPU hours end to end, which
+  is 2–2.5 hours of wall time on the two T4s).
+- Numbers: [results/gaze_model_results.json](results/gaze_model_results.json).
+  Chart: [results/gaze_model_robustness.png](results/gaze_model_robustness.png),
+  redrawn with `python plot_gaze_model.py`.
+
+**Why a gaze estimator and not a "reading from video" classifier.** No
+labelled video of people reading answers exists yet. GazeBase is eye-tracker
+coordinates, and our own recordings are Phase 3. A video classifier can't be
+trained or tested honestly on what we have. A gaze estimator can:
+MPIIFaceGaze has 37,667 laptop-webcam faces of 15 people with gaze labels,
+and networks already trained for gaze exist to start from.
+
+### Setup
+
+- **Data.** MPIIFaceGaze, undistorted and normalised (Zhang et al. 2018) to
+  224x224 crops from a virtual camera 600 mm away (focal 960). That is the
+  framing ETH-XGaze models use, which the zero-shot check confirms: the
+  ETH-XGaze ResNet-18 gets 6.99° on our crops without any fine-tuning, and
+  18–25° if a sign convention is flipped.
+- **Transfer learning.** Three starting points, all fine-tuned end to end:
+  ResNet-18 from ImageNet (timm), and ResNet-18 and ResNet-50 already trained
+  for gaze on ETH-XGaze (110 other people, so nothing leaks into the test
+  people). An ImageNet ResNet-50 was dropped to save GPU time once the
+  ETH-XGaze ResNet-50 turned out no better than the ResNet-18.
+- **Training.** L1 loss on pitch and yaw, AdamW, cosine schedule, mixed
+  precision, weight EMA. Augmentation: mirror (yaw flipped), shift, scale,
+  colour, and for the final model random downscaling to 24–224 px plus JPEG
+  q20–70 on small faces. Mirror test-time augmentation.
+- **Protocol.** Split by person only. Development: 3 folds of 5 held-out
+  people. Final number: leave-one-person-out (LOPO, 15 folds), the standard
+  MPIIFaceGaze protocol. Metric: mean over people of each person's mean
+  angular error, in degrees.
+- **Robustness.** Test faces shrunk to 160–32 px wide (the face fills the
+  crop, so this is about the face width in a meeting tile), and JPEG q30 on
+  top, like a compressed video call.
+
+### Results
+
+**Final model (LOPO): 4.54° mean angular error** (SD 1.55° over people; best
+p00 1.94°, worst p10 6.98°). ETH-XGaze ResNet-18, low-res + JPEG
+augmentation.
+
+| Starting point (dev, 3-fold) | Full size | 64 px | 32 px | 64 px + JPEG |
+|---|---|---|---|---|
+| MediaPipe iris offsets + linear map (current pipeline) | 7.18 | 7.22 | 8.00 | – |
+| ETH-XGaze ResNet-18, no fine-tuning | 6.99 | – | – | – |
+| ImageNet ResNet-18 | 5.49 | – | – | – |
+| ETH-XGaze ResNet-50 | 4.44 | – | – | – |
+| ETH-XGaze ResNet-18 | 4.30 | – | – | – |
+| ETH-XGaze ResNet-18, 15 epochs + EMA | **4.29** | 4.98 | 5.88 | 7.09 |
+| … + low-res and JPEG augmentation (chosen) | 4.35 | **4.72** | **5.19** | **5.64** |
+| Final model, LOPO | 4.54 | 4.87 | 5.31 | 5.76 |
+
+MediaPipe is measured on 500 faces per person, with the linear map fitted on
+the other 14 people. Fitted per person instead, which needs a calibration
+step OpenMeet can't run on a remote candidate, it reaches 5.67° at full size.
+The zero-shot row is on 3,000 random faces.
+
+![Gaze error and horizontal signal vs face size](results/gaze_model_robustness.png)
+
+What this shows:
+
+- **The learned model beats the current pipeline by 2.6° and degrades more
+  slowly.** More important for reading detection, its within-person
+  correlation with true horizontal gaze is 0.97 at full size and still 0.95
+  at 32 px. MediaPipe's is 0.88, falling to 0.76 at 32 px.
+- **Where the pretraining comes from matters more than model size.**
+  Starting from a gaze model instead of ImageNet cuts the error by 1.2°
+  (5.49 → 4.30). ResNet-50 is no better than ResNet-18 (4.44), and averaging
+  them doesn't help (4.30). We keep the ResNet-18, which is also the cheap
+  one.
+- **Augmenting for small, compressed tiles is nearly free.** It costs 0.06°
+  on full-size faces and saves 0.7° at 32 px and 1.45° on a compressed 64 px
+  face.
+- **Run-to-run noise is about 0.2°.** The same configuration scored 4.35°
+  in development and 4.54° in LOPO, and single people move by up to 1.5°
+  between runs. Averaging the held-out predictions of 2–5 separately trained
+  runs gives 4.30–4.42°, so ensembling would buy roughly 0.2° for 2–5x the
+  compute.
+- **Speed.** Exported to ONNX (44.7 MB, preprocessing inside the graph,
+  matches PyTorch to 2e-7 rad), one face takes 33 ms on one CPU thread and
+  17 ms on two (Kaggle Xeon). That is well inside the 100 ms a 10 fps
+  sampler allows.
+
+For context, published within-dataset results on MPIIFaceGaze are 4.8° for
+the original full-face network (Zhang et al. 2017) and 3.92° for L2CS-Net
+(Abdelrahman et al. 2022). Preprocessing and sample selection differ between
+papers, so treat these as a rough guide, not a ranking.
+
+**Limits.** Fifteen people, lab-style laptop sessions, normalised still
+images. The degradations are simulated: no real call compression, motion
+blur or frame drops yet. Face crops in the app also need the same
+normalisation, which takes head pose and camera intrinsics. MediaPipe gives
+an estimate of both, but that step isn't built or measured yet. Our own
+recordings (Phase 3) and EVE give the real test.
+
+**Getting the model.** Kaggle deletes session files when the session ends,
+so the ONNX file isn't in the repo. To rebuild it, run the notebook's
+"final" cells (`final_all` and the export cell; about 12 GPU minutes). It is
+trained on MPIIFaceGaze and starts from ETH-XGaze weights, both
+non-commercial research licences (CC BY-NC-SA 4.0). Keep it out of public
+releases and cite both datasets.
 
 ## Training in the cloud
 
@@ -364,7 +482,7 @@ laptop.
 ## Checklist
 
 - [x] Phase 0: environment, `.gitignore`, evaluation protocol written
-- [ ] Phase 1: gaze-quality report and minimum tile size (MediaPipe pipeline ready)
+- [ ] Phase 1: gaze-quality report and minimum tile size. Partly done on MPIIFaceGaze stills: the learned gaze model (4.54° LOPO) vs MediaPipe (7.18°), with error vs face size down to 32 px and JPEG. Still to do: real video (EVE), frame rate, and face normalisation from MediaPipe head pose
 - [ ] Phase 2: reading detector measured on simulated traces (code ready, not yet run on GazeBase)
 - [ ] Phase 3: own dataset collected (with the echo branch)
 - [ ] Phase 4: evaluation, threshold and false-positive rate, robustness and bias checks
