@@ -3,6 +3,11 @@
     python build_cache.py gazebase        D:/data/GazeBase_v2_0.zip   D:/data/cache/gazebase.npz
     python build_cache.py gazebasevr      D:/data/gazebasevr.zip      D:/data/cache/gazebasevr.npz
     python build_cache.py desktopactivity D:/data/DesktopActivity.zip D:/data/cache/desktopactivity.npz
+    python build_cache.py ritw            <links .json, file or URL>  D:/data/cache/ritw.npz
+
+For Reading in the Wild the source is the download-links file from the
+dataset page (it expires after about two weeks); only the gaze files are
+fetched, about 2 GB in all.
 
 Do this once per dataset. Everything after it (`reading_experiments.py`)
 works from the cache, so trying another frame rate, noise level or model
@@ -16,8 +21,10 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import sys
 import time
+import urllib.request
 import zipfile
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -28,7 +35,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 
 from readgaze.cache import Frames, TraceCache, bin_samples  # noqa: E402
-from readgaze.datasets import desktopactivity, gazebase, gazebasevr  # noqa: E402
+from readgaze.datasets import desktopactivity, gazebase, gazebasevr, ritw  # noqa: E402
 
 
 def _gazebase_recording(name: str, raw: bytes) -> tuple[dict, Frames] | None:
@@ -125,18 +132,89 @@ def build_desktopactivity(zip_path: Path) -> TraceCache:
     return TraceCache.from_recordings(rows, frames, desktopactivity.RATE)
 
 
+def _ritw_sequence(job: tuple[dict, dict]) -> tuple[dict, Frames] | None:
+    entry, note = job
+    label = ritw.label_for_task(int(note["task"]))
+    if label is None:
+        return None
+    meta = ritw.fetch_metadata(entry)
+    gaze, source = ritw.fetch_gaze(entry)
+    t, x, y = ritw.gaze_trace(gaze, float(note["whisper_start"]), float(note["whisper_end"]))
+    info = {
+        "dataset": "RitW",
+        # pt_id is the participant's slot (1-5) on a collection day, not a
+        # person id: one person is one day and slot.
+        "participant": f"rw{str(meta['date']).replace('-', '')}p{int(meta['pt_id'])}",
+        "recording": f"rw-{int(note['id'])}",
+        "task": f"T{int(note['task']):02d}",
+        "label": label,
+        "split": str(note["split"]),
+        "mode": str(note.get("mode") if pd.notna(note.get("mode")) else "none"),
+        "medium": str(note.get("medium") if pd.notna(note.get("medium")) else "none"),
+        "gaze_file": source,
+    }
+    return info, bin_samples(t, x, y)
+
+
+def build_ritw(source: str, workers: int) -> TraceCache:
+    """Gaze of every labelled Seattle sequence, fetched in parallel (network-bound)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    if source.startswith("http"):
+        with urllib.request.urlopen(source, timeout=120) as response:
+            links = json.load(response)["sequences"]
+    else:
+        links = json.loads(Path(source).read_text())["sequences"]
+    notes = ritw.load_annotations()
+    jobs = []
+    for _, note in notes.iterrows():
+        key = f"recording_{int(note['id'])}"
+        if key in links and ritw.label_for_task(int(note["task"])) is not None:
+            jobs.append((links[key], note.to_dict()))
+    import os
+
+    step = int(os.environ.get("RITW_EVERY", "1"))  # smoke tests: every n-th sequence only
+    if step > 1:
+        pick = np.random.default_rng(0).permutation(len(jobs))[: len(jobs) // step]
+        jobs = [jobs[i] for i in sorted(pick)]
+    print(f"  {len(jobs)} labelled sequences with download links", flush=True)
+    rows, frames, failed = [], [], 0
+    started = time.time()
+    with ThreadPoolExecutor(max_workers=max(workers, 1) * 4) as pool:
+        for done, result in enumerate(pool.map(_ritw_safe, jobs), start=1):
+            if result is None:
+                failed += 1
+            else:
+                rows.append(result[0])
+                frames.append(result[1])
+            if done % 50 == 0 or done == len(jobs):
+                print(f"  {done}/{len(jobs)} sequences, {failed} failed or empty, {time.time() - started:.0f} s", flush=True)
+    order = sorted(range(len(rows)), key=lambda i: rows[i]["recording"])
+    return TraceCache.from_recordings([rows[i] for i in order], [frames[i] for i in order])
+
+
+def _ritw_safe(job):
+    try:
+        return _ritw_sequence(job)
+    except Exception as error:  # one bad sequence must not stop the other 900
+        print(f"  skipped {job[1].get('id')}: {type(error).__name__}: {str(error)[:120]}", flush=True)
+        return None
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("dataset", choices=["gazebase", "gazebasevr", "desktopactivity"])
-    parser.add_argument("source", type=Path, help="the downloaded zip")
+    parser.add_argument("dataset", choices=["gazebase", "gazebasevr", "desktopactivity", "ritw"])
+    parser.add_argument("source", help="the downloaded zip (for ritw: the download-links .json, a path or a URL)")
     parser.add_argument("out", type=Path, help="the cache to write (.npz)")
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args(argv)
 
     if args.dataset == "desktopactivity":
-        cache = build_desktopactivity(args.source)
+        cache = build_desktopactivity(Path(args.source))
+    elif args.dataset == "ritw":
+        cache = build_ritw(args.source, args.workers)
     else:
-        cache = build_nested(args.dataset, args.source, args.workers)
+        cache = build_nested(args.dataset, Path(args.source), args.workers)
     cache.save(args.out)
     hours = len(cache.x) / cache.rate / 3600
     print(f"{len(cache)} recordings, {cache.meta['participant'].nunique()} people, {hours:.1f} hours -> {args.out}")
