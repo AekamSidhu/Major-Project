@@ -12,7 +12,7 @@ updated to match.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 import numpy as np
 
@@ -38,8 +38,37 @@ class WebcamProfile:
     """Chance that any single frame loses the face (motion blur, compression)."""
 
 
+@dataclass(frozen=True)
+class ProfileRange:
+    """Ranges to draw each recording's noise, drift and movement size from.
+
+    A detector trained at one fixed noise level can learn that level instead
+    of the reading pattern. Training on a spread of conditions, from a clean
+    full-screen face to a small compressed tile with the text near the
+    camera, avoids that.
+    """
+
+    noise: tuple[float, float] = (0.3, 3.5)
+    drift: tuple[float, float] = (0.0, 2.0)
+    amplitude: tuple[float, float] = (0.4, 1.3)
+
+    def draw(self, base: WebcamProfile, rng: np.random.Generator) -> WebcamProfile:
+        low, high = np.log(self.amplitude[0]), np.log(self.amplitude[1])
+        return replace(
+            base,
+            noise=float(rng.uniform(*self.noise)),
+            drift=float(rng.uniform(*self.drift)),
+            amplitude=float(np.exp(rng.uniform(low, high))),
+        )
+
+
 def simulate_webcam(trace: GazeTrace, profile: WebcamProfile, rng: np.random.Generator) -> GazeTrace:
-    cam = resample(trace, profile.fps)
+    return degrade(resample(trace, profile.fps), profile, rng)
+
+
+def degrade(cam: GazeTrace, profile: WebcamProfile, rng: np.random.Generator) -> GazeTrace:
+    """Add webcam-level noise, drift, blinks and dropouts to a trace that is
+    already at the camera's frame rate (`profile.fps` is used for timing only)."""
     n = len(cam)
     x, y = cam.x.copy(), cam.y.copy()
 
@@ -63,7 +92,7 @@ def simulate_webcam(trace: GazeTrace, profile: WebcamProfile, rng: np.random.Gen
     x[lost] = np.nan
     y[lost] = np.nan
 
-    return GazeTrace(cam.t, x, y, {**trace.meta, "webcam": asdict(profile)})
+    return GazeTrace(cam.t, x, y, {**cam.meta, "webcam": asdict(profile)})
 
 
 def _smooth_noise(n: int, std: float, width_frames: float, rng: np.random.Generator) -> np.ndarray:
