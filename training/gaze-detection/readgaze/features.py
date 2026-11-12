@@ -27,7 +27,6 @@ from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
-from scipy.stats import skew
 
 from .trace import GazeTrace, fill_gaps
 
@@ -98,7 +97,7 @@ def compute_features(window: GazeTrace, config: FeatureConfig = FeatureConfig())
     steps = dx[np.isfinite(dx)]
     duration_min = max(window.duration, 1e-9) / 60.0
 
-    velocity_skew = float(abs(skew(steps))) if steps.std() > 0 else 0.0
+    velocity_skew = abs(_skew(steps))
     n_sweeps = len(sweeps.times)
 
     if n_sweeps >= 3:
@@ -185,7 +184,19 @@ def _prepare(window: GazeTrace, config: FeatureConfig) -> _Prepared | None:
 def _median_filter(values: np.ndarray, frames: int) -> np.ndarray:
     if frames <= 1:
         return values
-    smooth = pd.Series(values).rolling(frames, center=True, min_periods=1).median().to_numpy(copy=True)
+    if frames % 2 == 0:
+        smooth = pd.Series(values).rolling(frames, center=True, min_periods=1).median().to_numpy(copy=True)
+    else:
+        # The same centred median that ignores missing samples, without the
+        # pandas overhead (this runs once per window, hundreds of thousands
+        # of times). Sorting puts NaN last, so the first `count` are valid.
+        half = frames // 2
+        padded = np.pad(values, half, constant_values=np.nan)
+        ordered = np.sort(np.lib.stride_tricks.sliding_window_view(padded, frames), axis=1)
+        count = np.isfinite(ordered).sum(axis=1)
+        lower = np.take_along_axis(ordered, np.maximum((count - 1) // 2, 0)[:, None], axis=1)[:, 0]
+        upper = np.take_along_axis(ordered, (count // 2).clip(max=frames - 1)[:, None], axis=1)[:, 0]
+        smooth = np.where(count > 0, (lower + upper) / 2.0, np.nan)
     smooth[~np.isfinite(values)] = np.nan  # don't invent samples inside long gaps
     return smooth
 
@@ -197,9 +208,17 @@ def _robust_std(values: np.ndarray) -> float:
 
 def _return_direction(steps: np.ndarray) -> int:
     """Direction of the long tail of the step distribution: where the big jumps go."""
-    if steps.std() == 0:
-        return 1
-    return 1 if skew(steps) > 0 else -1
+    return 1 if _skew(steps) >= 0 else -1
+
+
+def _skew(values: np.ndarray) -> float:
+    """Sample skewness (the biased estimator, as `scipy.stats.skew` gives by
+    default); 0 for constant input. Written out because it runs per window."""
+    centred = values - values.mean()
+    variance = float(np.mean(centred**2))
+    if variance <= 0:
+        return 0.0
+    return float(np.mean(centred**3) / variance**1.5)
 
 
 def _jump_events(dx: np.ndarray, threshold: float) -> list[tuple[int, int, float]]:

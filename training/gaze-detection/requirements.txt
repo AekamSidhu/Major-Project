@@ -7,3 +7,6 @@ scipy>=1.13
 pandas>=2.2
 scikit-learn>=1.5
 matplotlib>=3.9
+# The network detector (readgaze.seqmodel) also needs PyTorch. CPU wheels are
+# enough on a laptop: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
