@@ -22,7 +22,7 @@ pip install -q "scikit-learn>=1.5" "pandas>=2.2" "scipy>=1.13" 2>&1 | tail -1 ||
 python -c "import torch, sklearn; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'sklearn', sklearn.__version__)" | tee -a "$OUT/run.log"
 
 log "downloads"
-python -I ../download_gazebase.py --dest "$D/gazebase" --verify | tail -2
+python ../download_gazebase.py --dest "$D/gazebase" --verify | tail -2
 [ -s "$D/gazebasevr/gazebasevr.zip" ] || curl -sSL -o "$D/gazebasevr/gazebasevr.zip" https://ndownloader.figshare.com/files/38844024
 echo "048c04b00fd64347375cc8d37b451a22  $D/gazebasevr/gazebasevr.zip" | md5sum -c -
 [ -s "$D/desktopactivity/DesktopActivity.zip" ] || curl -sSL -o "$D/desktopactivity/DesktopActivity.zip" https://raw.githubusercontent.com/EyeSyn/GazeGraph/HEAD/DesktopActivity.zip
