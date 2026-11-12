@@ -129,7 +129,36 @@ then `final.py` picks the detector on development people and scores the
 locked test people once. Output: `/kaggle/working/results/`
 (`reading_detector_results.json`, logs, network weights).
 
-Reading in the Wild: Karan said to request access with his email.
+Reading in the Wild: access requested with Karan's email on 2026-11-13 and
+granted at once. The page gives a personal download-links JSON (signed,
+expires about 2026-12-12; a copy is in `openmeet-data/ritw/`, never commit
+it). `readgaze/datasets/ritw.py` reads only the gaze CSV out of each 2 GB
+MPS zip with HTTP range requests (about 2 MB per sequence, 2 GB in all).
+Facts found:
+- labels follow the authors' code: trimmed to `whisper_start..whisper_end`,
+  tasks 8-11 not reading, task 16 skipped, rest reading; 851 sequences
+- `pt_id` is a slot number (1-5) per collection day, not a person; a person
+  is day + slot (about 80 people). The official split is by date, so no
+  person is in two splits: it is person-level.
+- the paper's gaze-only numbers (Seattle test, accuracy): 82.3% on 2 s
+  windows at 60 Hz, 85.8% on 5 s, 80.4% on 2 s at 10 Hz
+
+## Kaggle runs started 2026-11-13 ~01:30 (account KaranChadha24, private notebooks)
+
+1. **OpenMeet reading detector** (version 2; version 1 failed on an import):
+   `experiments/kaggle_run.sh`, GazeBase end to end, about 3 h.
+   Log: https://www.kaggle.com/code/karanchadha24/openmeet-reading-detector/log
+   Output: `results/reading_detector_results.json`, `final.log`,
+   `boosting_cv.log`, `network_cv.log`, `model_cnn_gpu_seed{0,1,2}.pt`.
+2. **OpenMeet reading detector RitW** (version 1): `experiments/kaggle_ritw.sh`
+   with the links URL in the cell, about 1-1.5 h.
+   Log: https://www.kaggle.com/code/karanchadha24/openmeet-reading-detector-ritw/log
+   Output: `results/ritw_10s.json`, `ritw_5s.json` and their logs; HEADLINE
+   lines at the end of each log.
+
+Next after both finish: (a) zero-shot GazeBase network on RitW: add notebook
+1's output as an input to notebook 2 and rerun with
+`GAZEBASE_WEIGHTS=/kaggle/input/<notebook-1-output>/results`; (b) write up.
 
 ## Earlier: running unattended (`experiments/queue.sh`, log in `openmeet-data/logs/queue.log`), all finished
 
