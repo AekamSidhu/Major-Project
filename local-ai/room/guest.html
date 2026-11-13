@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMeet interview</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5d6676; --line:#e2e5ea; --accent:#2f6fde; --bad:#c7372f; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2e3440; --accent:#6c9cf0; --bad:#f0605a; } }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width:1000px; margin:auto; padding:16px; }
+  h1 { font-size:20px; margin:4px 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .stage { position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9; }
+  .stage #remote { width:100%; height:100%; object-fit:cover; }
+  #self { position:absolute; right:12px; bottom:12px; width:24%; max-width:220px; aspect-ratio:16/9; border-radius:8px; border:2px solid rgba(255,255,255,.6); object-fit:cover; background:#222; }
+  .status { position:absolute; left:12px; top:12px; background:rgba(0,0,0,.55); color:#fff; padding:4px 10px; border-radius:999px; font-size:13px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+  button { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:9px 14px; font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; } button.danger { color:var(--bad); }
+  button:disabled { opacity:.5; cursor:default; }
+  input[type=text] { padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); font:inherit; width:260px; max-width:100%; }
+  .notice { color:var(--muted); font-size:14px; }
+  label.consent { display:flex; gap:8px; align-items:flex-start; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interview</h1>
+  <div class="card" id="lobby">
+    <p class="notice"><b>Before you join.</b> This interview runs on OpenMeet, on the interviewer's own computer. While you talk,
+      that computer transcribes the conversation and looks at two things to help the interviewer: whether your eye movements look
+      like reading, and whether your answers read like AI-written text. Nothing is sent to an online service and nothing is recorded;
+      the interviewer keeps a written summary. These signals can be wrong, and they are a prompt for questions, not a judgement.</p>
+    <div class="row"><input type="text" id="name" placeholder="Your name (optional)" maxlength="60"></div>
+    <label class="consent"><input type="checkbox" id="agree"> <span>I understand and agree to join on these terms.</span></label>
+    <div class="row"><button class="primary" id="btnJoin" disabled>Join the interview</button><span class="notice" id="msg"></span></div>
+  </div>
+  <div id="call" hidden>
+    <div class="stage">
+      <video id="remote" autoplay playsinline></video>
+      <video id="self" autoplay playsinline muted></video>
+      <div class="status" id="status">Waiting for the interviewer…</div>
+    </div>
+    <div class="row">
+      <button id="btnMic">Mute</button><button id="btnCam">Camera off</button><button class="danger" id="btnLeave">Leave</button>
+    </div>
+  </div>
+</div>
+<script type="module">
+import { getMedia, connect, makePeer, handleSignal, toggleTrack } from "/room.js";
+const $ = (id) => document.getElementById(id);
+const room = location.pathname.split("/").pop();
+const key = new URLSearchParams(location.search).get("k") || "";
+let local = null, pc = null, signal = null;
+
+$("agree").onchange = () => ($("btnJoin").disabled = !$("agree").checked);
+$("btnJoin").onclick = async () => {
+  $("btnJoin").disabled = true;
+  try { local = await getMedia(); }
+  catch (e) { $("msg").textContent = "Camera or microphone blocked: " + e.message + ". Allow them and try again."; $("btnJoin").disabled = false; return; }
+  $("self").srcObject = local; $("lobby").hidden = true; $("call").hidden = false;
+  signal = connect(room, "guest", key, $("name").value.trim(), onSignal);
+  signal.ws.onclose = (e) => { if (e.code === 4403) $("status").textContent = "This invite link is not valid. Ask the interviewer for a new one."; };
+};
+async function onSignal(m) {
+  if (m.type === "offer") {
+    if (pc) pc.close();
+    pc = makePeer(local, signal, (stream) => ($("remote").srcObject = stream), (s) => {
+      $("status").textContent = { connected: "Connected", connecting: "Connecting…", disconnected: "Connection lost, retrying…", failed: "Could not connect" }[s] || s;
+    });
+  }
+  if (m.type === "peer-left") { $("status").textContent = "The interviewer left. Waiting…"; if (pc) { pc.close(); pc = null; } $("remote").srcObject = null; }
+  if (m.type === "hello" && m.peer_present) $("status").textContent = "Connecting…";
+  if (pc) await handleSignal(pc, signal, m);
+}
+$("btnMic").onclick = () => ($("btnMic").textContent = toggleTrack(local, "audio") ? "Mute" : "Unmute");
+$("btnCam").onclick = () => ($("btnCam").textContent = toggleTrack(local, "video") ? "Camera off" : "Camera on");
+$("btnLeave").onclick = () => { if (pc) pc.close(); signal.ws.close(); local.getTracks().forEach((t) => t.stop()); $("status").textContent = "You left the interview."; };
+</script>
+</body>
+</html>

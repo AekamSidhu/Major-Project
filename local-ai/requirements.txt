@@ -8,3 +8,6 @@ fastembed>=0.5
 # Answer-integrity checks (integrity/): the reading network and frame decoding
 onnxruntime>=1.17
 pillow>=10
+# OpenMeet Room (room_server.py): WebSocket signaling and its HTTPS certificate
+websockets>=12
+cryptography>=42

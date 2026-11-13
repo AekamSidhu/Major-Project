@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMeet Room</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5d6676; --line:#e2e5ea; --accent:#2f6fde;
+          --low:#2e8b57; --possible:#c98a00; --high:#c7372f; --track:#e9ecf1; --me:#2f6fde; --them:#8a4fd6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2e3440;
+    --accent:#6c9cf0; --low:#4cc38a; --possible:#e3b341; --high:#f0605a; --track:#2a2f38; --me:#6c9cf0; --them:#b98cf0; } }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:14.5px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 18px; border-bottom:1px solid var(--line); background:var(--card); flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; } .muted { color:var(--muted); }
+  main { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr); gap:14px; padding:14px 18px; max-width:1500px; margin:auto; }
+  @media (max-width:960px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  h2 { font-size:14px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .stage { position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9; }
+  .stage #remote { width:100%; height:100%; object-fit:contain; }
+  #self { position:absolute; right:12px; bottom:12px; width:22%; aspect-ratio:16/9; border-radius:8px; border:2px solid rgba(255,255,255,.6); object-fit:cover; background:#222; }
+  .badge { position:absolute; left:12px; top:12px; background:rgba(0,0,0,.55); color:#fff; padding:4px 10px; border-radius:999px; font-size:13px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  button { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; } button:disabled { opacity:.5; cursor:default; }
+  .invite { font-family:ui-monospace,Consolas,monospace; font-size:12.5px; word-break:break-all; background:var(--track); padding:6px 8px; border-radius:6px; }
+  .side { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .meter { height:10px; background:var(--track); border-radius:5px; overflow:hidden; } .meter > div { height:100%; width:0; transition:width .3s; }
+  .big { font-size:24px; font-weight:650; font-variant-numeric:tabular-nums; }
+  .level { font-size:12px; font-weight:650; text-transform:uppercase; letter-spacing:.04em; }
+  .low { color:var(--low); } .possible { color:var(--possible); } .high { color:var(--high); }
+  #transcript { max-height:340px; overflow:auto; display:flex; flex-direction:column; gap:6px; }
+  .line { font-size:13.5px; } .line b { font-weight:600; } .line.interviewer b { color:var(--me); } .line.candidate b { color:var(--them); }
+  .answers { display:flex; flex-direction:column; gap:10px; max-height:520px; overflow:auto; }
+  .answer { border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .answer .q { font-size:12.5px; color:var(--muted); margin-bottom:4px; } .answer .a { font-size:13px; margin:6px 0; max-height:4.4em; overflow:hidden; }
+  .scores { display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12.5px; }
+  .note { font-size:12px; color:var(--muted); }
+  .pill { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); }
+  .pill.on { color:var(--low); border-color:var(--low); }
+</style>
+</head>
+<body>
+<header>
+  <h1>OpenMeet Room <span class="muted" id="roomId"></span></h1>
+  <div class="row" style="margin:0">
+    <span class="pill" id="pillPeer">candidate: not joined</span>
+    <span class="pill" id="pillAsr">transcription: –</span>
+    <span class="pill" id="pillGaze">gaze: –</span>
+  </div>
+</header>
+<main>
+  <section>
+    <div class="stage">
+      <video id="remote" autoplay playsinline></video>
+      <video id="self" autoplay playsinline muted></video>
+      <div class="badge" id="badge">Waiting for the candidate to join…</div>
+    </div>
+    <div class="row">
+      <button id="btnMic">Mute</button><button id="btnCam">Camera off</button>
+      <button id="btnEndAnswer" disabled>End answer now</button>
+      <button id="btnReport">Download report</button>
+      <span class="note">Use headphones so the candidate's voice doesn't reach your microphone.</span>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Live transcript</h2>
+      <div id="transcript"><span class="note">Speech from each side appears here a few seconds after it is said.</span></div>
+    </div>
+  </section>
+  <section class="side">
+    <div class="card">
+      <h2>Invite the candidate</h2>
+      <div class="note">Send one of these links. A phone or laptop on the same Wi-Fi uses the first; it will warn about the
+        certificate once (the server made it on this computer).</div>
+      <div id="invites" class="row" style="flex-direction:column; align-items:stretch"></div>
+    </div>
+    <div class="card">
+      <h2>Reading, last 10 seconds</h2>
+      <div class="row" style="justify-content:space-between; margin:0"><span class="big" id="liveP">–</span><span class="level muted" id="liveL"></span></div>
+      <div class="meter"><div id="liveBar"></div></div>
+    </div>
+    <div class="card">
+      <h2>Answers</h2>
+      <div class="answers" id="answers"><span class="note">Each answer is checked when the candidate stops and you speak again.</span></div>
+      <p class="note">A high score is a reason to ask a follow-up question, never proof. Not yet calibrated on real interviews.</p>
+    </div>
+  </section>
+</main>
+<script type="module">
+import { getMedia, connect, makePeer, handleSignal, toggleTrack } from "/room.js";
+const $ = (id) => document.getElementById(id);
+const pct = (p) => (p == null ? "–" : Math.round(p * 100) + "%");
+const LABEL = { low: "low", possible: "possible", high: "high", too_short: "too short", not_enough_gaze: "no gaze" };
+const post = async (path, body, raw) => {
+  const r = await fetch(path, raw ? { method: "POST", body: raw } :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+};
+
+// ---- room and call ----
+const room = await post("/api/rooms");
+$("roomId").textContent = "· room " + room.room;
+const fake = new URLSearchParams(location.search).has("fake") ? "&fake=1" : "";
+$("invites").innerHTML = room.invites.map((u) => `<div class="invite">${u}${fake}</div>`).join("") +
+  `<button id="btnCopy">Copy the first link</button>`;
+$("btnCopy").onclick = () => navigator.clipboard.writeText(room.invites[0] + fake);
+let local;
+try { local = await getMedia(); }
+catch (e) {  // still useful receive-only: the candidate's video, gaze and transcript
+  local = new MediaStream();
+  $("badge").textContent = "Your camera/microphone is blocked (" + e.message + "). Allow them in the browser and reload.";
+}
+$("self").srcObject = local;
+let pc = null, remoteStream = null, candidateName = "";
+const signal = connect(room.room, "host", room.host_key, "", async (m) => {
+  if (m.type === "peer-joined" || (m.type === "hello" && m.peer_present)) {
+    candidateName = m.name || "";
+    if (pc) pc.close();
+    pc = makePeer(local, signal, onRemote, (s) => {
+      $("badge").textContent = { connected: (candidateName || "Candidate") + " connected", connecting: "Connecting…",
+        disconnected: "Connection lost, retrying…", failed: "Could not connect" }[s] || s;
+      $("pillPeer").textContent = "candidate: " + s; $("pillPeer").className = "pill" + (s === "connected" ? " on" : "");
+    });
+    await pc.setLocalDescription(await pc.createOffer());
+    signal.send({ type: "offer", sdp: pc.localDescription });
+  } else if (m.type === "peer-left") {
+    $("badge").textContent = "The candidate left. Waiting…"; $("pillPeer").textContent = "candidate: left"; $("pillPeer").className = "pill";
+    if (pc) { pc.close(); pc = null; } $("remote").srcObject = null; remoteStream = null; await closeAnswer();
+  } else if (pc) await handleSignal(pc, signal, m);
+});
+function onRemote(stream) {
+  if (remoteStream === stream) return;
+  remoteStream = stream; $("remote").srcObject = stream;
+  if (stream.getAudioTracks().length) startSegmenter(stream, "candidate");
+}
+$("btnMic").onclick = () => ($("btnMic").textContent = toggleTrack(local, "audio") ? "Mute" : "Unmute");
+$("btnCam").onclick = () => ($("btnCam").textContent = toggleTrack(local, "video") ? "Camera off" : "Camera on");
+
+// ---- candidate's video -> gaze, ~10 frames a second ----
+const grab = document.createElement("canvas"); let sending = false;
+setInterval(async () => {
+  const v = $("remote");
+  if (sending || !remoteStream || !v.videoWidth) return;
+  sending = true;
+  const s = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+  grab.width = Math.round(v.videoWidth * s); grab.height = Math.round(v.videoHeight * s);
+  grab.getContext("2d").drawImage(v, 0, 0, grab.width, grab.height);
+  const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.8));
+  try { await post("/v1/integrity/gaze/frame", null, blob); } catch (e) { $("pillGaze").textContent = "gaze: " + e.message.slice(0, 40); }
+  sending = false;
+}, 100);
+setInterval(async () => {
+  try {
+    const s = await (await fetch("/v1/integrity/status")).json();
+    const live = s.live_reading, g = s.gaze;
+    $("pillGaze").textContent = `gaze: face ${Math.round(g.face_found_fraction * 100)}%`;
+    $("pillGaze").className = "pill" + (g.face_found_fraction > 0.5 ? " on" : "");
+    $("liveP").textContent = pct(live && live.reading_probability);
+    $("liveL").textContent = live ? LABEL[live.level] : g.frames_per_second > 0 ? "not enough gaze yet" : "";
+    $("liveL").className = "level " + (live ? live.level : "muted");
+    $("liveBar").style.width = live ? Math.round(live.reading_probability * 100) + "%" : "0";
+    $("liveBar").style.background = `var(--${live && live.level !== "low" ? live.level : "low"})`;
+  } catch {}
+}, 1000);
+
+// ---- speech of each side, cut at pauses, transcribed on this computer ----
+const audio = new AudioContext({ sampleRate: 16000 });
+document.addEventListener("click", () => audio.resume(), { once: true });
+const segmenters = {};
+function startSegmenter(stream, speaker) {
+  if (segmenters[speaker]) segmenters[speaker].stop();
+  const src = audio.createMediaStreamSource(stream), proc = audio.createScriptProcessor(4096, 1, 1), mute = audio.createGain();
+  mute.gain.value = 0; src.connect(proc); proc.connect(mute).connect(audio.destination);
+  let floor = 0.005, chunks = [], speaking = false, silentFor = 0, startedAt = 0, preroll = [];
+  proc.onaudioprocess = (e) => {
+    const x = new Float32Array(e.inputBuffer.getChannelData(0)), now = Date.now() / 1000, dur = x.length / audio.sampleRate;
+    const rms = Math.sqrt(x.reduce((a, v) => a + v * v, 0) / x.length);
+    const voiced = rms > Math.max(0.012, floor * 3);
+    if (!voiced) floor = 0.95 * floor + 0.05 * rms;
+    if (voiced && !speaking) { speaking = true; chunks = [...preroll]; startedAt = now - dur * (preroll.length + 1); onSpeechStart(speaker, startedAt); }
+    if (speaking) {
+      chunks.push(x); silentFor = voiced ? 0 : silentFor + dur;
+      const length = chunks.length * dur;
+      if (silentFor > 0.8 || length > 20) {
+        speaking = false;
+        if (length - silentFor > 0.6) emitSegment(speaker, startedAt, now - silentFor, chunks);
+      }
+    }
+    preroll = [...preroll, x].slice(-2);
+  };
+  segmenters[speaker] = { stop: () => { proc.disconnect(); src.disconnect(); } };
+}
+if (local.getAudioTracks().length) startSegmenter(local, "interviewer");
+
+function wav(chunks) {
+  const n = chunks.reduce((a, c) => a + c.length, 0), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+  let o = 44; for (const c of chunks) for (const s of c) { v.setInt16(o, Math.max(-1, Math.min(1, s)) * 0x7fff, true); o += 2; }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+// ---- turns: an answer is the candidate's speech until the interviewer talks again ----
+let answer = null, question = [], firstLine = true;
+function onSpeechStart(speaker, t) {
+  if (speaker === "candidate" && !answer) {
+    answer = { start: t, end: t, texts: [], pending: [], question: question.join(" ") };
+    $("btnEndAnswer").disabled = false;
+  }
+  if (speaker === "interviewer" && answer && t > answer.end + 0.5) closeAnswer();
+}
+function emitSegment(speaker, start, end, chunks) {
+  const target = speaker === "candidate" ? answer : null;
+  if (target) target.end = Math.max(target.end, end);
+  const job = post(`/api/rooms/${room.room}/transcribe?speaker=${speaker}&start=${start}&end=${end}`, null, wav(chunks))
+    .then((seg) => {
+      $("pillAsr").textContent = "transcription: on"; $("pillAsr").className = "pill on";
+      if (!seg.text) return;
+      addLine(seg);
+      if (target) target.texts.push(seg.text); else if (speaker === "interviewer") question.push(seg.text);
+    })
+    .catch((e) => { $("pillAsr").textContent = "transcription: " + e.message.slice(0, 50); });
+  if (target) target.pending.push(job);
+}
+function addLine(seg) {
+  if (firstLine) { $("transcript").innerHTML = ""; firstLine = false; }
+  const div = document.createElement("div"); div.className = "line " + seg.speaker;
+  div.innerHTML = `<b>${seg.speaker === "interviewer" ? "You" : candidateName || "Candidate"}:</b> `;
+  div.append(seg.text); $("transcript").append(div); $("transcript").scrollTop = 1e9;
+}
+async function closeAnswer() {
+  const a = answer; if (!a) return;
+  answer = null; question = []; $("btnEndAnswer").disabled = true;
+  await Promise.allSettled(a.pending);
+  const end = Math.max(a.end, a.start + 1);
+  if (!a.texts.length && end - a.start < 5) return; // a cough or noise, not an answer
+  try { renderAnswer(await post(`/api/rooms/${room.room}/answers`, { start: a.start, end, text: a.texts.join(" "), question: a.question })); }
+  catch (e) { console.warn(e); }
+}
+$("btnEndAnswer").onclick = closeAnswer;
+let firstAnswer = true;
+function renderAnswer(r) {
+  if (firstAnswer) { $("answers").innerHTML = ""; firstAnswer = false; }
+  const score = (title, p, level) => `<div><div class="muted">${title}</div><span class="big" style="font-size:18px">${pct(p)}</span>
+    <span class="level ${level}">${LABEL[level] || level}</span></div>`;
+  const div = document.createElement("div"); div.className = "answer";
+  div.innerHTML = `<div class="q"></div><div class="note">Answer ${r.index} · ${Math.round(r.end - r.start)} s</div><div class="a"></div>
+    <div class="scores">${score("AI-written", r.echo && r.echo.ai_probability, r.echo ? r.echo.level : "too_short")}
+    ${score("Reading", r.reading && r.reading.reading_probability, r.reading ? r.reading.level : "not_enough_gaze")}</div>`;
+  div.querySelector(".q").textContent = r.question ? "Q: " + r.question : "";
+  div.querySelector(".a").textContent = r.text || "(no transcript)";
+  $("answers").prepend(div);
+}
+
+// ---- report ----
+$("btnReport").onclick = async () => {
+  const r = await (await fetch(`/api/rooms/${room.room}/report`)).json();
+  const t = (s) => new Date(s * 1000).toLocaleTimeString();
+  const lines = [`# Interview report`, ``, `Room ${r.room}, ${new Date(r.created * 1000).toLocaleString()}${r.candidate ? ", candidate " + r.candidate : ""}.`, ``,
+    `Scores are signals for follow-up questions, not judgements; they are not yet calibrated on real interviews.`, ``, `## Answers`, ``];
+  for (const a of r.answers) {
+    lines.push(`### Answer ${a.index} (${t(a.start)}, ${Math.round(a.end - a.start)} s)`, ``);
+    if (a.question) lines.push(`**Question:** ${a.question}`, ``);
+    lines.push(`**Answer:** ${a.text || "(no transcript)"}`, ``,
+      `- AI-written: ${a.echo ? pct(a.echo.ai_probability) + " (" + a.echo.level + ")" : "–"}`,
+      `- Reading: ${a.reading && a.reading.reading_probability != null ? pct(a.reading.reading_probability) + " (" + a.reading.level + ")" : "not enough gaze"}`, ``);
+  }
+  lines.push(`## Transcript`, ``, ...r.transcript.map((s) => `- ${t(s.start)} **${s.speaker}:** ${s.text}`));
+  const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/markdown" })), download: `interview-${r.room}.md` });
+  link.click();
+};
+</script>
+</body>
+</html>
