@@ -14,10 +14,12 @@ share its address instead.
 Transcription (faster-whisper) and both integrity models run here; see
 room/__init__.py for what each side can reach.
 
-Follow-up questions come from a chat model: Ollama on this computer by
-default (`ollama pull llama3.2`), or any OpenAI-compatible endpoint set with
-OPENMEET_ROOM_LLM_URL, OPENMEET_ROOM_LLM_MODEL and OPENMEET_ROOM_LLM_KEY.
-Without one, simple rules suggest follow-ups and the page says so.
+Follow-up questions (room/followups.py, a LangChain chain with guardrails):
+    --followups local    Ollama on this computer (default; `ollama pull llama3.2`)
+    --followups online   Google Gemini; set OPENMEET_GEMINI_API_KEY in the environment
+                         or in ~/.openmeet/room.env. The candidate's join page says so.
+    --followups rules    no model, simple rules
+If the model is unreachable, the rules answer and the page says so.
 """
 
 from __future__ import annotations
@@ -69,7 +71,9 @@ def self_signed_cert(folder: Path) -> tuple[Path, Path]:
 
 
 def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None,  # type: ignore[no-untyped-def]
-                    followup_writer=None) -> FastAPI:
+                    followup_writer=None, followups: str | None = None) -> FastAPI:
+    from room.followups import FollowupWriter
+
     import time
 
     app = FastAPI(title="OpenMeet Room", docs_url=None, redoc_url=None)
@@ -94,7 +98,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         port=port,
         scheme=scheme,
         whisper_model=whisper_model,
-        followup_writer=followup_writer,
+        followup_writer=followup_writer or FollowupWriter(mode=followups),
     )
     return app
 
@@ -104,6 +108,8 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("OPENMEET_ROOM_PORT", "8443")))
     parser.add_argument("--no-https", action="store_true", help="plain http on localhost only")
     parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "base.en"))
+    parser.add_argument("--followups", choices=("local", "online", "rules"), default=None,
+                        help="where follow-up questions come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
@@ -112,13 +118,22 @@ def main() -> None:
     import uvicorn
 
     scheme = "http" if args.no_https else "https"
-    app = create_room_app(args.port, scheme, args.whisper_model)
+    app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups)
     host = "127.0.0.1" if args.no_https else "0.0.0.0"
     ssl = {}
     if not args.no_https:
         cert, key = self_signed_cert(CERT_DIR)
         ssl = {"ssl_certfile": str(cert), "ssl_keyfile": str(key)}
+    from room.followups import Settings
+
+    settings = Settings.load()
+    mode = args.followups or settings.mode
+    if mode == "online" and not settings.gemini_key:
+        raise SystemExit("--followups online needs OPENMEET_GEMINI_API_KEY (environment or ~/.openmeet/room.env)")
+    where = {"local": f"{settings.ollama_model} on this computer (Ollama)", "online": f"{settings.gemini_model} (Google, online)",
+             "rules": "simple rules"}[mode]
     print(f"\nOpenMeet Room: open {scheme}://localhost:{args.port} on this computer.")
+    print(f"  follow-up questions: {where}")
     if not args.no_https:
         for ip in lan_addresses():
             print(f"  candidates on this network join through https://{ip}:{args.port}/join/... (the invite link)")

@@ -9,7 +9,7 @@
   body { overflow: hidden; }
   .topbar { height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px;
     border-bottom: 1px solid var(--border); background: var(--bg); }
-  .topbar .mid { display: flex; align-items: baseline; gap: 12px; }
+  .topbar .mid { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
   .call-clock { font-size: 26px; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; }
   .call-clock.idle { color: var(--muted); }
   .live-dot { color: var(--danger); align-self: center; }
@@ -47,7 +47,9 @@
   .scores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .score .row { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 6px; }
   .score b { font-size: 20px; font-stretch: 82%; font-weight: 620; font-variant-numeric: tabular-nums; }
-  #transcript { display: flex; flex-direction: column; gap: 14px; max-height: 360px; overflow: auto; }
+  .panel .card { animation: rise .38s var(--ease) both; } .panel .card:nth-child(2) { animation-delay: .05s; }
+  .panel .card:nth-child(3) { animation-delay: .1s; } .panel .card:nth-child(4) { animation-delay: .15s; }
+  #transcript { scroll-behavior: smooth; display: flex; flex-direction: column; gap: 14px; max-height: 360px; overflow: auto; }
   .line { display: flex; gap: 10px; animation: rise .18s var(--ease) both; }
   .avatar { width: 28px; height: 28px; border-radius: 999px; flex: none; display: inline-flex; align-items: center; justify-content: center;
     font-size: 11.5px; font-weight: 650; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--fg-soft); }
@@ -84,7 +86,7 @@
   <section class="stage-col">
     <div class="stage">
       <video id="remote" autoplay playsinline></video>
-      <div class="waiting" id="waiting">
+      <div class="waiting fade" id="waiting">
         <div class="card">
           <h2>Waiting for the candidate</h2>
           <p class="note" style="font-size:13.5px">Send this link. A phone or laptop on the same Wi-Fi can open it; the browser warns about the certificate once
@@ -135,7 +137,7 @@
   </aside>
 </main>
 <script type="module">
-import { getMedia, connect, makePeer, handleSignal, toggleTrack } from "/room.js";
+import { getMedia, connect, makePeer, handleSignal, toggleTrack, showSelf } from "/room.js";
 const $ = (id) => document.getElementById(id);
 const pct = (p) => (p == null ? "–" : Math.round(p * 100) + "%");
 const LABEL = { low: "low", possible: "possible", high: "high", too_short: "too short", not_enough_gaze: "no gaze" };
@@ -169,7 +171,7 @@ catch (e) {  // still useful receive-only: the candidate's video, gaze and trans
   local = new MediaStream();
   $("badge").hidden = false; $("badge").textContent = "Your camera/microphone is blocked. Allow them and reload.";
 }
-$("self").srcObject = local;
+showSelf($("self"), local);
 $("btnMic").innerHTML = ICON.mic; $("btnCam").innerHTML = ICON.cam;
 let pc = null, remoteStream = null, candidateName = "", connectedAt = null;
 const STATES = { connected: "connected", connecting: "connecting…", disconnected: "reconnecting…", failed: "could not connect" };
@@ -180,19 +182,20 @@ const signal = connect(room.room, "host", room.host_key, "", async (m) => {
     pc = makePeer(local, signal, onRemote, (s) => {
       const ok = s === "connected";
       setPill("pillPeer", (candidateName || "candidate") + " " + (STATES[s] || s), ok ? "on" : s === "failed" ? "bad" : "");
-      $("waiting").hidden = ok || s === "disconnected";
+      $("waiting").classList.toggle("out", ok || s === "disconnected");
       if (ok && !connectedAt) connectedAt = Date.now();
     });
     await pc.setLocalDescription(await pc.createOffer());
     signal.send({ type: "offer", sdp: pc.localDescription });
   } else if (m.type === "peer-left") {
-    setPill("pillPeer", "candidate left", ""); $("waiting").hidden = false; $("nameplate").hidden = true;
+    setPill("pillPeer", "candidate left", ""); $("waiting").classList.remove("out"); $("nameplate").hidden = true;
     if (pc) { pc.close(); pc = null; } $("remote").srcObject = null; remoteStream = null; await closeAnswer();
   } else if (pc) await handleSignal(pc, signal, m);
 });
 function onRemote(stream) {
   if (remoteStream === stream) return;
-  remoteStream = stream; $("remote").srcObject = stream;
+  remoteStream = stream; $("remote").classList.add("waiting-frame"); $("remote").onloadeddata = () => $("remote").classList.remove("waiting-frame");
+  $("remote").srcObject = stream;
   $("nameplate").hidden = false; $("nameplate").textContent = candidateName || "Candidate";
   if (stream.getAudioTracks().length) startSegmenter(stream, "candidate");
 }
@@ -350,9 +353,13 @@ async function suggest(index) {
       $("asknext").append(b);
     }
     $("fuSource").hidden = false;
+    const dropped = r.dropped && r.dropped.length ? ` The guardrails held back ${r.dropped.length} (${[...new Set(r.dropped)].join(", ")}).` : "";
     $("fuSource").textContent = r.source === "ai"
-      ? `Written by ${r.model} from the answer and the transcript.`
-      : "Written by simple rules because no AI model is running. Start Ollama (ollama pull llama3.2) for AI follow-ups.";
+      ? (r.mode === "online"
+        ? `Written by ${r.model} (Google, online) from the answer text, with emails, phone numbers and the candidate's name removed.`
+        : `Written by ${r.model} on this computer.`) + dropped
+      : r.mode === "rules" ? "Written by simple rules (the room runs without an AI model)."
+      : "Written by simple rules because the AI model did not answer. Check that Ollama is running (ollama pull llama3.2).";
   } catch (e) {
     if (job === fuJob) $("asknext").innerHTML = `<p class="note">Could not write follow-ups: ${e.message}</p>`;
   } finally {

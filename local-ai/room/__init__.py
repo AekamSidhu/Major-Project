@@ -10,8 +10,9 @@ The interviewer's browser then sends, to this computer only:
 - each speaker's speech, cut at pauses, for local transcription (Whisper);
 - frames of the candidate's video, for the reading-gaze check;
 - each finished answer's transcript, for the AI-written-answer check and
-  for follow-up questions (room/followups.py: a chat model on this computer
-  by default, or rules when none is running).
+  for follow-up questions (room/followups.py: Ollama on this computer by
+  default; Google Gemini in online mode, which the candidate's join page
+  then states; simple rules when no model answers).
 
 Who may call what:
 - interviewer endpoints (/host, /api/*, /v1/integrity/*) answer only to
@@ -46,6 +47,9 @@ HERE = Path(__file__).resolve().parent
 MAX_SEGMENT_BYTES = 8 * 1024 * 1024
 SPEAKERS = ("interviewer", "candidate")
 MIN_CONFIDENCE = 0.35
+OFFLINE_TERMS = "Nothing goes to an online service and nothing is recorded;"
+ONLINE_TERMS = ("Nothing is recorded. To suggest follow-up questions, the text of your answers (not audio or video) "
+                "is sent to Google Gemini, with emails, phone numbers and your name removed;")
 PHANTOMS = {"thank you", "thanks for watching", "thank you for watching", "well see you in the next one",
             "see you in the next one", "bye", "you", "so", "okay", "subtitles by the amaraorg community"}
 
@@ -160,7 +164,10 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
 
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     def join_page(room_id: str) -> str:
-        return page("guest.html")
+        html = page("guest.html")
+        if writer.online:  # the candidate agrees to what actually happens
+            html = html.replace(OFFLINE_TERMS, ONLINE_TERMS)
+        return html
 
     @app.post("/api/rooms", dependencies=[Depends(host_only)])
     def create_room() -> dict[str, Any]:
@@ -173,8 +180,9 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
 
     @app.get("/api/status", dependencies=[Depends(host_only)])
     def status() -> dict[str, Any]:
-        return {"transcription_model": whisper_model, "rooms": len(rooms),
-                "followup_model": writer.model_name, "followup_model_ok": writer.model_ok}
+        return {"transcription_model": whisper_model, "rooms": len(rooms), "followup_mode": writer.mode,
+                "followup_model": writer.model_name, "followup_model_ok": writer.model_ok,
+                "followup_error": writer.last_error}
 
     @app.post("/api/rooms/{room_id}/transcribe", dependencies=[Depends(host_only)])
     async def transcribe(room_id: str, request: Request, speaker: str, start: float, end: float) -> dict[str, Any]:
@@ -235,7 +243,8 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
 
         def run() -> dict[str, Any]:
             with followup_lock:
-                return writer.write(answer["question"], answer["text"], list(room.transcript), previous)
+                return writer.write(answer["question"], answer["text"], list(room.transcript), previous,
+                                    candidate_name=room.candidate_name)
 
         result = await asyncio.get_running_loop().run_in_executor(None, run)
         answer["followups"] = result

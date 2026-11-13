@@ -11,7 +11,7 @@
   .lobby { max-width: 1060px; margin: 0 auto; padding: 40px 20px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: center; }
   @media (max-width: 860px) { .lobby { grid-template-columns: 1fr; padding-top: 20px; } }
   .preview { position: relative; aspect-ratio: 16/9; border-radius: 14px; overflow: hidden; background: var(--stage); }
-  .preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .preview video { width: 100%; height: 100%; object-fit: cover; }
   .preview .placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b9c2bf; font-size: 14px; }
   .panel h1 { font-size: 40px; line-height: 1.05; margin: 4px 0 10px; }
   .terms { margin: 18px 0; padding: 14px 16px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 13.5px; color: var(--fg-soft); line-height: 1.6; }
@@ -22,11 +22,12 @@
   .call { height: calc(100vh - 60px); display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
   .stage { position: relative; flex: 1; min-height: 240px; border-radius: 14px; overflow: hidden; background: var(--stage); }
   #remote { width: 100%; height: 100%; object-fit: contain; display: block; }
-  #self { position: absolute; right: 16px; bottom: 16px; width: 24%; min-width: 120px; max-width: 260px; aspect-ratio: 16/9; object-fit: cover; transform: scaleX(-1);
+  #self { position: absolute; right: 16px; bottom: 16px; width: 24%; min-width: 120px; max-width: 260px; aspect-ratio: 16/9; object-fit: cover;
     border-radius: 10px; border: 1px solid rgb(255 255 255 / 0.16); background: #222826; box-shadow: 0 12px 30px -12px rgb(0 0 0 / .7); }
   .chip { position: absolute; left: 16px; top: 16px; display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 6px;
     background: rgb(16 20 19 / 0.72); color: #fff; font-size: 12.5px; font-weight: 550; }
   .dock { display: flex; justify-content: center; gap: 12px; padding: 6px; }
+  #status { transition: background-color .3s var(--ease); }
   .ended { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--stage); color: #e7ecea; text-align: center; padding: 20px; }
 </style>
 </head>
@@ -37,11 +38,11 @@
 </header>
 
 <main class="lobby" id="lobby">
-  <div class="preview rise">
+  <div class="preview enter">
     <video id="preview" autoplay playsinline muted></video>
     <div class="placeholder" id="previewNote">Your camera preview appears here</div>
   </div>
-  <div class="panel rise">
+  <div class="panel enter-2">
     <h1>Ready to join?</h1>
     <p class="soft" style="margin:0">This interview runs on OpenMeet, on the interviewer's own computer.</p>
     <div class="terms">
@@ -66,7 +67,7 @@
     <video id="remote" autoplay playsinline></video>
     <span class="chip" id="status"><span class="dot live" style="color:var(--warn)"></span>Waiting for the interviewer…</span>
     <video id="self" autoplay playsinline muted></video>
-    <div class="ended" id="ended" hidden><div><h1 style="font-size:26px;margin-bottom:6px">You left the interview</h1><p class="muted">You can close this tab.</p></div></div>
+    <div class="ended fade out" id="ended"><div><h1 style="font-size:26px;margin-bottom:6px">You left the interview</h1><p class="muted">You can close this tab.</p></div></div>
   </div>
   <div class="dock">
     <button class="round" id="btnMic" title="Mute"></button>
@@ -75,7 +76,7 @@
   </div>
 </main>
 <script type="module">
-import { getMedia, connect, makePeer, handleSignal, toggleTrack } from "/room.js";
+import { getMedia, connect, makePeer, handleSignal, toggleTrack, showSelf } from "/room.js";
 const $ = (id) => document.getElementById(id);
 const ICON = {
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></svg>',
@@ -89,7 +90,7 @@ const key = new URLSearchParams(location.search).get("k") || "";
 let local = null, pc = null, signal = null;
 
 // A preview before joining, so the candidate can check camera and framing.
-getMedia().then((s) => { local = s; $("preview").srcObject = s; $("previewNote").hidden = true; })
+getMedia().then((s) => { local = s; showSelf($("preview"), s); $("previewNote").hidden = true; })
   .catch((e) => { $("previewNote").textContent = "Camera or microphone blocked: allow them in the browser, then reload."; });
 $("agree").onchange = () => ($("btnJoin").disabled = !$("agree").checked);
 $("btnJoin").onclick = async () => {
@@ -98,7 +99,8 @@ $("btnJoin").onclick = async () => {
     try { local = await getMedia(); }
     catch (e) { $("msg").textContent = "Camera or microphone blocked: " + e.message + ". Allow them and try again."; $("btnJoin").disabled = false; return; }
   }
-  $("self").srcObject = local; $("lobby").hidden = true; $("call").hidden = false; $("statusPill").textContent = "In the interview";
+  const enter = () => { showSelf($("self"), local); $("lobby").hidden = true; $("call").hidden = false; $("statusPill").textContent = "In the interview"; };
+  if (document.startViewTransition) document.startViewTransition(enter); else enter();
   $("btnMic").innerHTML = ICON.mic; $("btnCam").innerHTML = ICON.cam; $("btnLeave").innerHTML = ICON.leave;
   signal = connect(room, "guest", key, $("name").value.trim(), onSignal);
   signal.ws.onclose = (e) => { if (e.code === 4403) setStatus("This invite link is not valid. Ask the interviewer for a new one.", "danger"); };
@@ -125,7 +127,7 @@ $("btnMic").onclick = () => { const on = toggleTrack(local, "audio"); $("btnMic"
 $("btnCam").onclick = () => { const on = toggleTrack(local, "video"); $("btnCam").innerHTML = on ? ICON.cam : ICON.camOff; $("btnCam").classList.toggle("off", !on); };
 $("btnLeave").onclick = () => {
   if (pc) pc.close(); signal.ws.close(); local.getTracks().forEach((t) => t.stop());
-  $("ended").hidden = false; $("statusPill").textContent = "Left";
+  $("ended").classList.remove("out"); $("statusPill").textContent = "Left";
   document.querySelectorAll(".dock .round").forEach((b) => (b.disabled = true));
 };
 </script>

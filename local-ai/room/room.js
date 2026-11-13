@@ -13,6 +13,14 @@ export async function getMedia() {
   });
 }
 
+/** Mirror a self view only when it is a real camera, so the test picture's label stays readable. */
+export function showSelf(video, stream) {
+  video.classList.add("waiting-frame");
+  video.onloadeddata = () => video.classList.remove("waiting-frame");
+  video.srcObject = stream;
+  video.classList.toggle("mirror", !stream.isTest);
+}
+
 function fakeMedia() {
   const canvas = Object.assign(document.createElement("canvas"), { width: 640, height: 360 });
   const g = canvas.getContext("2d");
@@ -27,6 +35,7 @@ function fakeMedia() {
   const ctx = new AudioContext(), osc = ctx.createOscillator(), gain = ctx.createGain(), dest = ctx.createMediaStreamDestination();
   osc.frequency.value = 220; gain.gain.value = 0.05; osc.connect(gain).connect(dest); osc.start();
   stream.addTrack(dest.stream.getAudioTracks()[0]);
+  stream.isTest = true;
   return stream;
 }
 

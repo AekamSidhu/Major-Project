@@ -11,3 +11,7 @@ pillow>=10
 # OpenMeet Room (room_server.py): WebSocket signaling and its HTTPS certificate
 websockets>=12
 cryptography>=42
+# Room follow-up questions: a LangChain chain over Ollama (local) or Gemini (online)
+langchain-core>=0.3
+langchain-ollama>=0.2
+langchain-google-genai>=2.0
