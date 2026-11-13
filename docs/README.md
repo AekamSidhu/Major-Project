@@ -2,6 +2,7 @@
 
 | Document | What it covers |
 |----------|----------------|
+| [MODELS.md](MODELS.md) | A beginner's guide to the trained models: what each one does, the data and features, how it was trained and tested, results and limits |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, data flow, pipelines, state machines, database model, overlay, OS integrations, security and privacy boundaries, failure modes, design decisions |
 | [INTERNALS.md](INTERNALS.md) | Binding contracts between the Rust crates (public APIs, formats, rules) |
 | [FRONTEND.md](FRONTEND.md) | Contract for the React windows (IPC, events, UX requirements) |
