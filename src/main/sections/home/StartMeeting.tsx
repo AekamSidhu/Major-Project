@@ -64,7 +64,7 @@ function Step({
     >
       <span
         aria-hidden
-        className="mt-px flex size-7 items-center justify-center rounded-lg border border-border-strong bg-surface-2 text-[0.75rem] font-semibold text-fg-soft tabular-nums shadow-[0_1px_0_var(--om-highlight)_inset]"
+        className="om-display mt-[-2px] flex size-7 items-center justify-center text-[1.3rem] text-muted tabular-nums"
       >
         {n}
       </span>
@@ -124,11 +124,11 @@ function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => v
           <label
             key={m.value}
             className={cx(
-              "relative flex cursor-pointer gap-3 rounded-xl border px-4 py-3.5 transition-all duration-150",
+              "relative flex cursor-pointer gap-3 rounded-[10px] border px-4 py-3.5 transition-all duration-150",
               "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
               checked
-                ? "border-accent/60 bg-accent-soft shadow-[0_0_0_4px_var(--om-accent-soft)]"
-                : "border-border bg-surface-2/50 hover:border-border-strong hover:bg-surface-2",
+                ? "border-accent bg-accent-soft"
+                : "border-border bg-surface hover:border-border-strong",
             )}
           >
             <input
@@ -298,9 +298,7 @@ function PrivacyStep({ settings }: { settings: Settings }) {
     >
       <dl className="space-y-3 text-[0.82rem]">
         <div>
-          <dt className="mb-1 text-[0.72rem] font-semibold tracking-wide text-muted uppercase">
-            Data flow
-          </dt>
+          <dt className="mb-1 text-[0.78rem] font-medium text-muted">Data flow</dt>
           <dd>
             {flow.loading && !flow.data && (
               <p role="status" className="flex items-center gap-2 text-muted">
@@ -585,7 +583,7 @@ export function StartMeeting({ settings }: { settings: Settings }) {
             variant="primary"
             busy={starting}
             disabled={problem !== null}
-            className="h-11 rounded-xl px-6 text-[0.95rem]"
+            className="h-11 rounded-md px-6 text-[0.95rem]"
           >
             <Icon name="play" />
             Start meeting

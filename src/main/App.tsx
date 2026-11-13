@@ -76,12 +76,12 @@ function renderSection(id: SectionId): ReactNode {
   }
 }
 
-/** The OpenMeet mark: two overlapping speech rings on the accent gradient. */
+/** The OpenMeet mark: two overlapping speech rings on solid felt. */
 export function BrandMark({ size = 28 }: { size?: number }) {
   return (
     <span
       aria-hidden
-      className="om-gradient inline-flex shrink-0 items-center justify-center rounded-[9px] shadow-glow"
+      className="om-fill inline-flex shrink-0 items-center justify-center rounded-[7px]"
       style={{ width: size, height: size }}
     >
       <svg viewBox="0 0 24 24" width={size * 0.62} height={size * 0.62} fill="none">
@@ -101,7 +101,7 @@ function CaptureIndicator() {
       <button
         type="button"
         onClick={() => setSection("home")}
-        className="flex w-full items-center gap-2.5 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2.5 text-left text-[0.8rem] font-medium text-danger"
+        className="flex w-full items-center gap-2.5 rounded-[10px] border border-danger/30 bg-danger-soft px-3 py-2.5 text-left text-[0.8rem] font-medium text-danger"
       >
         <StatusDot tone="danger" />
         Processing stopped
@@ -114,7 +114,7 @@ function CaptureIndicator() {
       <button
         type="button"
         onClick={() => setSection("home")}
-        className="group flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-left text-[0.8rem] shadow-card transition-colors hover:border-border-strong"
+        className="group flex w-full items-center gap-2.5 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-left text-[0.8rem] transition-colors hover:border-border-strong"
       >
         <StatusDot tone={active ? "danger" : "warn"} pulse={active} />
         <span className="min-w-0 flex-1">
@@ -149,7 +149,7 @@ function Notices() {
         <div
           key={n.id}
           role={n.level === "error" ? "alert" : "status"}
-          className="om-rise pointer-events-auto flex items-start gap-2.5 rounded-xl border border-border bg-raised px-3.5 py-3 text-[0.82rem] shadow-pop"
+          className="om-enter pointer-events-auto flex items-start gap-2.5 rounded-[10px] border border-border bg-raised px-3.5 py-3 text-[0.82rem] shadow-pop"
         >
           <span className="mt-1.5">
             <StatusDot
@@ -246,13 +246,13 @@ export function App() {
     <div className="flex h-full">
       <nav
         aria-label="Sections"
-        className="flex w-60 shrink-0 flex-col border-r border-border bg-surface/80 px-3 py-4 backdrop-blur-xl"
+        className="flex w-60 shrink-0 flex-col border-r border-border bg-bg px-3 py-4"
       >
         <div className="mb-5 flex items-center gap-2.5 px-2">
           <BrandMark />
-          <span className="text-[1.02rem] font-semibold tracking-[-0.02em]">OpenMeet</span>
+          <span className="om-display text-[1.12rem]">OpenMeet</span>
           {devMode && (
-            <span className="ml-auto rounded-full border border-border px-1.5 text-[0.62rem] font-medium text-muted">
+            <span className="ml-auto rounded-[5px] border border-border px-1.5 text-[0.68rem] font-medium text-muted">
               dev
             </span>
           )}
@@ -274,18 +274,12 @@ export function App() {
                         aria-current={current ? "page" : undefined}
                         onClick={() => setSection(item.id)}
                         className={cx(
-                          "group relative flex h-8.5 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[0.85rem] transition-colors duration-150",
+                          "group relative flex h-8.5 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[0.86rem] transition-colors duration-150",
                           current
-                            ? "bg-accent-soft font-medium text-fg"
+                            ? "bg-surface font-medium text-fg shadow-[0_0_0_1px_var(--om-border)]"
                             : "text-fg-soft hover:bg-surface-2 hover:text-fg",
                         )}
                       >
-                        {current && (
-                          <span
-                            aria-hidden
-                            className="om-gradient absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full"
-                          />
-                        )}
                         <Icon
                           name={item.icon}
                           className={cx(
@@ -305,7 +299,7 @@ export function App() {
         <div className="mt-2 flex items-center justify-between gap-2 border-t border-border px-1 pt-3">
           <button
             type="button"
-            className="flex h-8 items-center gap-2 rounded-lg px-2 text-[0.8rem] text-fg-soft transition-colors hover:bg-surface-2 hover:text-fg"
+            className="flex h-8 items-center gap-2 rounded-md px-2 text-[0.8rem] text-fg-soft transition-colors hover:bg-surface-2 hover:text-fg"
             onClick={() => {
               api.overlayToggle().catch((e) => useMain.getState().notify("error", errorMessage(e)));
             }}
@@ -319,7 +313,9 @@ export function App() {
         </div>
       </nav>
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-10 py-9">{renderSection(section)}</div>
+        <div key={section} className="om-enter mx-auto max-w-5xl px-10 pt-10 pb-12">
+          {renderSection(section)}
+        </div>
       </main>
       <Notices />
     </div>

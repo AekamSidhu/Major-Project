@@ -38,12 +38,14 @@ type Action = "pause" | "end" | "emergency" | "overlay" | "screen" | "capture" |
 
 function Card({
   title,
+  count,
   actions,
   children,
   className,
   bodyClassName,
 }: {
   title: string;
+  count?: number;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -51,10 +53,13 @@ function Card({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className={cx("om-card om-rise overflow-hidden", className)}>
+    <section aria-labelledby={id} className={cx("om-card overflow-hidden", className)}>
       <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
-        <h2 id={id} className="text-[0.9rem] font-semibold tracking-[-0.01em] text-fg">
+        <h2 id={id} className="flex items-baseline gap-2 text-[0.92rem] font-semibold text-fg">
           {title}
+          {count ? (
+            <span className="text-[0.82rem] font-medium text-muted tabular-nums">{count}</span>
+          ) : null}
         </h2>
         {actions}
       </div>
@@ -66,11 +71,11 @@ function Card({
 function ElapsedClock({ startedAt }: { startedAt: number }) {
   const now = useNow(1000);
   return (
-    <div className="shrink-0 rounded-2xl border border-border bg-surface-2/80 px-4 py-2 text-right shadow-card">
+    <div className="shrink-0 text-right">
       <div className="om-eyebrow">Elapsed</div>
       <time
         aria-label="Elapsed time"
-        className="block text-[1.5rem] leading-tight font-semibold tracking-[-0.02em] text-fg tabular-nums"
+        className="om-display block text-[3.4rem] leading-[0.95] text-fg tabular-nums"
       >
         {formatElapsed(startedAt, now)}
       </time>
@@ -87,7 +92,7 @@ function HealthWarnings({ components }: { components: ReadonlyArray<ComponentHea
     <div
       role="alert"
       className={cx(
-        "om-rise mb-4 rounded-xl border bg-surface px-4 py-3 shadow-card",
+        "mb-4 rounded-[10px] border bg-surface px-4 py-3",
         severe ? "border-danger/35" : "border-warn/35",
       )}
     >
@@ -98,14 +103,13 @@ function HealthWarnings({ components }: { components: ReadonlyArray<ComponentHea
               <StatusDot tone={w.status === "error" ? "danger" : "warn"} />
             </span>
             <span className="min-w-0 flex-1 text-fg-soft">
-              <span className="font-medium text-fg">{componentLabel(w.component)}</span>
-              {" · "}
+              <span className="font-medium text-fg">{componentLabel(w.component)}</span>{" "}
               {w.status === "error"
-                ? "Error"
+                ? "has an error"
                 : w.status === "degraded"
-                  ? "Degraded"
-                  : "Unsupported"}
-              {w.message ? ` — ${w.message}` : ""}
+                  ? "is degraded"
+                  : "is not supported here"}
+              {w.message ? `: ${w.message}` : ""}
             </span>
             <LinkButton onClick={() => setSection(componentSection(w.component))}>
               {componentSection(w.component) === "diagnostics" ? "Diagnostics" : "Settings"}
@@ -259,17 +263,11 @@ function QuestionItem({
 }) {
   return (
     <li className="om-fade-in relative px-5 py-3 transition-colors hover:bg-surface-2/60">
-      <span
-        aria-hidden
-        className="om-gradient absolute top-3 bottom-3 left-0 w-[3px] rounded-r-full opacity-70"
-      />
-      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[0.72rem] text-muted">
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.74rem] text-muted">
         <Badge tone="accent">{categoryLabel(q.category)}</Badge>
         {q.requiresResponse && mode === "candidate" && <Badge tone="warn">Needs your answer</Badge>}
-        <span>
-          {speakerLabel(q.speakerRole, mode)} ·{" "}
-          {formatOffset(segmentOffset(q.detectedAt, startedAt))}
-        </span>
+        <span>{speakerLabel(q.speakerRole, mode)}</span>
+        <span className="tabular-nums">{formatOffset(segmentOffset(q.detectedAt, startedAt))}</span>
       </div>
       <p className="text-[0.88rem] leading-snug font-medium text-fg">{q.question}</p>
       {q.parts.length > 1 && (
@@ -409,18 +407,22 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
 
   return (
     <div>
-      <header className="om-rise mb-6 flex items-end justify-between gap-6">
+      <header className="mb-7 flex items-end justify-between gap-6 border-b border-border pb-6">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <Badge tone={badge.tone}>
-              <StatusDot tone={badge.tone} pulse={state === "active" && !stopped} />
+            {/* Live is signal red; the label stays quiet. */}
+            <Badge tone={state === "active" && !stopped ? "neutral" : badge.tone}>
+              <StatusDot
+                tone={state === "active" && !stopped ? "danger" : badge.tone}
+                pulse={state === "active" && !stopped}
+              />
               {badge.label}
             </Badge>
             <Badge>{modeLabel(mode)}</Badge>
             {live.demoRunning && <Badge tone="accent">Demo</Badge>}
             {!meeting.persisted && !live.demoRunning && <Badge>Not saved</Badge>}
           </div>
-          <h1 className="truncate text-[1.85rem] leading-tight font-semibold tracking-[-0.03em] text-fg">
+          <h1 className="om-display truncate text-[2.1rem] leading-[1.05] text-fg">
             {meeting.title}
           </h1>
         </div>
@@ -455,7 +457,7 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
       <div
         role="group"
         aria-label="Meeting controls"
-        className="om-rise mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface/70 p-2 shadow-card backdrop-blur"
+        className="mb-6 flex flex-wrap items-center gap-2"
       >
         {!stopped && (
           <Button
@@ -551,15 +553,12 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
               level={live.levels.system ?? 0}
             />
             <ScreenControl settings={settings} on={screenOn} busy={busy} run={run} />
-            <p className="bg-surface-2/50 px-5 py-2.5 text-[0.75rem] text-muted">
+            <p className="px-5 py-2.5 text-[0.76rem] text-muted">
               Audio sources are chosen when the meeting starts. Pause to stop listening.
             </p>
           </Card>
 
-          <Card
-            title={`Questions${questions.length ? ` · ${questions.length}` : ""}`}
-            bodyClassName="max-h-80 overflow-y-auto"
-          >
+          <Card title="Questions" count={questions.length} bodyClassName="max-h-80 overflow-y-auto">
             <p role="status" className="sr-only">
               {latestQuestion ? `Question detected: ${latestQuestion.question}` : ""}
             </p>

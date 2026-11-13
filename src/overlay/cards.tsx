@@ -88,7 +88,7 @@ function headerFor(p: PrimaryRequest): { label: string; text: string | null } {
       };
     default:
       return {
-        label: p.category ? `Question · ${categoryLabel(p.category)}` : "Question",
+        label: p.category ? `${categoryLabel(p.category)} question` : "Question",
         text: p.questionText,
       };
   }
@@ -142,9 +142,7 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
           <ul className="mt-1 space-y-0.5 text-[0.86rem] text-fg-soft">
             {a.clarify.map((c, i) => (
               <li key={i} className="flex gap-1.5">
-                <span aria-hidden className="text-accent">
-                  →
-                </span>
+                <span aria-hidden className="mt-[0.55em] size-1 shrink-0 rounded-full bg-accent" />
                 <span
                   className={cx(caretOn("clarify") && i === a.clarify.length - 1 && "om-caret")}
                 >
@@ -367,15 +365,16 @@ function FollowupItem({ f }: { f: FollowUpQuestion }) {
         type="button"
         onClick={() => copy(f.question)}
         title="Copy question"
-        className="group w-full rounded-xl border border-border bg-[color-mix(in_srgb,var(--om-fg)_3%,transparent)] px-2.5 py-2 text-left transition-colors hover:border-border-strong hover:bg-[color-mix(in_srgb,var(--om-fg)_7%,transparent)]"
+        className="group w-full rounded-lg border border-border bg-[color-mix(in_srgb,var(--om-fg)_3%,transparent)] px-2.5 py-2 text-left transition-colors hover:border-border-strong hover:bg-[color-mix(in_srgb,var(--om-fg)_7%,transparent)]"
       >
         <div className="flex items-start gap-1.5">
           <span
             aria-hidden
-            className={cx("mt-px", f.priority === "high" ? "text-accent" : "text-muted")}
-          >
-            →
-          </span>
+            className={cx(
+              "mt-[0.45em] size-1.5 shrink-0 rounded-full",
+              f.priority === "high" ? "bg-accent" : "border border-muted",
+            )}
+          />
           <span
             className={cx(
               "text-[0.88rem] leading-snug",

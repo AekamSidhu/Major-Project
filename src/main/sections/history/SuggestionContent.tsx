@@ -4,11 +4,7 @@ import { useMemo, type ReactNode } from "react";
 import { parseAnswer } from "@/lib/answer";
 
 function Label({ children }: { children: ReactNode }) {
-  return (
-    <div className="mb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
-      {children}
-    </div>
-  );
+  return <div className="mb-1 text-[0.76rem] font-semibold text-muted">{children}</div>;
 }
 
 export function SuggestionContent({ content }: { content: string }) {

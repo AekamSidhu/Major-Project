@@ -89,10 +89,10 @@ export function ActionButton({
       type="button"
       {...rest}
       className={cx(
-        "inline-flex h-[1.85rem] items-center gap-1.5 rounded-lg px-[0.7rem] text-[0.78rem] font-medium whitespace-nowrap transition",
+        "inline-flex h-[1.85rem] items-center gap-1.5 rounded-md px-[0.7rem] text-[0.78rem] font-medium whitespace-nowrap transition-colors",
         "disabled:cursor-not-allowed disabled:opacity-50",
         primary
-          ? "om-gradient text-white shadow-glow hover:brightness-110"
+          ? "bg-accent text-accent-fg hover:bg-accent-strong"
           : cx("border border-border-strong text-fg", HOVER),
         className,
       )}
@@ -147,15 +147,10 @@ export function Dot({ tone, pulse }: { tone: Tone; pulse?: boolean }) {
   );
 }
 
-/** Small uppercase section heading ("SUGGESTED ANSWER"). */
+/** Small section heading ("Suggested answer"), sentence case. */
 export function SectionLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div
-      className={cx(
-        "mb-[0.3rem] text-[0.68rem] font-semibold tracking-[0.09em] text-muted uppercase",
-        className,
-      )}
-    >
+    <div className={cx("mb-[0.3rem] text-[0.74rem] font-semibold text-muted", className)}>
       {children}
     </div>
   );

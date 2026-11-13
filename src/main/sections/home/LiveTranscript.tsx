@@ -32,7 +32,7 @@ export function TranscriptBlocks({
             className={cx(
               "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[0.74rem] font-semibold",
               g.role === "user"
-                ? "om-gradient text-white shadow-glow"
+                ? "om-fill"
                 : "border border-border-strong bg-surface-2 text-fg-soft",
             )}
           >

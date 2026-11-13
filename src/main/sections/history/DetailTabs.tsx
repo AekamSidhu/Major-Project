@@ -32,7 +32,7 @@ function Panel({ children }: { children: ReactNode }) {
 
 function SubHeading({ children, count }: { children: ReactNode; count?: number }) {
   return (
-    <h3 className="mb-2 flex items-center gap-2 text-[0.72rem] font-semibold tracking-wider text-muted uppercase">
+    <h3 className="mb-2 flex items-center gap-2 text-[0.8rem] font-semibold text-fg-soft">
       {children}
       {count !== undefined && <span className="font-normal tabular-nums">{count}</span>}
     </h3>
@@ -179,9 +179,7 @@ function SuggestionCard({ s }: { s: Suggestion }) {
 function SpokenAnswer({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <div className="mb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
-        {label}
-      </div>
+      <div className="mb-1 text-[0.76rem] font-semibold text-muted">{label}</div>
       <blockquote className="border-l-2 border-border-strong pl-3 text-[0.86rem] leading-relaxed whitespace-pre-line text-fg">
         {text}
       </blockquote>

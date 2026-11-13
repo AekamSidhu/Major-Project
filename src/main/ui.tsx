@@ -1,5 +1,5 @@
 // Minimal, accessible UI primitives for the main window.
-// Calm surfaces, one accent gradient for what matters, soft depth.
+// Ink on linen; felt green for your actions; hierarchy from type, not boxes.
 
 import {
   useEffect,
@@ -29,13 +29,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    "om-gradient text-white shadow-glow border border-white/10 hover:brightness-110 hover:shadow-[0_10px_30px_-8px_var(--om-accent)]",
-  secondary:
-    "bg-surface-2 text-fg border border-border shadow-[0_1px_0_var(--om-highlight)_inset] hover:border-border-strong hover:bg-raised",
+  primary: "bg-accent text-accent-fg border border-transparent shadow-glow hover:bg-accent-strong",
+  secondary: "bg-surface text-fg border border-border-strong hover:bg-surface-2",
   ghost: "bg-transparent text-fg-soft border border-transparent hover:bg-surface-2 hover:text-fg",
   danger:
-    "bg-danger-soft text-danger border border-danger/25 hover:bg-danger hover:text-white hover:border-transparent",
+    "bg-surface text-danger border border-danger/35 hover:bg-danger hover:text-white hover:border-transparent",
 };
 
 export function Button({
@@ -54,8 +52,8 @@ export function Button({
       disabled={disabled || busy}
       aria-busy={busy || undefined}
       className={cx(
-        "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium whitespace-nowrap",
-        "transition-all duration-150 active:translate-y-px",
+        "inline-flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap",
+        "transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.98]",
         "disabled:pointer-events-none disabled:opacity-45",
         size === "sm" ? "h-7.5 px-3 text-[0.8rem]" : "h-9 px-4 text-[0.86rem]",
         VARIANTS[variant],
@@ -116,9 +114,9 @@ export function Field({ label, description, error, htmlFor, children, inline }: 
 }
 
 const INPUT =
-  "w-full rounded-lg border border-border bg-surface-2 px-3 text-[0.86rem] text-fg placeholder:text-muted " +
-  "shadow-[0_1px_0_var(--om-highlight)_inset] transition-[border-color,box-shadow] duration-150 " +
-  "hover:border-border-strong focus:border-accent focus:ring-4 focus:ring-accent-soft focus:outline-none disabled:opacity-50";
+  "w-full rounded-md border border-border-strong bg-surface px-3 text-[0.86rem] text-fg placeholder:text-muted " +
+  "transition-[border-color,box-shadow] duration-150 " +
+  "hover:border-muted focus:border-accent focus:ring-3 focus:ring-accent-soft focus:outline-none disabled:opacity-50";
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(INPUT, "h-9", props.className)} />;
@@ -191,14 +189,14 @@ export function Toggle({ checked, onChange, label, disabled, id }: ToggleProps) 
         "relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full border transition-all duration-200",
         "disabled:cursor-not-allowed disabled:opacity-50",
         checked
-          ? "om-gradient border-transparent shadow-[0_4px_14px_-4px_var(--om-accent)]"
+          ? "border-transparent bg-accent"
           : "border-border-strong bg-surface-2 hover:border-muted",
       )}
     >
       <span
         aria-hidden
         className={cx(
-          "inline-block size-4 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.3)] transition-transform duration-200",
+          "inline-block size-4 rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/0.25)] transition-transform duration-200",
           checked ? "translate-x-[20px]" : "translate-x-[2px]",
         )}
       />
@@ -268,13 +266,13 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="om-rise mb-7 flex items-end justify-between gap-4">
+    <header className="mb-8 flex items-end justify-between gap-4">
       <div>
-        <h1 className="text-[1.65rem] leading-tight font-semibold tracking-[-0.025em] text-fg">
-          {title}
-        </h1>
+        <h1 className="om-display text-[2.1rem] leading-[1.05] text-fg">{title}</h1>
         {description && (
-          <p className="mt-1.5 max-w-2xl text-[0.9rem] leading-relaxed text-muted">{description}</p>
+          <p className="mt-2 max-w-[60ch] text-[0.9rem] leading-relaxed text-muted">
+            {description}
+          </p>
         )}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
@@ -335,7 +333,7 @@ export function Badge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.7rem] leading-none font-medium",
+        "inline-flex items-center gap-1 rounded-[5px] border px-1.5 py-[3px] text-[0.72rem] leading-none font-medium",
         BADGE_TONES[tone],
         className,
       )}
@@ -374,7 +372,7 @@ export function StatusDot({ tone, pulse, label }: { tone: Tone; pulse?: boolean;
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-md border border-border-strong bg-surface-2 px-1.5 py-px font-mono text-[0.72rem] text-fg-soft shadow-[0_1px_0_var(--om-border-strong)]">
+    <kbd className="rounded-[5px] border border-border-strong bg-surface px-1.5 py-px font-sans text-[0.74rem] font-medium text-fg-soft shadow-[0_1px_0_var(--om-border-strong)]">
       {children}
     </kbd>
   );
@@ -410,7 +408,7 @@ export function Banner({
     <div
       role={tone === "danger" || tone === "warn" ? "alert" : "status"}
       className={cx(
-        "om-rise mb-4 flex items-start justify-between gap-4 rounded-xl border px-4 py-3 shadow-card",
+        "mb-4 flex items-start justify-between gap-4 rounded-[10px] border px-4 py-3",
         border[tone],
         BANNER_FILL[tone],
       )}
@@ -439,12 +437,8 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-strong bg-surface/40 px-6 py-14 text-center">
-      <span
-        aria-hidden
-        className="om-gradient mb-3 inline-block size-9 rounded-xl opacity-90 shadow-glow"
-      />
-      <p className="text-[0.98rem] font-semibold text-fg">{title}</p>
+    <div className="flex flex-col items-start justify-center rounded-[10px] border border-dashed border-border-strong px-6 py-10">
+      <p className="text-[1rem] font-semibold text-fg">{title}</p>
       {children && <div className="mt-1 max-w-md text-[0.84rem] text-muted">{children}</div>}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -482,7 +476,7 @@ export function Dialog({ open, title, onClose, children, footer }: DialogProps) 
         e.preventDefault();
         onClose();
       }}
-      className="om-rise m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-border bg-raised p-0 text-fg shadow-pop backdrop:bg-black/55 backdrop:backdrop-blur-[2px]"
+      className="om-enter m-auto w-[min(32rem,calc(100vw-2rem))] rounded-[14px] border border-border bg-raised p-0 text-fg shadow-pop backdrop:bg-[rgb(27_35_33/0.45)]"
     >
       <div className="px-6 pt-5 pb-4">
         <h2 id={titleId} className="text-[1.08rem] font-semibold tracking-[-0.01em]">
@@ -491,9 +485,7 @@ export function Dialog({ open, title, onClose, children, footer }: DialogProps) 
         <div className="mt-2 text-[0.86rem] text-fg-soft">{children}</div>
       </div>
       {footer && (
-        <div className="flex justify-end gap-2 border-t border-border bg-surface-2/50 px-6 py-3.5">
-          {footer}
-        </div>
+        <div className="flex justify-end gap-2 border-t border-border px-6 py-3.5">{footer}</div>
       )}
     </dialog>
   );
@@ -557,11 +549,7 @@ export function Tabs<T extends string>({
   label: string;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label={label}
-      className="mb-5 inline-flex gap-1 rounded-xl border border-border bg-surface-2 p-1"
-    >
+    <div role="tablist" aria-label={label} className="mb-6 flex gap-5 border-b border-border">
       {tabs.map((t) => (
         <button
           key={t.value}
@@ -570,8 +558,10 @@ export function Tabs<T extends string>({
           aria-selected={value === t.value}
           onClick={() => onChange(t.value)}
           className={cx(
-            "rounded-lg px-3.5 py-1.5 text-[0.84rem] font-medium transition-all duration-150",
-            value === t.value ? "bg-surface text-fg shadow-card" : "text-muted hover:text-fg-soft",
+            "-mb-px border-b-2 pt-1 pb-2.5 text-[0.86rem] font-medium transition-colors duration-150",
+            value === t.value
+              ? "border-accent text-fg"
+              : "border-transparent text-muted hover:text-fg-soft",
           )}
         >
           {t.label}
