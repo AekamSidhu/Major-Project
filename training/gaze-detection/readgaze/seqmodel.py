@@ -144,7 +144,10 @@ class ReadingNet(nn.Module):
         self.to(memory_format=torch.channels_last)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        step = torch.diff(x[:, :2], dim=2, prepend=x[:, :2, :1])
+        # Frame-to-frame change (0 for the first frame). Same as torch.diff
+        # with the first frame prepended, written out so ONNX can export it.
+        xy = x[:, :2]
+        step = xy - torch.cat([xy[:, :, :1], xy[:, :, :-1]], dim=2)
         h = torch.cat([x, step], dim=1).unsqueeze(2).contiguous(memory_format=torch.channels_last)
         h = self.features(h)
         pooled = torch.cat([h.mean(dim=(2, 3)), h.amax(dim=(2, 3))], dim=1)
