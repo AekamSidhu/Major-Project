@@ -42,6 +42,8 @@ if [ "$dev" = 1 ]; then
 else
   "$venv/bin/python" -m pip install -r "$dir/requirements.txt"
 fi
+# Live gaze for the integrity check (optional: the rest works without it).
+"$venv/bin/python" -m pip install -r "$dir/requirements-integrity.txt"   || echo "Gaze packages did not install; the integrity check's reading signal is unavailable."
 if [ "$download" = 1 ]; then
   "$venv/bin/python" "$dir/server.py" --download-models
 fi

@@ -57,6 +57,9 @@ $venvPython = Join-Path $venv "Scripts\python.exe"
 $req = if ($Dev) { "requirements-dev.txt" } else { "requirements.txt" }
 & $venvPython -m pip install -r (Join-Path $dir $req)
 if ($LASTEXITCODE -ne 0) { Write-Error "Dependency installation failed." }
+# Live gaze for the integrity check (optional: the rest works without it).
+& $venvPython -m pip install -r (Join-Path $dir "requirements-integrity.txt")
+if ($LASTEXITCODE -ne 0) { Write-Warning "Gaze packages did not install; the integrity check's reading signal is unavailable." }
 
 if ($DownloadModels) {
     & $venvPython (Join-Path $dir "server.py") --download-models

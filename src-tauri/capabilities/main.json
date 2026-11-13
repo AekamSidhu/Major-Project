@@ -9,6 +9,13 @@
     "core:default",
     "core:window:allow-set-focus",
     "clipboard-manager:allow-write-text",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "http://127.0.0.1:*/integrity" },
+        { "url": "http://localhost:*/integrity" }
+      ]
+    },
     "allow-get-app-info",
     "allow-get-settings",
     "allow-update-settings",

@@ -1,0 +1,32 @@
+{
+ "model": "OpenMeet reading network v1: residual 1-D CNN, 3 seeds averaged",
+ "input": {
+  "name": "window",
+  "shape": [
+   "n",
+   3,
+   100
+  ],
+  "fps": 10,
+  "seconds": 10,
+  "channels": "x, y (centred on the median, divided by the window's spread, clipped to +-6), valid-frame flag",
+  "gaps": "linear interpolation, nearest value at the ends"
+ },
+ "output": "reading probability per window",
+ "answer_score": "mean of the top half of the answer's window scores (10 s windows every 5 s)",
+ "thresholds": {
+  "window_balanced": 0.5879599452018738,
+  "window_low_false_positive": 0.13977749645709994,
+  "answer_balanced": 0.9661602079868317,
+  "answer_low_false_positive": 0.41294264793396
+ },
+ "trained_on": "GazeBase (CC BY 4.0), 258 development people, degraded to webcam quality",
+ "test_people_window_balanced_accuracy": {
+  "gazebase_nominal": 0.9883249261579374,
+  "gazebase_hard": 0.9750293637861933,
+  "gazebase_small": 0.9750293637861933,
+  "gazebase_small_hard": 0.8549869454233341,
+  "gazebase_slow": 0.9648601524147422
+ },
+ "onnx_max_abs_diff_vs_pytorch": 1.341104507446289e-07
+}

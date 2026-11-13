@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { LocalAiStatus } from "@/bindings";
 import { api, errorMessage } from "@/lib/ipc";
 import { Banner, Button, StatusDot } from "../ui";
@@ -50,6 +51,16 @@ export function LocalAiPanel({ compact = false }: { compact?: boolean }) {
     }
   };
 
+  // The sidecar serves the answer-integrity page (reading gaze + AI-written
+  // answers) next to its API; it opens in the default browser.
+  const openIntegrityCheck = async (baseUrl: string) => {
+    try {
+      await openUrl(`${baseUrl.replace(/\/v1\/?$/, "")}/integrity`);
+    } catch (e) {
+      setError(`Could not open the integrity check: ${errorMessage(e)}`);
+    }
+  };
+
   const s = status.data;
   const sum = s ? summary(s) : null;
 
@@ -78,6 +89,11 @@ export function LocalAiPanel({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {s?.running && (
+            <Button size="sm" onClick={() => void openIntegrityCheck(s.baseUrl)}>
+              Integrity check
+            </Button>
+          )}
           {s?.installed && !s.running && (
             <Button
               variant="primary"
