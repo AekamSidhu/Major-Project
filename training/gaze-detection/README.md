@@ -439,6 +439,136 @@ trained on MPIIFaceGaze and starts from ETH-XGaze weights, both
 non-commercial research licences (CC BY-NC-SA 4.0). Keep it out of public
 releases and cite both datasets.
 
+## Reading detector
+
+The question: from 10 seconds of gaze at webcam quality, is this person
+reading? Two Kaggle runs on 2026-11-12/13 answer it on public data. Code is
+in `experiments/` (`kaggle_run.sh` for GazeBase, `kaggle_ritw.sh` for
+Reading in the Wild); results are in `results/`.
+
+### Datasets and why
+
+| Dataset | Used for | Why |
+|---|---|---|
+| GazeBase | train + locked test | 322 people, 211 h, reading (a poem) vs six other tasks (fixation, saccades, two videos, a game, random dots). Big enough to split by person and still have 64 test people. Recorded at 1000 Hz with a chin rest, so we degrade it to webcam quality: 10 fps, noise, drift, blinks, dropped frames (`simulate.degrade`). |
+| GazeBaseVR | outside test only | 407 people in a VR headset, 5 tasks. Different hardware, never trained on. |
+| DesktopActivity | outside test only | 8 people at a real desktop with the head free: READ vs BROWSE, PLAY, SEARCH, WATCH, WRITE. The closest thing to everyday computer use. |
+| Reading in the Wild (Meta) | train + locked test, separately | 81 people (Seattle subset), 47.5 h, eye-tracking glasses in daily life, reading and non-reading in the same places. The best real-world benchmark and the only one with a published gaze-only number. |
+
+### Protocol
+
+Fixed before any test score was read.
+
+- **GazeBase:** people split once (seed 2026): 258 development, 64 test.
+  Every choice (features, model, thresholds) comes from 5-fold person-level
+  cross-validation on development people. The chosen model is refitted on
+  all development people and the test people are scored once.
+- **Reading in the Wild:** the authors' split, which is by date and so by
+  person: 64 development people (train + val), 17 test people. Same
+  procedure.
+- Unit: a 10 s window every 5 s at 10 fps (RitW also 5 s windows, to compare
+  with the paper). A recording score is the mean of its top half of window
+  scores.
+- Headline metric: **balanced accuracy**, the mean of the reading and the
+  not-reading hit rates. Only 14% of GazeBase windows are reading, so a
+  detector that never flags gets 86% plain accuracy. Plain accuracy is given
+  where we compare with the paper.
+- Thresholds come from development nominal scores and are not moved for the
+  harder conditions. Conditions: nominal (noise 1.5°, drift 1°), hard
+  (noise 3°, drift 2°), small (eye movements x0.5, i.e. smaller text or a
+  farther screen), small_hard (both), slow (a reader at 2/3 speed).
+- Candidates: gradient boosting on 58 hand-made features, a 1-D CNN on the
+  raw window (3 seeds, trained on clean windows with random webcam
+  degradation), and the average of the two.
+
+### Model choice (development people only)
+
+Mean window balanced accuracy over the four GazeBase conditions, 5-fold CV:
+boosting 89.2%, **network 94.8%**, average 93.9%. The network was chosen.
+It holds up much better under noise because it divides each window by its
+own spread (which is also why hard and small give the same network score).
+
+On Reading in the Wild the same procedure picked the **average** of
+boosting and network (development mean 82.0%, vs 79.9% boosting and 80.2%
+network).
+
+### Results on test people (GazeBase, network, scored once)
+
+| Condition | Window bal. acc. | Window accuracy | Window AUC | Recording bal. acc. |
+|---|---|---|---|---|
+| nominal | **98.8%** | 99.0% | 0.999 | 99.9% |
+| hard | 97.5% | 97.4% | 0.997 | 99.5% |
+| small | 97.5% | 97.4% | 0.997 | 99.5% |
+| small_hard | 85.5% | 90.2% | 0.949 | 73.4% |
+| slow reader | 96.5% | 97.7% | 0.994 | 99.0% |
+
+Test numbers match development CV within 0.4 points in every condition, so
+the split did not flatter the model. For small_hard the recording threshold
+is too strict (recall 47%, specificity 99.8%), but the ranking is still good
+(recording AUC 0.995): the threshold, not the score, is what breaks.
+
+For reference, the boosted model on the same test people: 97.9 / 92.2 /
+92.4 / 73.5 / 94.9%.
+
+### Outside data (trained on GazeBase only, GazeBase thresholds)
+
+| Dataset | Network | Boosting | Average |
+|---|---|---|---|
+| GazeBaseVR, window bal. acc. (AUC) | 96.6% (0.986) | 95.3% | 96.7% |
+| GazeBaseVR, recording bal. acc. | 99.3% | | |
+| DesktopActivity, window bal. acc. (AUC) | 74.0% (0.825) | 83.9% | 81.1% |
+| DesktopActivity, recording AUC | 0.997 | | |
+
+On DesktopActivity the network still ranks every READ recording above the
+others (recording AUC 0.997), but at the GazeBase threshold it flags only 2
+of 8 READ recordings and none of the 40 others; at the GazeBase
+5%-false-positive threshold it flags all 8 but also 15 of the 40 others.
+Per window, boosting transfers better than the network here. Real desktop
+reading needs its own threshold, which our own recordings will set.
+
+### Reading in the Wild (trained and tested on RitW people)
+
+"Eye tracker" is the glasses' gaze at 10 fps with nothing added; "webcam"
+adds our webcam noise, drift and blinks. Test people, chosen model (average):
+
+| Window | Input | Window accuracy | Window bal. acc. | Window AUC | Recording bal. acc. |
+|---|---|---|---|---|---|
+| 10 s | eye tracker | 82.3% | **83.0%** | 0.908 | 92.9% |
+| 10 s | webcam | 78.6% | 79.1% | 0.886 | 90.4% |
+| 5 s | eye tracker | 78.0% | 78.7% | 0.874 | 92.5% |
+| 5 s | webcam | 75.6% | 75.1% | 0.847 | 86.2% |
+
+Development CV gave 83.6% / 80.4% (10 s) and 79.4% / 76.5% (5 s) window
+balanced accuracy, so again test agrees with development.
+
+**Comparison with the paper.** The RitW paper's gaze-only model reaches
+82.3% accuracy on 2 s windows and 85.8% on 5 s windows at 60 Hz, and 80.4%
+on 2 s at 10 Hz. At 5 s we are 7.8 points below their 60 Hz number (78.0% vs
+85.8%); we need 10 s windows to reach their 2 s accuracy (82.3%). The gap is
+expected: our input is 10 fps, the rate a webcam pipeline gives, and our
+models were built for GazeBase-style lab data, not tuned for RitW. It is
+also much harder than GazeBase. The per-task flag rates (10 s, test
+people) show where: the non-reading tasks 8-11 are flagged 11-20% of the
+time, while some reading tasks are flagged far less than others (tasks 2
+and 17 about 44%, tasks 12 and 13 about 60%, most others 80-99%).
+
+### Limits
+
+- GazeBase reading is silent reading of a poem with a chin rest, and the
+  negatives are lab tasks, not a person talking in an interview. The 98.8%
+  is a ceiling for clean, simulated webcam gaze, not an expected field
+  number.
+- Webcam quality is simulated, not measured on video. Real webcam gaze
+  comes from the visual model above (4.54° error), which is worse than the
+  simulated nominal noise of 1.5°.
+- Small text plus double noise (small_hard) is near the floor: 85.5% per
+  window, and the recording threshold needs to move.
+- Reading in the Wild, the only real-world set, gives about 79-83% per
+  window at 10 s. Per recording (a whole answer) it is 90-93%.
+- Not yet run: the GazeBase-only network scored zero-shot on RitW test
+  people (`ritw_run.py --gazebase-weights`). Only our own recordings
+  (Phase 3) give the number that matters for OpenMeet.
+
 ## Training in the cloud
 
 Yes, it can be trained in the cloud, but it doesn't need to be. Training is
@@ -483,7 +613,7 @@ laptop.
 
 - [x] Phase 0: environment, `.gitignore`, evaluation protocol written
 - [ ] Phase 1: gaze-quality report and minimum tile size. Partly done on MPIIFaceGaze stills: the learned gaze model (4.54° LOPO) vs MediaPipe (7.18°), with error vs face size down to 32 px and JPEG. Still to do: real video (EVE), frame rate, and face normalisation from MediaPipe head pose
-- [ ] Phase 2: reading detector measured on simulated traces (code ready, not yet run on GazeBase)
+- [x] Phase 2: reading detector measured on GazeBase test people (98.8% window balanced accuracy at nominal webcam quality, 85.5% in the hardest condition), two outside datasets and Reading in the Wild (83.0% at 10 s); see "Reading detector"
 - [ ] Phase 3: own dataset collected (with the echo branch)
 - [ ] Phase 4: evaluation, threshold and false-positive rate, robustness and bias checks
 - [ ] Phase 5: integrated into the app behind a setting
