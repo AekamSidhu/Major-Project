@@ -28,3 +28,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Integrity-detection training: datasets and per-person data stay local
+training/*/data/
+training/*/.venv/
