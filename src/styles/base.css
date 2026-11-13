@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 /*
  * OpenMeet design tokens. Both windows (main + overlay) share these.
@@ -19,61 +20,87 @@
   --color-fg-soft: var(--om-fg-soft);
   --color-muted: var(--om-muted);
   --color-accent: var(--om-accent);
+  --color-accent-2: var(--om-accent-2);
   --color-accent-soft: var(--om-accent-soft);
   --color-accent-fg: var(--om-accent-fg);
   --color-ok: var(--om-ok);
   --color-warn: var(--om-warn);
   --color-danger: var(--om-danger);
   --color-danger-soft: var(--om-danger-soft);
+  --shadow-card: var(--om-shadow-card);
+  --shadow-pop: var(--om-shadow-pop);
+  --shadow-glow: var(--om-shadow-glow);
   --font-sans:
-    "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
-    "Helvetica Neue", Arial, system-ui, sans-serif;
+    "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", -apple-system,
+    BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, system-ui, sans-serif;
   --font-mono:
     "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
+/*
+ * Palette: a calm near-neutral base with one violet-to-blue accent used for
+ * what matters (primary actions, the active section, live state). Surfaces
+ * step up in lightness and carry a faint top highlight; status colors are
+ * reserved for status.
+ */
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --om-bg: #f6f7f9;
+  --om-bg: #f4f5f9;
   --om-surface: #ffffff;
-  --om-surface-2: #f1f3f6;
+  --om-surface-2: #f2f3f8;
   --om-raised: #ffffff;
-  --om-border: rgb(15 23 42 / 0.09);
-  --om-border-strong: rgb(15 23 42 / 0.16);
-  --om-fg: #11151c;
-  --om-fg-soft: #2b313c;
-  --om-muted: #667085;
-  --om-accent: #4f5bd5;
-  --om-accent-soft: rgb(79 91 213 / 0.1);
+  --om-border: rgb(17 20 45 / 0.08);
+  --om-border-strong: rgb(17 20 45 / 0.15);
+  --om-fg: #0e1121;
+  --om-fg-soft: #343a52;
+  --om-muted: #6b7189;
+  --om-accent: #6a5af9;
+  --om-accent-2: #3b82f6;
+  --om-accent-soft: rgb(106 90 249 / 0.1);
   --om-accent-fg: #ffffff;
-  --om-ok: #138a5b;
-  --om-warn: #b25e09;
-  --om-danger: #c2303b;
-  --om-danger-soft: rgb(194 48 59 / 0.1);
+  --om-ok: #0e9f6e;
+  --om-warn: #b7791f;
+  --om-danger: #e11d48;
+  --om-danger-soft: rgb(225 29 72 / 0.09);
+  --om-highlight: rgb(255 255 255 / 0.9);
+  --om-shadow-card: 0 1px 2px rgb(17 20 45 / 0.04), 0 4px 16px -6px rgb(17 20 45 / 0.08);
+  --om-shadow-pop: 0 12px 40px -12px rgb(17 20 45 / 0.25), 0 2px 6px rgb(17 20 45 / 0.06);
+  --om-shadow-glow: 0 6px 20px -6px rgb(106 90 249 / 0.55);
+  --om-backdrop:
+    radial-gradient(1200px 600px at 0% -10%, rgb(106 90 249 / 0.08), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgb(59 130 246 / 0.06), transparent 55%);
   /* overlay glass (rgb triplet, alpha applied from the opacity setting) */
   --om-glass: 255 255 255;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --om-bg: #0b0d12;
-  --om-surface: #12151c;
-  --om-surface-2: #181c25;
-  --om-raised: #1d2230;
-  --om-border: rgb(255 255 255 / 0.07);
-  --om-border-strong: rgb(255 255 255 / 0.14);
-  --om-fg: #e9ecf2;
-  --om-fg-soft: #c9cfdb;
-  --om-muted: #8a93a6;
-  --om-accent: #8f9bff;
-  --om-accent-soft: rgb(143 155 255 / 0.14);
-  --om-accent-fg: #0b0d12;
-  --om-ok: #3ccf91;
-  --om-warn: #f0a44b;
-  --om-danger: #ff6b76;
-  --om-danger-soft: rgb(255 107 118 / 0.14);
-  --om-glass: 14 17 24;
+  --om-bg: #07080c;
+  --om-surface: #0f1118;
+  --om-surface-2: #151822;
+  --om-raised: #1a1e2a;
+  --om-border: rgb(255 255 255 / 0.065);
+  --om-border-strong: rgb(255 255 255 / 0.13);
+  --om-fg: #eef0f7;
+  --om-fg-soft: #c3c8d6;
+  --om-muted: #7f879c;
+  --om-accent: #9384ff;
+  --om-accent-2: #5fa8ff;
+  --om-accent-soft: rgb(147 132 255 / 0.14);
+  --om-accent-fg: #ffffff;
+  --om-ok: #34d399;
+  --om-warn: #fbbf24;
+  --om-danger: #fb7185;
+  --om-danger-soft: rgb(251 113 133 / 0.13);
+  --om-highlight: rgb(255 255 255 / 0.045);
+  --om-shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --om-shadow-pop: 0 20px 50px -16px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --om-shadow-glow: 0 8px 26px -8px rgb(147 132 255 / 0.65);
+  --om-backdrop:
+    radial-gradient(1100px 560px at 0% -12%, rgb(147 132 255 / 0.11), transparent 60%),
+    radial-gradient(900px 520px at 100% -5%, rgb(95 168 255 / 0.07), transparent 55%);
+  --om-glass: 13 15 22;
 }
 
 :root {
@@ -81,6 +108,8 @@
   --om-space: 1;
   font-size: var(--om-font-size);
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -98,7 +127,8 @@ body,
 
 body {
   margin: 0;
-  background: var(--om-bg);
+  background: var(--om-backdrop), var(--om-bg);
+  background-attachment: fixed;
   color: var(--om-fg);
 }
 
@@ -177,4 +207,66 @@ html.overlay #root {
   margin-left: 1px;
   color: var(--om-accent);
   animation: om-pulse 1s steps(2) infinite;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared surfaces
+ * ------------------------------------------------------------------------ */
+
+/* A card: surface, hairline border, faint top highlight, soft shadow. */
+.om-card {
+  background: linear-gradient(180deg, var(--om-highlight), transparent 48px), var(--om-surface);
+  border: 1px solid var(--om-border);
+  border-radius: 16px;
+  box-shadow: var(--om-shadow-card);
+}
+
+/* The accent gradient, for primary actions and the brand mark. */
+.om-gradient {
+  background-image: linear-gradient(135deg, var(--om-accent), var(--om-accent-2));
+}
+
+.om-gradient-text {
+  background-image: linear-gradient(135deg, var(--om-accent), var(--om-accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Small uppercase section label. */
+.om-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--om-muted);
+}
+
+@keyframes om-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.om-rise {
+  animation: om-rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes om-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+/* A live dot that sends out a soft ring. */
+.om-live {
+  animation: om-ring 1.6s ease-out infinite;
 }

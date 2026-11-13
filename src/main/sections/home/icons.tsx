@@ -81,6 +81,54 @@ const PATHS = {
       <circle cx="12" cy="13" r="3" />
     </>
   ),
+  home: <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4.5l3 2" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+      <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+    </>
+  ),
+  cpu: (
+    <>
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <path d="M10 3.5V7M14 3.5V7M10 17v3.5M14 17v3.5M3.5 10H7M3.5 14H7M17 10h3.5M17 14h3.5" />
+    </>
+  ),
+  wave: <path d="M4 12h1.5M8 8.5v7M12 5v14M16 8.5v7M20 12h-1.5" />,
+  palette: (
+    <>
+      <path d="M12 4a8 8 0 1 0 0 16c1.1 0 1.6-.8 1.3-1.7-.4-1.1.3-2.3 1.5-2.3H17a3.5 3.5 0 0 0 3.5-3.5C20.5 7.6 16.7 4 12 4z" />
+      <circle cx="8" cy="11" r="1" />
+      <circle cx="11.5" cy="7.8" r="1" />
+      <circle cx="15.5" cy="9" r="1" />
+    </>
+  ),
+  keyboard: (
+    <>
+      <rect x="3.5" y="6.5" width="17" height="11" rx="2" />
+      <path d="M7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8.5" r="3.5" />
+      <path d="M5 19.5c1.2-3.3 3.9-5 7-5s5.8 1.7 7 5" />
+    </>
+  ),
+  sliders: <path d="M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1M14 5v4M8 10v4M16 15v4" />,
+  activity: <path d="M3.5 12h4l2.5-6 4 12 2.5-6h4" />,
+  layers: (
+    <>
+      <path d="M12 4 3.5 8.5 12 13l8.5-4.5L12 4z" />
+      <path d="M3.5 12.5 12 17l8.5-4.5" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

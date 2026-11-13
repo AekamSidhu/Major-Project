@@ -51,12 +51,9 @@ function Card({
 }) {
   const id = useId();
   return (
-    <section
-      aria-labelledby={id}
-      className={cx("rounded-lg border border-border bg-surface", className)}
-    >
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-        <h2 id={id} className="text-[0.84rem] font-semibold text-fg">
+    <section aria-labelledby={id} className={cx("om-card om-rise overflow-hidden", className)}>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <h2 id={id} className="text-[0.9rem] font-semibold tracking-[-0.01em] text-fg">
           {title}
         </h2>
         {actions}
@@ -69,11 +66,12 @@ function Card({
 function ElapsedClock({ startedAt }: { startedAt: number }) {
   const now = useNow(1000);
   return (
-    <div className="text-right">
-      <div className="text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
-        Elapsed
-      </div>
-      <time aria-label="Elapsed time" className="text-[1.25rem] font-semibold text-fg tabular-nums">
+    <div className="shrink-0 rounded-2xl border border-border bg-surface-2/80 px-4 py-2 text-right shadow-card">
+      <div className="om-eyebrow">Elapsed</div>
+      <time
+        aria-label="Elapsed time"
+        className="block text-[1.5rem] leading-tight font-semibold tracking-[-0.02em] text-fg tabular-nums"
+      >
         {formatElapsed(startedAt, now)}
       </time>
     </div>
@@ -89,8 +87,8 @@ function HealthWarnings({ components }: { components: ReadonlyArray<ComponentHea
     <div
       role="alert"
       className={cx(
-        "mb-4 rounded-lg border bg-surface px-3.5 py-2.5",
-        severe ? "border-danger/40" : "border-warn/40",
+        "om-rise mb-4 rounded-xl border bg-surface px-4 py-3 shadow-card",
+        severe ? "border-danger/35" : "border-warn/35",
       )}
     >
       <ul className="space-y-1.5">
@@ -135,10 +133,12 @@ function SourceLine({
   children?: ReactNode;
 }) {
   return (
-    <div className="px-4 py-2.5">
-      <div className="flex items-center gap-2.5">
-        <Icon name={icon} className="text-fg-soft" />
-        <span className="flex-1 text-[0.84rem] font-medium text-fg">{title}</span>
+    <div className="px-5 py-3">
+      <div className="flex items-center gap-3">
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 text-fg-soft">
+          <Icon name={icon} />
+        </span>
+        <span className="flex-1 text-[0.86rem] font-medium text-fg">{title}</span>
         {level !== undefined && status.tone === "ok" && (
           <LevelMeter level={level} label={`${title} level`} />
         )}
@@ -258,8 +258,12 @@ function QuestionItem({
   busy: boolean;
 }) {
   return (
-    <li className="om-fade-in px-4 py-2.5">
-      <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[0.72rem] text-muted">
+    <li className="om-fade-in relative px-5 py-3 transition-colors hover:bg-surface-2/60">
+      <span
+        aria-hidden
+        className="om-gradient absolute top-3 bottom-3 left-0 w-[3px] rounded-r-full opacity-70"
+      />
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[0.72rem] text-muted">
         <Badge tone="accent">{categoryLabel(q.category)}</Badge>
         {q.requiresResponse && mode === "candidate" && <Badge tone="warn">Needs your answer</Badge>}
         <span>
@@ -267,7 +271,7 @@ function QuestionItem({
           {formatOffset(segmentOffset(q.detectedAt, startedAt))}
         </span>
       </div>
-      <p className="text-[0.84rem] leading-snug text-fg">{q.question}</p>
+      <p className="text-[0.88rem] leading-snug font-medium text-fg">{q.question}</p>
       {q.parts.length > 1 && (
         <ul className="mt-1 list-disc pl-4 text-[0.78rem] text-fg-soft">
           {q.parts.map((p, i) => (
@@ -300,13 +304,13 @@ const TOPIC_STYLE: Record<Topic["status"], { mark: string; className: string; la
 function Topics({ topics, next }: { topics: ReadonlyArray<Topic>; next: string | null }) {
   if (topics.length === 0) {
     return (
-      <p className="px-4 py-3 text-[0.8rem] text-muted">
+      <p className="px-5 py-4 text-[0.82rem] text-muted">
         Topics appear here as the conversation develops.
       </p>
     );
   }
   return (
-    <div className="px-4 py-3">
+    <div className="px-5 py-4">
       <ul className="flex flex-wrap gap-1.5">
         {topics.map((t) => {
           const s = TOPIC_STYLE[t.status];
@@ -314,8 +318,10 @@ function Topics({ topics, next }: { topics: ReadonlyArray<Topic>; next: string |
             <li
               key={t.id}
               className={cx(
-                "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[0.78rem]",
-                t.status === "current" ? "border-accent/50 bg-accent-soft" : "border-border",
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.78rem] transition-colors",
+                t.status === "current"
+                  ? "border-accent/40 bg-accent-soft shadow-[0_0_0_3px_var(--om-accent-soft)]"
+                  : "border-border bg-surface-2/60",
               )}
             >
               <span aria-hidden className={s.className}>
@@ -328,8 +334,9 @@ function Topics({ topics, next }: { topics: ReadonlyArray<Topic>; next: string |
         })}
       </ul>
       {next && (
-        <p className="mt-2 text-[0.78rem] text-fg-soft">
-          Suggested next area: <span className="font-medium text-fg">{next}</span>
+        <p className="mt-3 rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-[0.8rem] leading-snug text-fg-soft">
+          <Icon name="sparkle" className="size-3.5 text-accent" />
+          Suggested next: <span className="font-semibold text-fg">{next}</span>
         </p>
       )}
     </div>
@@ -402,9 +409,9 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
 
   return (
     <div>
-      <header className="mb-5 flex items-start justify-between gap-6">
+      <header className="om-rise mb-6 flex items-end justify-between gap-6">
         <div className="min-w-0">
-          <div className="mb-1 flex flex-wrap items-center gap-1.5">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <Badge tone={badge.tone}>
               <StatusDot tone={badge.tone} pulse={state === "active" && !stopped} />
               {badge.label}
@@ -413,7 +420,7 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
             {live.demoRunning && <Badge tone="accent">Demo</Badge>}
             {!meeting.persisted && !live.demoRunning && <Badge>Not saved</Badge>}
           </div>
-          <h1 className="truncate text-[1.25rem] font-semibold tracking-tight text-fg">
+          <h1 className="truncate text-[1.85rem] leading-tight font-semibold tracking-[-0.03em] text-fg">
             {meeting.title}
           </h1>
         </div>
@@ -448,7 +455,7 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
       <div
         role="group"
         aria-label="Meeting controls"
-        className="mb-5 flex flex-wrap items-center gap-2"
+        className="om-rise mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface/70 p-2 shadow-card backdrop-blur"
       >
         {!stopped && (
           <Button
@@ -480,7 +487,7 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
           <Icon name="octagon" />
           Emergency stop
         </Button>
-        <span className="mx-1 h-6 w-px bg-border" aria-hidden />
+        <span className="mx-1 h-7 w-px bg-border-strong" aria-hidden />
         <Button
           variant="ghost"
           className="h-10"
@@ -508,13 +515,13 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
       </div>
       {error && <InlineError className="-mt-3 mb-4">{error}</InlineError>}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Card title="Transcript" className="min-w-0">
           <LiveTranscript
             segments={live.transcript}
             mode={mode}
             meetingStartedAt={meeting.startedAt}
-            className="h-[26rem]"
+            className="h-[30rem]"
             emptyText={
               stopped || paused
                 ? "Paused — nothing is being transcribed."
@@ -544,7 +551,7 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
               level={live.levels.system ?? 0}
             />
             <ScreenControl settings={settings} on={screenOn} busy={busy} run={run} />
-            <p className="px-4 py-2 text-[0.74rem] text-muted">
+            <p className="bg-surface-2/50 px-5 py-2.5 text-[0.75rem] text-muted">
               Audio sources are chosen when the meeting starts. Pause to stop listening.
             </p>
           </Card>
@@ -557,7 +564,7 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
               {latestQuestion ? `Question detected: ${latestQuestion.question}` : ""}
             </p>
             {questions.length === 0 ? (
-              <p className="px-4 py-3 text-[0.8rem] text-muted">
+              <p className="px-5 py-4 text-[0.82rem] text-muted">
                 {mode === "candidate"
                   ? "Questions you’re asked will appear here."
                   : "Questions detected in the conversation will appear here."}

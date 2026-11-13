@@ -84,8 +84,9 @@ function useAppearance(): CSSProperties {
       width: `${overlay?.width ?? 380}px`,
       maxHeight: `${overlay?.maxHeight ?? 560}px`,
       background: `rgb(var(--om-glass) / ${alpha})`,
-      backdropFilter: translucent ? "blur(14px) saturate(140%)" : undefined,
-      WebkitBackdropFilter: translucent ? "blur(14px) saturate(140%)" : undefined,
+      backdropFilter: translucent ? "blur(22px) saturate(160%)" : undefined,
+      WebkitBackdropFilter: translucent ? "blur(22px) saturate(160%)" : undefined,
+      boxShadow: "var(--om-shadow-pop), inset 0 1px 0 rgb(255 255 255 / 0.06)",
     };
   }, [overlay]);
 }
@@ -358,7 +359,7 @@ function AskBox() {
   };
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-1">
-      <div className="flex items-center gap-1 rounded-md border border-border-strong bg-[rgb(var(--om-glass)/0.6)] px-1.5 focus-within:border-accent">
+      <div className="flex items-center gap-1 rounded-xl border border-border-strong bg-[rgb(var(--om-glass)/0.6)] px-2 transition-shadow focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft">
         <SparkIcon className="text-accent" />
         <input
           ref={inputRef}
@@ -494,8 +495,12 @@ export function OverlayApp() {
     <div
       ref={ref}
       style={style}
-      className="flex flex-col overflow-hidden rounded-xl border border-border-strong text-fg"
+      className="relative flex flex-col overflow-hidden rounded-2xl border border-border-strong text-fg"
     >
+      <span
+        aria-hidden
+        className="om-gradient pointer-events-none absolute inset-x-0 top-0 h-px opacity-70"
+      />
       <Header />
       {expanded && hydrated && <Body />}
     </div>

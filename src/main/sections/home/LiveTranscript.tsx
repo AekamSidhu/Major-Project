@@ -26,25 +26,36 @@ export function TranscriptBlocks({
   return (
     <>
       {groups.map((g) => (
-        <div key={g.key} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
-          <div className="pt-px text-[0.76rem] leading-snug">
-            <div
-              className={cx("font-semibold", g.role === "user" ? "text-accent" : "text-fg-soft")}
-            >
-              {g.label}
-            </div>
-            <div className="text-muted tabular-nums">
-              {formatOffset(segmentOffset(g.startTime, meetingStartedAt))}
-            </div>
-          </div>
-          <p className="text-[0.86rem] leading-relaxed text-fg">
-            {g.segments.map((s, i) => (
-              <span key={s.id} className={s.isFinal ? undefined : "text-muted italic"}>
-                {i > 0 ? " " : ""}
-                {s.text}
+        <div key={g.key} className="om-fade-in flex gap-3">
+          <span
+            aria-hidden
+            className={cx(
+              "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[0.74rem] font-semibold",
+              g.role === "user"
+                ? "om-gradient text-white shadow-glow"
+                : "border border-border-strong bg-surface-2 text-fg-soft",
+            )}
+          >
+            {g.label.slice(0, 1).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="mb-0.5 flex items-baseline gap-2 text-[0.78rem]">
+              <span className={cx("font-semibold", g.role === "user" ? "text-accent" : "text-fg")}>
+                {g.label}
               </span>
-            ))}
-          </p>
+              <span className="text-muted tabular-nums">
+                {formatOffset(segmentOffset(g.startTime, meetingStartedAt))}
+              </span>
+            </div>
+            <p className="text-[0.9rem] leading-relaxed text-fg-soft">
+              {g.segments.map((s, i) => (
+                <span key={s.id} className={s.isFinal ? undefined : "text-muted italic"}>
+                  {i > 0 ? " " : ""}
+                  {s.text}
+                </span>
+              ))}
+            </p>
+          </div>
         </div>
       ))}
     </>
@@ -78,12 +89,12 @@ export function LiveTranscript({
         tabIndex={0}
         onScroll={(e) => setFollowing(isNearBottom(e.currentTarget))}
         className={cx(
-          "space-y-3 overflow-y-auto px-4 py-3 focus-visible:outline-offset-[-2px]",
+          "space-y-5 overflow-y-auto px-5 py-4 focus-visible:outline-offset-[-2px]",
           className,
         )}
       >
         {segments.length === 0 ? (
-          <p className="py-6 text-center text-[0.84rem] text-muted">{emptyText}</p>
+          <p className="py-10 text-center text-[0.86rem] text-muted">{emptyText}</p>
         ) : (
           <TranscriptBlocks segments={segments} mode={mode} meetingStartedAt={meetingStartedAt} />
         )}
@@ -92,7 +103,7 @@ export function LiveTranscript({
         <button
           type="button"
           onClick={() => setFollowing(true)}
-          className="om-fade-in absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-border-strong bg-raised px-3 py-1 text-[0.76rem] font-medium text-fg-soft shadow-md hover:text-fg"
+          className="om-fade-in absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-border-strong bg-raised px-3.5 py-1.5 text-[0.76rem] font-medium text-fg-soft shadow-pop hover:text-fg"
         >
           <Icon name="arrowDown" className="size-3.5" />
           Jump to latest

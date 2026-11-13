@@ -5,6 +5,7 @@ import { api, errorMessage, onMeetingEvent, onUiCommand } from "@/lib/ipc";
 import { applyAppearance, watchSystemTheme } from "@/lib/theme";
 import { isSectionId, useMain, type SectionId } from "./store";
 import { Button, StatusDot, cx } from "./ui";
+import { Icon, type IconName } from "./sections/home/icons";
 import { HomeSection } from "./sections/Home";
 import { HistorySection } from "./sections/History";
 import { PrivacySection } from "./sections/Privacy";
@@ -21,30 +22,31 @@ import { Onboarding } from "./onboarding/Onboarding";
 interface NavItem {
   id: SectionId;
   label: string;
+  icon: IconName;
 }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<NavItem> }> = [
   {
     group: "Meeting",
     items: [
-      { id: "home", label: "Home" },
-      { id: "history", label: "History" },
+      { id: "home", label: "Home", icon: "home" },
+      { id: "history", label: "History", icon: "clock" },
     ],
   },
-  { group: "Privacy", items: [{ id: "privacy", label: "Privacy & data" }] },
+  { group: "Privacy", items: [{ id: "privacy", label: "Privacy & data", icon: "lock" }] },
   {
     group: "Settings",
     items: [
-      { id: "settings/ai", label: "AI providers" },
-      { id: "settings/transcription", label: "Transcription & audio" },
-      { id: "settings/screen", label: "Screen context" },
-      { id: "settings/appearance", label: "Overlay & appearance" },
-      { id: "settings/shortcuts", label: "Shortcuts" },
-      { id: "settings/profile", label: "Profile & context" },
-      { id: "settings/general", label: "General" },
+      { id: "settings/ai", label: "AI providers", icon: "cpu" },
+      { id: "settings/transcription", label: "Transcription & audio", icon: "wave" },
+      { id: "settings/screen", label: "Screen context", icon: "monitor" },
+      { id: "settings/appearance", label: "Overlay & appearance", icon: "palette" },
+      { id: "settings/shortcuts", label: "Shortcuts", icon: "keyboard" },
+      { id: "settings/profile", label: "Profile & context", icon: "user" },
+      { id: "settings/general", label: "General", icon: "sliders" },
     ],
   },
-  { group: "System", items: [{ id: "diagnostics", label: "Diagnostics" }] },
+  { group: "System", items: [{ id: "diagnostics", label: "Diagnostics", icon: "activity" }] },
 ];
 
 function renderSection(id: SectionId): ReactNode {
@@ -74,6 +76,22 @@ function renderSection(id: SectionId): ReactNode {
   }
 }
 
+/** The OpenMeet mark: two overlapping speech rings on the accent gradient. */
+export function BrandMark({ size = 28 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden
+      className="om-gradient inline-flex shrink-0 items-center justify-center rounded-[9px] shadow-glow"
+      style={{ width: size, height: size }}
+    >
+      <svg viewBox="0 0 24 24" width={size * 0.62} height={size * 0.62} fill="none">
+        <circle cx="9.5" cy="12" r="5.5" stroke="white" strokeWidth="2.2" />
+        <circle cx="14.5" cy="12" r="5.5" stroke="white" strokeOpacity="0.65" strokeWidth="2.2" />
+      </svg>
+    </span>
+  );
+}
+
 /** Always-visible statement of what is being captured (spec §60). */
 function CaptureIndicator() {
   const live = useMain((s) => s.live);
@@ -83,7 +101,7 @@ function CaptureIndicator() {
       <button
         type="button"
         onClick={() => setSection("home")}
-        className="flex w-full items-center gap-2 rounded-md border border-danger/40 bg-danger-soft px-2.5 py-2 text-left text-[0.78rem] font-medium text-danger"
+        className="flex w-full items-center gap-2.5 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2.5 text-left text-[0.8rem] font-medium text-danger"
       >
         <StatusDot tone="danger" />
         Processing stopped
@@ -96,11 +114,14 @@ function CaptureIndicator() {
       <button
         type="button"
         onClick={() => setSection("home")}
-        className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2 text-left text-[0.78rem]"
+        className="group flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-left text-[0.8rem] shadow-card transition-colors hover:border-border-strong"
       >
         <StatusDot tone={active ? "danger" : "warn"} pulse={active} />
-        <span className="font-medium text-fg">
-          {active ? "Meeting in progress" : "Meeting paused"}
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-fg">
+            {active ? "Meeting in progress" : "Meeting paused"}
+          </span>
+          <span className="block text-[0.72rem] text-muted">Open the live view</span>
         </span>
       </button>
     );
@@ -128,7 +149,7 @@ function Notices() {
         <div
           key={n.id}
           role={n.level === "error" ? "alert" : "status"}
-          className="om-fade-in pointer-events-auto flex items-start gap-2.5 rounded-lg border border-border bg-raised px-3 py-2.5 text-[0.82rem] shadow-lg"
+          className="om-rise pointer-events-auto flex items-start gap-2.5 rounded-xl border border-border bg-raised px-3.5 py-3 text-[0.82rem] shadow-pop"
         >
           <span className="mt-1.5">
             <StatusDot
@@ -225,62 +246,80 @@ export function App() {
     <div className="flex h-full">
       <nav
         aria-label="Sections"
-        className="flex w-56 shrink-0 flex-col border-r border-border bg-surface px-3 py-4"
+        className="flex w-60 shrink-0 flex-col border-r border-border bg-surface/80 px-3 py-4 backdrop-blur-xl"
       >
-        <div className="mb-4 flex items-center gap-2 px-2">
-          <span
-            aria-hidden
-            className="inline-block size-3 rounded-full border-[3px] border-accent"
-          />
-          <span className="text-[0.95rem] font-semibold tracking-tight">OpenMeet</span>
-          {devMode && <span className="ml-auto text-[0.68rem] text-muted">dev</span>}
+        <div className="mb-5 flex items-center gap-2.5 px-2">
+          <BrandMark />
+          <span className="text-[1.02rem] font-semibold tracking-[-0.02em]">OpenMeet</span>
+          {devMode && (
+            <span className="ml-auto rounded-full border border-border px-1.5 text-[0.62rem] font-medium text-muted">
+              dev
+            </span>
+          )}
         </div>
-        <div className="mb-3">
+        <div className="mb-4">
           <CaptureIndicator />
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="-mx-1 flex-1 overflow-y-auto px-1">
           {NAV.map((g) => (
-            <div key={g.group} className="mb-3">
-              <div className="px-2 pb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
-                {g.group}
-              </div>
-              <ul>
-                {g.items.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      aria-current={section === item.id ? "page" : undefined}
-                      onClick={() => setSection(item.id)}
-                      className={cx(
-                        "w-full rounded-md px-2 py-1.5 text-left text-[0.84rem] transition-colors",
-                        section === item.id
-                          ? "bg-accent-soft font-medium text-fg"
-                          : "text-fg-soft hover:bg-surface-2",
-                      )}
-                    >
-                      {item.label}
-                    </button>
-                  </li>
-                ))}
+            <div key={g.group} className="mb-4">
+              <div className="om-eyebrow px-2.5 pb-1.5">{g.group}</div>
+              <ul className="space-y-0.5">
+                {g.items.map((item) => {
+                  const current = section === item.id;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        aria-current={current ? "page" : undefined}
+                        onClick={() => setSection(item.id)}
+                        className={cx(
+                          "group relative flex h-8.5 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[0.85rem] transition-colors duration-150",
+                          current
+                            ? "bg-accent-soft font-medium text-fg"
+                            : "text-fg-soft hover:bg-surface-2 hover:text-fg",
+                        )}
+                      >
+                        {current && (
+                          <span
+                            aria-hidden
+                            className="om-gradient absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full"
+                          />
+                        )}
+                        <Icon
+                          name={item.icon}
+                          className={cx(
+                            "transition-colors",
+                            current ? "text-accent" : "text-muted group-hover:text-fg-soft",
+                          )}
+                        />
+                        {item.label}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
         </div>
-        <div className="px-2 pt-2 text-[0.7rem] text-muted">
-          {appInfo ? `v${appInfo.version}` : null}
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-border px-1 pt-3">
           <button
             type="button"
-            className="ml-2 underline-offset-2 hover:underline"
+            className="flex h-8 items-center gap-2 rounded-lg px-2 text-[0.8rem] text-fg-soft transition-colors hover:bg-surface-2 hover:text-fg"
             onClick={() => {
               api.overlayToggle().catch((e) => useMain.getState().notify("error", errorMessage(e)));
             }}
           >
+            <Icon name="layers" className="text-muted" />
             Toggle overlay
           </button>
+          <span className="text-[0.7rem] text-muted tabular-nums">
+            {appInfo ? `v${appInfo.version}` : null}
+          </span>
         </div>
       </nav>
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-8 py-7">{renderSection(section)}</div>
+        <div className="mx-auto max-w-5xl px-10 py-9">{renderSection(section)}</div>
       </main>
       <Notices />
     </div>

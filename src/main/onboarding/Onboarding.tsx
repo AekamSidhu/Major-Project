@@ -291,7 +291,7 @@ function Finish() {
         Start a meeting from Home when you are ready. Try a demo meeting first to see the overlay in
         action without using your microphone.
       </StepTitle>
-      <dl className="max-w-md divide-y divide-border rounded-lg border border-border bg-surface px-4 text-[0.84rem]">
+      <dl className="max-w-md divide-y divide-border om-card px-4 text-[0.84rem]">
         {rows.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-4 py-2">
             <dt className="text-muted">{k}</dt>

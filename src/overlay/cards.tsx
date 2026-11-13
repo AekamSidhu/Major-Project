@@ -367,7 +367,7 @@ function FollowupItem({ f }: { f: FollowUpQuestion }) {
         type="button"
         onClick={() => copy(f.question)}
         title="Copy question"
-        className="group w-full rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--om-fg)_7%,transparent)]"
+        className="group w-full rounded-xl border border-border bg-[color-mix(in_srgb,var(--om-fg)_3%,transparent)] px-2.5 py-2 text-left transition-colors hover:border-border-strong hover:bg-[color-mix(in_srgb,var(--om-fg)_7%,transparent)]"
       >
         <div className="flex items-start gap-1.5">
           <span
@@ -388,7 +388,7 @@ function FollowupItem({ f }: { f: FollowUpQuestion }) {
             {copied ? "Copied" : "Copy"}
           </span>
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1 pl-4">
+        <div className="mt-1 flex flex-wrap items-center gap-1 pl-4">
           <Tag tone={PRIORITY_TONE[f.priority]}>{categoryLabel(f.category)}</Tag>
           {f.priority === "high" && <Tag tone="accent">High</Tag>}
           {f.reason && <span className="text-[0.74rem] leading-snug text-muted">{f.reason}</span>}
@@ -401,7 +401,7 @@ function FollowupItem({ f }: { f: FollowUpQuestion }) {
 export function FollowupsCard({ f }: { f: FollowupsRequest }) {
   const thinking = isThinking(f.state) || (f.state === "streaming" && f.questions.length === 0);
   return (
-    <section aria-label="Follow-up questions" className="om-fade-in space-y-1">
+    <section aria-label="Follow-up questions" className="om-fade-in space-y-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <SectionLabel>Follow-up questions</SectionLabel>
         {f.turnPreview && (
@@ -412,7 +412,7 @@ export function FollowupsCard({ f }: { f: FollowupsRequest }) {
       </div>
       {thinking && <Thinking label="Reading the answer…" />}
       {f.questions.length > 0 && (
-        <ol className="space-y-0.5" aria-live="polite">
+        <ol className="space-y-1.5" aria-live="polite">
           {f.questions.map((q) => (
             <FollowupItem key={q.id} f={q} />
           ))}

@@ -245,7 +245,7 @@ export function ShortcutsSection() {
           <Spinner /> Loading shortcuts…
         </div>
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border bg-surface px-4">
+        <ul className="divide-y divide-border om-card px-4">
           {ORDER.map((a) => {
             const s = byAction.get(a);
             if (!s) return null;

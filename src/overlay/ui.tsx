@@ -40,7 +40,7 @@ export function IconButton({
       title={label}
       {...rest}
       className={cx(
-        "inline-flex size-[1.65rem] shrink-0 items-center justify-center rounded-md transition-colors",
+        "inline-flex size-[1.7rem] shrink-0 items-center justify-center rounded-lg transition-colors",
         "disabled:cursor-not-allowed disabled:opacity-40",
         HOVER,
         ICON_TONES[tone],
@@ -64,10 +64,10 @@ export function ChipButton({ active, className, children, ...rest }: ChipButtonP
       type="button"
       {...rest}
       className={cx(
-        "inline-flex h-[1.55rem] items-center gap-1 rounded-md border px-[0.45rem] text-[0.74rem] whitespace-nowrap transition-colors",
+        "inline-flex h-[1.6rem] items-center gap-1 rounded-full border px-[0.6rem] text-[0.74rem] whitespace-nowrap transition-colors",
         "disabled:cursor-not-allowed disabled:opacity-45",
         active
-          ? "border-transparent bg-accent-soft font-medium text-accent"
+          ? "border-accent/30 bg-accent-soft font-medium text-accent"
           : cx("border-border text-fg-soft hover:border-border-strong hover:text-fg", HOVER),
         className,
       )}
@@ -89,10 +89,10 @@ export function ActionButton({
       type="button"
       {...rest}
       className={cx(
-        "inline-flex h-[1.75rem] items-center gap-1.5 rounded-md px-[0.6rem] text-[0.78rem] font-medium whitespace-nowrap transition",
+        "inline-flex h-[1.85rem] items-center gap-1.5 rounded-lg px-[0.7rem] text-[0.78rem] font-medium whitespace-nowrap transition",
         "disabled:cursor-not-allowed disabled:opacity-50",
         primary
-          ? "bg-accent text-accent-fg hover:opacity-90"
+          ? "om-gradient text-white shadow-glow hover:brightness-110"
           : cx("border border-border-strong text-fg", HOVER),
         className,
       )}
@@ -137,7 +137,11 @@ export function Dot({ tone, pulse }: { tone: Tone; pulse?: boolean }) {
       className={cx(
         "inline-block size-[0.5rem] shrink-0 rounded-full",
         DOT_TONES[tone],
-        pulse && "om-pulse",
+        pulse && "om-live",
+        tone === "ok" && "text-ok",
+        tone === "danger" && "text-danger",
+        tone === "warn" && "text-warn",
+        tone === "accent" && "text-accent",
       )}
     />
   );
@@ -148,7 +152,7 @@ export function SectionLabel({ children, className }: { children: ReactNode; cla
   return (
     <div
       className={cx(
-        "mb-[0.2rem] text-[0.72rem] font-semibold tracking-[0.06em] text-muted uppercase",
+        "mb-[0.3rem] text-[0.68rem] font-semibold tracking-[0.09em] text-muted uppercase",
         className,
       )}
     >
@@ -177,7 +181,7 @@ export function Tag({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded border px-[0.3rem] py-px text-[0.72rem] leading-tight font-medium whitespace-nowrap",
+        "inline-flex items-center rounded-full border px-[0.45rem] py-[0.1rem] text-[0.7rem] leading-tight font-medium whitespace-nowrap",
         CHIP_TONES[tone],
         className,
       )}

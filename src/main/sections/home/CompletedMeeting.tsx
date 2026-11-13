@@ -79,10 +79,7 @@ export function CompletedMeeting({ live }: { live: LiveState }) {
         </Banner>
       )}
 
-      <section
-        aria-labelledby="om-completed-summary"
-        className="mb-5 rounded-lg border border-border bg-surface px-5 py-4"
-      >
+      <section aria-labelledby="om-completed-summary" className="mb-5 om-card px-5 py-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 id="om-completed-summary" className="text-[0.92rem] font-semibold text-fg">
             Summary

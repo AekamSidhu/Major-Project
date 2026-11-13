@@ -30,10 +30,7 @@ export function DemoCard() {
   };
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="rounded-lg border border-border bg-surface px-4 py-3.5"
-    >
+    <section aria-labelledby={headingId} className="om-card px-4 py-3.5">
       <div className="flex items-center gap-2">
         <Icon name="sparkle" className="text-accent" />
         <h2 id={headingId} className="text-[0.92rem] font-semibold text-fg">
