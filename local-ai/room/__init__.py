@@ -74,7 +74,18 @@ def lan_addresses() -> list[str]:
                 found.append(ip)
     except OSError:
         pass
-    return found
+
+    # Home and office Wi-Fi is usually 192.168.x or 172.16-31.x; 10.x is often a
+    # VPN adapter that a phone on the same Wi-Fi cannot reach.
+    def rank(ip: str) -> int:
+        parts = [int(p) for p in ip.split(".")]
+        if parts[0] == 192 and parts[1] == 168:
+            return 0
+        if parts[0] == 172 and 16 <= parts[1] <= 31:
+            return 1
+        return 2 if parts[0] == 10 else 3
+
+    return sorted(found, key=rank)
 
 
 @dataclass

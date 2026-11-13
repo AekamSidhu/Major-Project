@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from .gaze import FaceTracker, GazeMonitor, Region, Tracker, decode_image
@@ -34,6 +34,9 @@ from .models import FPS, WINDOW_FRAMES, EchoModel, ReadingModel
 
 LOG = logging.getLogger("openmeet.local_ai.integrity")
 PAGE = Path(__file__).resolve().parent / "page.html"
+# The shared look of the sidecar's pages (same design system as the app).
+UI_DIR = Path(__file__).resolve().parent.parent / "ui"
+UI_FILES = {"openmeet.css": "text/css", "inter.woff2": "font/woff2"}
 MAX_FRAME_BYTES = 4 * 1024 * 1024
 MAX_TEXT_CHARS = 20000
 
@@ -94,6 +97,12 @@ def add_routes(
     reading_model = _Lazy(lambda: reading or ReadingModel())
     monitor = GazeMonitor(tracker_factory or (lambda: FaceTracker(model_dir)), clock)
     auth = [Depends(check_auth)]
+
+    @app.get("/ui/{name}", include_in_schema=False)
+    def ui_asset(name: str) -> FileResponse:
+        if name not in UI_FILES:
+            raise HTTPException(status_code=404, detail="not found")
+        return FileResponse(UI_DIR / name, media_type=UI_FILES[name], headers={"Cache-Control": "max-age=86400"})
 
     @app.get("/integrity", response_class=HTMLResponse)
     def page() -> str:

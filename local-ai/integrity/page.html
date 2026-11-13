@@ -4,52 +4,53 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenMeet integrity check</title>
+<link rel="stylesheet" href="/ui/openmeet.css">
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5d6676; --line:#e2e5ea; --accent:#2f6fde;
-          --low:#2e8b57; --possible:#c98a00; --high:#c7372f; --track:#e9ecf1; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2e3440; --accent:#6c9cf0;
-            --low:#4cc38a; --possible:#e3b341; --high:#f0605a; --track:#2a2f38; } }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  header { padding:20px 24px 8px; max-width:1180px; margin:auto; }
-  h1 { font-size:22px; margin:0 0 4px; }
-  .sub { color:var(--muted); margin:0; }
-  main { max-width:1180px; margin:auto; padding:12px 24px 40px; display:grid; gap:16px; grid-template-columns:1fr 1fr; }
+  header.top { max-width:1180px; margin:auto; padding:28px 24px 6px; }
+  header.top h1 { font-size:30px; font-weight:650; letter-spacing:-.03em; margin:18px 0 6px; }
+  .sub { color:var(--muted); margin:0; max-width:760px; }
+  main { max-width:1180px; margin:auto; padding:16px 24px 48px; display:grid; gap:16px; grid-template-columns:1fr 1fr; }
   @media (max-width:900px) { main { grid-template-columns:1fr; } }
-  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
-  h2 { font-size:16px; margin:0 0 10px; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
-  button { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-  button:disabled { opacity:.5; cursor:default; }
-  input[type=number] { width:78px; padding:5px 6px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
-  textarea { width:100%; min-height:120px; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); font:inherit; resize:vertical; }
-  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
-  .chip { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:2px 9px; color:var(--muted); }
-  .chip.ok { color:var(--low); border-color:var(--low); }
-  .chip.bad { color:var(--high); border-color:var(--high); }
-  .stage { position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; }
+  section { background:linear-gradient(180deg, var(--highlight), transparent 48px), var(--surface); border:1px solid var(--border);
+    border-radius:16px; box-shadow:var(--shadow-card); padding:20px; animation:rise .26s both; }
+  h2 { font-size:15px; font-weight:600; margin:0 0 12px; letter-spacing:-.01em; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  button { display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 16px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--fg); font:inherit; font-size:13.5px; font-weight:550; cursor:pointer; transition:all .15s ease;
+    box-shadow:0 1px 0 var(--highlight) inset; }
+  button:hover { border-color:var(--border-strong); background:var(--raised); }
+  button.primary { background:var(--gradient); color:#fff; border-color:rgb(255 255 255 / .1); box-shadow:var(--shadow-glow); }
+  button.primary:hover { filter:brightness(1.1); }
+  button:disabled { opacity:.45; pointer-events:none; }
+  input[type=number] { width:84px; padding:6px 8px; }
+  textarea { min-height:130px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:550;
+    border:1px solid var(--border); background:var(--surface-2); color:var(--fg-soft); }
+  .chip.ok { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 35%, transparent); background:color-mix(in srgb, var(--ok) 10%, transparent); }
+  .chip.bad { color:var(--danger); border-color:color-mix(in srgb, var(--danger) 35%, transparent); background:var(--danger-soft); }
+  .stage { position:relative; background:#05060a; border-radius:14px; overflow:hidden; aspect-ratio:16/9; border:1px solid var(--border-strong); }
   .stage video, .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
-  .stage .hint { position:absolute; inset:auto 0 0 0; color:#fff; font-size:12px; padding:6px 10px; background:rgba(0,0,0,.5); }
-  .meter { height:14px; background:var(--track); border-radius:7px; overflow:hidden; }
-  .meter > div { height:100%; width:0; border-radius:7px; transition:width .3s, background .3s; }
-  .big { font-size:28px; font-weight:650; font-variant-numeric:tabular-nums; }
-  .level { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
-  .low { color:var(--low); } .possible { color:var(--possible); } .high { color:var(--high); } .muted { color:var(--muted); }
-  .stats { display:flex; gap:16px; color:var(--muted); font-size:13px; }
-  .result { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
-  .result > div { border:1px solid var(--line); border-radius:10px; padding:12px; }
-  .history { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
-  .history td, .history th { border-top:1px solid var(--line); padding:6px 4px; text-align:left; }
+  .stage .hint { position:absolute; left:12px; right:12px; bottom:12px; color:#fff; font-size:12.5px; padding:7px 12px; border-radius:10px;
+    background:rgb(8 9 14 / .6); backdrop-filter:blur(10px); border:1px solid rgb(255 255 255 / .1); }
+  .meter { height:10px; }
+  .low { color:var(--low); } .possible { color:var(--possible); } .high { color:var(--high); }
+  .stats { display:flex; gap:16px; color:var(--muted); font-size:13px; margin-top:10px; }
+  .result { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+  .result > div { border:1px solid var(--border); border-radius:14px; padding:14px; background:var(--surface-2); }
+  .result .big { margin:4px 0; }
+  .history { width:100%; border-collapse:collapse; font-size:13px; margin-top:14px; }
+  .history th { text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:8px 6px; }
+  .history td { border-top:1px solid var(--border); padding:9px 6px; text-align:left; }
   .wide { grid-column:1 / -1; }
-  #spark { width:100%; height:60px; display:block; }
-  .note { color:var(--muted); font-size:12.5px; }
+  #spark { width:100%; height:64px; display:block; margin:6px 0; }
+  details summary { cursor:pointer; }
 </style>
 </head>
 <body>
-<header>
-  <h1>OpenMeet integrity check</h1>
+<header class="top">
+  <span class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><circle cx="9.5" cy="12" r="5.5" stroke="#fff" stroke-width="2.2"/><circle cx="14.5" cy="12" r="5.5" stroke="#fff" stroke-opacity=".65" stroke-width="2.2"/></svg></span>OpenMeet</span>
+  <h1>Integrity check</h1>
   <p class="sub">Two signals while a candidate answers: do their eyes move like someone reading, and does the answer read like an AI wrote it.
     Everything runs on this computer.</p>
   <div class="chips" id="chips"></div>
