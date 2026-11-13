@@ -8,6 +8,7 @@ OpenAI-compatible endpoints:
     GET  /v1/models
     POST /v1/audio/transcriptions   (multipart: file, model, language, prompt)
     POST /v1/embeddings             ({"model": ..., "input": str | [str]})
+    GET  /integrity, /v1/integrity/...  answer-integrity checks (integrity/__init__.py)
 
 Privacy:
   * Binds to 127.0.0.1 by default and refuses non-loopback binds unless
@@ -283,6 +284,8 @@ def create_app(
     token: str | None = None,
     whisper_model: str = DEFAULT_WHISPER_MODEL,
     embed_model: str = DEFAULT_EMBED_MODEL,
+    integrity_tracker: Any = None,
+    clock: Any = time.time,
 ) -> FastAPI:
     app = FastAPI(title="OpenMeet local AI", version=__version__, docs_url=None, redoc_url=None)
     transcriber = transcriber or WhisperTranscriber(whisper_model)
@@ -374,6 +377,10 @@ def create_app(
             "data": [{"object": "embedding", "index": i, "embedding": v} for i, v in enumerate(vectors)],
         }
 
+    # Answer-integrity checks: AI-written answers and reading (optional extras).
+    from integrity import add_routes as add_integrity_routes
+
+    add_integrity_routes(app, check_auth, MODEL_DIR, tracker_factory=integrity_tracker, clock=clock)
     return app
 
 

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMeet integrity check</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5d6676; --line:#e2e5ea; --accent:#2f6fde;
+          --low:#2e8b57; --possible:#c98a00; --high:#c7372f; --track:#e9ecf1; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#2e3440; --accent:#6c9cf0;
+            --low:#4cc38a; --possible:#e3b341; --high:#f0605a; --track:#2a2f38; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { padding:20px 24px 8px; max-width:1180px; margin:auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0; }
+  main { max-width:1180px; margin:auto; padding:12px 24px 40px; display:grid; gap:16px; grid-template-columns:1fr 1fr; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  h2 { font-size:16px; margin:0 0 10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  button { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  input[type=number] { width:78px; padding:5px 6px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+  textarea { width:100%; min-height:120px; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); font:inherit; resize:vertical; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .chip { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:2px 9px; color:var(--muted); }
+  .chip.ok { color:var(--low); border-color:var(--low); }
+  .chip.bad { color:var(--high); border-color:var(--high); }
+  .stage { position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; }
+  .stage video, .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+  .stage .hint { position:absolute; inset:auto 0 0 0; color:#fff; font-size:12px; padding:6px 10px; background:rgba(0,0,0,.5); }
+  .meter { height:14px; background:var(--track); border-radius:7px; overflow:hidden; }
+  .meter > div { height:100%; width:0; border-radius:7px; transition:width .3s, background .3s; }
+  .big { font-size:28px; font-weight:650; font-variant-numeric:tabular-nums; }
+  .level { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .low { color:var(--low); } .possible { color:var(--possible); } .high { color:var(--high); } .muted { color:var(--muted); }
+  .stats { display:flex; gap:16px; color:var(--muted); font-size:13px; }
+  .result { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+  .result > div { border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .history { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
+  .history td, .history th { border-top:1px solid var(--line); padding:6px 4px; text-align:left; }
+  .wide { grid-column:1 / -1; }
+  #spark { width:100%; height:60px; display:block; }
+  .note { color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OpenMeet integrity check</h1>
+  <p class="sub">Two signals while a candidate answers: do their eyes move like someone reading, and does the answer read like an AI wrote it.
+    Everything runs on this computer.</p>
+  <div class="chips" id="chips"></div>
+</header>
+<main>
+  <section>
+    <h2>1. Watch the candidate's eyes</h2>
+    <div class="row">
+      <button id="btnShare" class="primary">Share the meeting window</button>
+      <button id="btnCam">Use this webcam</button>
+      <button id="btnStop" disabled>Stop</button>
+    </div>
+    <div class="stage" id="stage">
+      <video id="video" autoplay muted playsinline></video>
+      <canvas id="overlay"></canvas>
+      <div class="hint" id="hint">Share the meeting window, then drag a box around the candidate's video tile.</div>
+    </div>
+    <details style="margin-top:10px"><summary class="muted">Or let the sidecar capture a screen region itself</summary>
+      <div class="row">left <input type="number" id="rl" value="0"> top <input type="number" id="rt" value="0">
+        width <input type="number" id="rw" value="640"> height <input type="number" id="rh" value="360">
+        <button id="btnRegion">Capture region</button></div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Reading, last 10 seconds</h2>
+    <div class="row" style="justify-content:space-between">
+      <div class="big" id="liveP">–</div><div class="level muted" id="liveL">waiting for video</div>
+    </div>
+    <div class="meter"><div id="liveBar"></div></div>
+    <p class="note">Horizontal eye position, last 30 s (reading looks like a sawtooth: slow drift, quick jump back):</p>
+    <canvas id="spark"></canvas>
+    <div class="stats"><span id="fps">0 fps</span><span id="face">face –</span><span id="src">source –</span></div>
+  </section>
+
+  <section class="wide">
+    <h2>2. Check an answer</h2>
+    <div class="row">
+      <button id="btnStart" class="primary">Candidate starts answering</button>
+      <button id="btnEnd" disabled>Answer finished: check it</button>
+      <button id="btnRec">Record answer audio</button>
+      <span class="muted" id="timer"></span>
+    </div>
+    <textarea id="text" placeholder="The answer's transcript. Paste it here, or record the answer audio and it is transcribed locally."></textarea>
+    <div class="result" id="result" hidden>
+      <div><div class="muted">Reads like an AI-written answer</div><div class="big" id="echoP">–</div><div class="level" id="echoL"></div>
+        <div class="meter"><div id="echoBar"></div></div></div>
+      <div><div class="muted">Eyes moving like reading during the answer</div><div class="big" id="readP">–</div><div class="level" id="readL"></div>
+        <div class="meter"><div id="readBar"></div></div></div>
+    </div>
+    <table class="history" id="history" hidden><thead><tr><th>Time</th><th>Length</th><th>AI-written</th><th>Reading</th><th>Start of answer</th></tr></thead><tbody></tbody></table>
+    <p class="note">A high score is a reason to ask a follow-up question, never proof. Thresholds come from public datasets
+      (HC3 for text, GazeBase for gaze) and are not yet calibrated on real interviews.</p>
+  </section>
+</main>
+<script>
+const token = new URLSearchParams(location.search).get("token");
+const H = token ? { Authorization: "Bearer " + token } : {};
+const $ = (id) => document.getElementById(id);
+const api = async (path, body, raw) => {
+  const opts = { method: body === undefined ? "GET" : "POST", headers: { ...H } };
+  if (raw) { opts.body = raw; opts.headers["Content-Type"] = "application/octet-stream"; }
+  else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+};
+const pct = (p) => (p == null ? "–" : Math.round(p * 100) + "%");
+const LABEL = { low: "low", possible: "possible", high: "high", too_short: "answer too short", not_enough_gaze: "not enough gaze tracked" };
+function show(pEl, lEl, bar, p, level) {
+  pEl.textContent = pct(p);
+  lEl.textContent = LABEL[level] || level || "";
+  lEl.className = "level " + (["low", "possible", "high"].includes(level) ? level : "muted");
+  bar.style.width = p == null ? "0" : Math.round(p * 100) + "%";
+  bar.style.background = `var(--${["possible", "high"].includes(level) ? level : "low"})`;
+}
+
+// ---- video sources: the browser grabs frames and posts them, ~10 a second ----
+const video = $("video"), overlay = $("overlay"), grab = document.createElement("canvas");
+let stream = null, crop = null, drag = null, sending = false, loop = null;
+async function startStream(getter, hint) {
+  stopAll();
+  try { stream = await getter(); } catch (e) { $("hint").textContent = "Not started: " + e.message; return; }
+  video.srcObject = stream; crop = null; $("hint").textContent = hint; $("btnStop").disabled = false;
+  stream.getVideoTracks()[0].addEventListener("ended", stopAll);
+  loop = setInterval(sendFrame, 100);
+}
+function stopAll() {
+  if (loop) clearInterval(loop); loop = null;
+  if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; video.srcObject = null;
+  api("/v1/integrity/gaze/stop", {}).catch(() => {});
+  $("btnStop").disabled = true; drawCrop();
+}
+async function sendFrame() {
+  if (sending || !stream || !video.videoWidth) return;
+  sending = true;
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const c = crop ? { x: crop.x * vw, y: crop.y * vh, w: crop.w * vw, h: crop.h * vh } : { x: 0, y: 0, w: vw, h: vh };
+  const scale = Math.min(1, 640 / Math.max(c.w, c.h));
+  grab.width = Math.max(32, Math.round(c.w * scale)); grab.height = Math.max(32, Math.round(c.h * scale));
+  grab.getContext("2d").drawImage(video, c.x, c.y, c.w, c.h, 0, 0, grab.width, grab.height);
+  const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.8));
+  try { await api("/v1/integrity/gaze/frame", undefined, blob); } catch (e) { $("hint").textContent = e.message; }
+  sending = false;
+}
+$("btnShare").onclick = () => startStream(() => navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 } }),
+  "Drag a box around the candidate's face tile so only their face is tracked.");
+$("btnCam").onclick = () => startStream(() => navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } }),
+  "Webcam on. Try reading a paragraph, then look around normally.");
+$("btnStop").onclick = stopAll;
+$("btnRegion").onclick = async () => {
+  stopAll();
+  try {
+    await api("/v1/integrity/gaze/screen", { left: +$("rl").value, top: +$("rt").value, width: +$("rw").value, height: +$("rh").value });
+    $("hint").textContent = "The sidecar is capturing that screen region at 10 fps."; $("btnStop").disabled = false;
+  } catch (e) { $("hint").textContent = e.message; }
+};
+// Drag a box on the preview to choose the candidate's tile.
+function videoBox() {
+  const r = overlay.getBoundingClientRect(), vw = video.videoWidth || 16, vh = video.videoHeight || 9;
+  const s = Math.min(r.width / vw, r.height / vh);
+  return { x: (r.width - vw * s) / 2, y: (r.height - vh * s) / 2, w: vw * s, h: vh * s, r };
+}
+function drawCrop(live) {
+  const b = videoBox(); overlay.width = b.r.width; overlay.height = b.r.height;
+  const g = overlay.getContext("2d"); g.clearRect(0, 0, overlay.width, overlay.height);
+  const c = live || crop; if (!c || !stream) return;
+  g.strokeStyle = "#4cc38a"; g.lineWidth = 2;
+  g.strokeRect(b.x + c.x * b.w, b.y + c.y * b.h, c.w * b.w, c.h * b.h);
+}
+const toFrac = (e) => { const b = videoBox(); return { x: Math.min(1, Math.max(0, (e.clientX - b.r.left - b.x) / b.w)), y: Math.min(1, Math.max(0, (e.clientY - b.r.top - b.y) / b.h)) }; };
+overlay.onmousedown = (e) => { if (stream) drag = toFrac(e); };
+overlay.onmousemove = (e) => { if (!drag) return; const p = toFrac(e); drawCrop({ x: Math.min(drag.x, p.x), y: Math.min(drag.y, p.y), w: Math.abs(p.x - drag.x), h: Math.abs(p.y - drag.y) }); };
+overlay.onmouseup = (e) => {
+  if (!drag) return; const p = toFrac(e);
+  const c = { x: Math.min(drag.x, p.x), y: Math.min(drag.y, p.y), w: Math.abs(p.x - drag.x), h: Math.abs(p.y - drag.y) };
+  drag = null; crop = c.w > 0.03 && c.h > 0.03 ? c : null; drawCrop();
+  api("/v1/integrity/gaze/reset", {}).catch(() => {});
+  $("hint").textContent = crop ? "Tracking only the boxed tile. Drag again to change it." : "Tracking the whole picture.";
+};
+
+// ---- live status ----
+function spark(xs) {
+  const c = $("spark"), w = (c.width = c.clientWidth * devicePixelRatio), h = (c.height = 60 * devicePixelRatio);
+  const g = c.getContext("2d"); g.clearRect(0, 0, w, h);
+  const v = xs.filter((x) => x != null); if (v.length < 2) return;
+  const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+  g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent"); g.lineWidth = 1.5 * devicePixelRatio;
+  g.beginPath(); let pen = false;
+  xs.forEach((x, i) => { if (x == null) { pen = false; return; } const px = (i / (xs.length - 1)) * w, py = h - ((x - lo) / span) * (h - 6) - 3; pen ? g.lineTo(px, py) : g.moveTo(px, py); pen = true; });
+  g.stroke();
+}
+async function poll() {
+  try {
+    const s = await api("/v1/integrity/status");
+    const chip = (ok, text) => `<span class="chip ${ok ? "ok" : "bad"}">${text}</span>`;
+    $("chips").innerHTML = chip(s.echo_ready, "AI-answer model") + chip(s.reading_ready, "reading model") +
+      (s.gaze.error ? chip(false, s.gaze.error) : "");
+    const g = s.gaze;
+    $("fps").textContent = g.frames_per_second.toFixed(1) + " fps";
+    $("face").textContent = "face found " + Math.round(g.face_found_fraction * 100) + "%";
+    $("src").textContent = "source " + g.source;
+    const live = s.live_reading;
+    if (live) show($("liveP"), $("liveL"), $("liveBar"), live.reading_probability, live.level);
+    else show($("liveP"), $("liveL"), $("liveBar"), null, g.frames_per_second > 0 ? "not_enough_gaze" : "");
+    if (s.trace_x) spark(s.trace_x);
+  } catch (e) { $("chips").innerHTML = `<span class="chip bad">sidecar: ${e.message}</span>`; }
+}
+setInterval(poll, 1000); poll(); addEventListener("resize", () => drawCrop());
+
+// ---- one answer ----
+let t0 = null, tick = null;
+$("btnStart").onclick = () => {
+  t0 = Date.now() / 1000; $("btnEnd").disabled = false; $("btnStart").disabled = true; $("text").value = "";
+  tick = setInterval(() => ($("timer").textContent = "answering for " + Math.round(Date.now() / 1000 - t0) + " s"), 500);
+};
+$("btnEnd").onclick = async () => {
+  const t1 = Date.now() / 1000; clearInterval(tick); $("btnEnd").disabled = true; $("btnStart").disabled = false;
+  $("timer").textContent = "checking…";
+  const text = $("text").value.trim();
+  const [echo, read] = await Promise.all([
+    text ? api("/v1/integrity/echo", { text }).catch((e) => ({ error: e.message })) : Promise.resolve(null),
+    api("/v1/integrity/reading", { start: t0, end: t1 }).catch((e) => ({ error: e.message })),
+  ]);
+  report(echo, read, t1 - t0, text);
+};
+$("text").addEventListener("change", async () => {
+  // Checking a pasted transcript on its own (no answer timing) is allowed too.
+  if (t0 === null && $("text").value.trim()) report(await api("/v1/integrity/echo", { text: $("text").value }).catch((e) => ({ error: e.message })), null, null, $("text").value);
+});
+function report(echo, read, seconds, text) {
+  $("result").hidden = false; $("timer").textContent = "";
+  if (echo && !echo.error) show($("echoP"), $("echoL"), $("echoBar"), echo.ai_probability, echo.level);
+  else show($("echoP"), $("echoL"), $("echoBar"), null, echo ? echo.error : "no transcript");
+  if (read && !read.error) show($("readP"), $("readL"), $("readBar"), read.reading_probability, read.level);
+  else show($("readP"), $("readL"), $("readBar"), null, read ? read.error : "no gaze for this answer");
+  const row = document.createElement("tr");
+  const cell = (r, key) => (r && !r.error && r[key] != null ? `${pct(r[key])} <span class="${r.level}">${LABEL[r.level] || r.level}</span>` : "–");
+  row.innerHTML = `<td>${new Date().toLocaleTimeString()}</td><td>${seconds ? Math.round(seconds) + " s" : "–"}</td>
+    <td>${cell(echo, "ai_probability")}</td><td>${cell(read, "reading_probability")}</td><td></td>`;
+  row.lastElementChild.textContent = (text || "").slice(0, 80);
+  $("history").hidden = false; $("history").tBodies[0].prepend(row);
+  t0 = null;
+}
+
+// ---- optional: record the answer and transcribe it locally ----
+let rec = null;
+$("btnRec").onclick = async () => {
+  if (rec) { rec.stop(); return; }
+  let mic; try { mic = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { $("timer").textContent = e.message; return; }
+  const chunks = []; rec = new MediaRecorder(mic); rec.ondataavailable = (e) => chunks.push(e.data);
+  rec.onstop = async () => {
+    mic.getTracks().forEach((t) => t.stop()); rec = null; $("btnRec").textContent = "Record answer audio";
+    const wav = await toWav(new Blob(chunks)); const form = new FormData(); form.append("file", wav, "answer.wav");
+    $("timer").textContent = "transcribing…";
+    try { const r = await fetch("/v1/audio/transcriptions", { method: "POST", body: form, headers: H }); const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || r.statusText); $("text").value = d.text; $("timer").textContent = "";
+    } catch (e) { $("timer").textContent = "transcription failed: " + e.message; }
+  };
+  rec.start(); $("btnRec").textContent = "Stop recording";
+};
+async function toWav(blob) {  // the sidecar decodes WAV; browsers record WebM/Opus
+  const ctx = new AudioContext({ sampleRate: 16000 });
+  const audio = await ctx.decodeAudioData(await blob.arrayBuffer()); const data = audio.getChannelData(0);
+  const buf = new ArrayBuffer(44 + data.length * 2), v = new DataView(buf), w = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + data.length * 2, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, "data"); v.setUint32(40, data.length * 2, true);
+  data.forEach((s, i) => v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, s)) * 0x7fff, true));
+  return new Blob([buf], { type: "audio/wav" });
+}
+</script>
+</body>
+</html>
