@@ -9,7 +9,9 @@ them (signaling) and serves the pages.
 The interviewer's browser then sends, to this computer only:
 - each speaker's speech, cut at pauses, for local transcription (Whisper);
 - frames of the candidate's video, for the reading-gaze check;
-- each finished answer's transcript, for the AI-written-answer check.
+- each finished answer's transcript, for the AI-written-answer check and
+  for follow-up questions (room/followups.py: a chat model on this computer
+  by default, or rules when none is running).
 
 Who may call what:
 - interviewer endpoints (/host, /api/*, /v1/integrity/*) answer only to
@@ -100,6 +102,10 @@ class Room:
     candidate_name: str = ""
 
 
+class FollowupRequest(BaseModel):
+    answer: int | None = None  # the answer's index; the latest when omitted
+
+
 class AnswerRequest(BaseModel):
     start: float
     end: float
@@ -108,9 +114,13 @@ class AnswerRequest(BaseModel):
 
 
 def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: Any, reading_factory: Any,
-                    port: int, scheme: str, whisper_model: str) -> dict[str, Room]:
+                    port: int, scheme: str, whisper_model: str, followup_writer: Any = None) -> dict[str, Room]:
+    from .followups import FollowupWriter
+
     rooms: dict[str, Room] = {}
     infer_lock = threading.Lock()
+    followup_lock = threading.Lock()
+    writer = followup_writer or FollowupWriter()
     models: dict[str, Any] = {}
 
     def host_only(request: Request) -> None:
@@ -163,7 +173,8 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
 
     @app.get("/api/status", dependencies=[Depends(host_only)])
     def status() -> dict[str, Any]:
-        return {"transcription_model": whisper_model, "rooms": len(rooms)}
+        return {"transcription_model": whisper_model, "rooms": len(rooms),
+                "followup_model": writer.model_name, "followup_model_ok": writer.model_ok}
 
     @app.post("/api/rooms/{room_id}/transcribe", dependencies=[Depends(host_only)])
     async def transcribe(room_id: str, request: Request, speaker: str, start: float, end: float) -> dict[str, Any]:
@@ -211,6 +222,24 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
                   "text": req.text, "echo": echo, "reading": reading}
         room.answers.append(answer)
         return answer
+
+    @app.post("/api/rooms/{room_id}/followups", dependencies=[Depends(host_only)])
+    async def followups(room_id: str, req: FollowupRequest) -> dict[str, Any]:
+        room = room_or_404(room_id)
+        if not room.answers:
+            raise HTTPException(status_code=409, detail="no answers yet")
+        answer = room.answers[-1] if req.answer is None else next((a for a in room.answers if a["index"] == req.answer), None)
+        if answer is None:
+            raise HTTPException(status_code=404, detail="no such answer")
+        previous = [i["question"] for a in room.answers for i in (a.get("followups") or {}).get("items", [])]
+
+        def run() -> dict[str, Any]:
+            with followup_lock:
+                return writer.write(answer["question"], answer["text"], list(room.transcript), previous)
+
+        result = await asyncio.get_running_loop().run_in_executor(None, run)
+        answer["followups"] = result
+        return {"answer": answer["index"], **result}
 
     @app.get("/api/rooms/{room_id}/report", dependencies=[Depends(host_only)])
     def report(room_id: str) -> dict[str, Any]:

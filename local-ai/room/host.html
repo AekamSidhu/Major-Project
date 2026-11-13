@@ -8,26 +8,27 @@
 <style>
   body { overflow: hidden; }
   .topbar { height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px;
-    border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 80%, transparent); backdrop-filter: blur(16px); }
-  .topbar .mid { display: flex; align-items: center; gap: 10px; }
+    border-bottom: 1px solid var(--border); background: var(--bg); }
+  .topbar .mid { display: flex; align-items: baseline; gap: 12px; }
+  .call-clock { font-size: 26px; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .call-clock.idle { color: var(--muted); }
+  .live-dot { color: var(--danger); align-self: center; }
   .topbar .pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .layout { height: calc(100vh - 60px); display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px 20px; }
   @media (max-width: 1000px) { body { overflow: auto; } .layout { height: auto; grid-template-columns: 1fr; } }
   .stage-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
-  .stage { position: relative; flex: 1; min-height: 320px; border-radius: 20px; overflow: hidden; background: #05060a;
-    border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); }
+  .stage { position: relative; flex: 1; min-height: 320px; border-radius: 14px; overflow: hidden; background: var(--stage); }
   #remote { width: 100%; height: 100%; object-fit: contain; display: block; }
   #self { position: absolute; right: 16px; bottom: 16px; width: 22%; min-width: 150px; aspect-ratio: 16/9; object-fit: cover;
-    border-radius: 14px; border: 2px solid rgb(255 255 255 / 0.18); background: #1a1e2a; box-shadow: 0 12px 30px -10px rgb(0 0 0 / .8); }
-  .chip { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
-    background: rgb(8 9 14 / 0.6); color: #fff; font-size: 12.5px; font-weight: 550; backdrop-filter: blur(12px); border: 1px solid rgb(255 255 255 / .1); }
+    border-radius: 10px; border: 1px solid rgb(255 255 255 / 0.16); background: #222826; box-shadow: 0 12px 30px -12px rgb(0 0 0 / .7); }
+  .chip { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 6px;
+    background: rgb(16 20 19 / 0.72); color: #fff; font-size: 12.5px; font-weight: 550; }
   #badge { left: 16px; top: 16px; }
   #nameplate { left: 16px; bottom: 16px; }
-  .waiting { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px;
-    background: radial-gradient(600px 300px at 50% 30%, rgb(147 132 255 / .16), transparent 70%), #07080c; }
-  .waiting .card { width: min(560px, 100%); padding: 26px; text-align: center; }
-  .waiting h2 { font-size: 22px; font-weight: 650; margin: 14px 0 6px; }
-  .invite { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 6px 6px 6px 14px; border-radius: 12px;
+  .waiting { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--stage); }
+  .waiting .card { width: min(540px, 100%); padding: 24px 26px; }
+  .waiting h2 { font-size: 24px; font-stretch: 82%; font-weight: 620; margin: 0 0 6px; }
+  .invite { display: flex; align-items: center; gap: 8px; margin-top: 18px; padding: 5px 5px 5px 12px; border-radius: 8px;
     background: var(--surface-2); border: 1px solid var(--border); text-align: left; }
   .invite code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--fg-soft); }
   .others { margin-top: 10px; font-size: 12px; color: var(--muted); text-align: left; }
@@ -37,17 +38,33 @@
   .panel { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: auto; padding-right: 2px; }
   .gauge { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 10px; }
   #answers { display: flex; flex-direction: column; gap: 10px; }
-  .answer { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; background: var(--surface-2); animation: rise .26s both; }
+  .answer { border-top: 1px solid var(--border); padding: 12px 0 2px; animation: rise .18s var(--ease) both; }
+  .answer:first-child { border-top: 0; padding-top: 0; }
+  .answer .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .answer .head b { font-size: 13px; font-weight: 600; }
   .answer .q { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .answer .a { font-size: 13px; color: var(--fg-soft); margin: 4px 0 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .scores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .score .row { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 6px; }
-  .score b { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .score b { font-size: 20px; font-stretch: 82%; font-weight: 620; font-variant-numeric: tabular-nums; }
   #transcript { display: flex; flex-direction: column; gap: 14px; max-height: 360px; overflow: auto; }
-  .line { display: flex; gap: 10px; animation: rise .26s both; }
+  .line { display: flex; gap: 10px; animation: rise .18s var(--ease) both; }
   .avatar { width: 28px; height: 28px; border-radius: 999px; flex: none; display: inline-flex; align-items: center; justify-content: center;
     font-size: 11.5px; font-weight: 650; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--fg-soft); }
-  .line.interviewer .avatar { background: var(--gradient); border-color: transparent; color: #fff; box-shadow: var(--shadow-glow); }
+  .line.interviewer .avatar { background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+  #asknext { display: flex; flex-direction: column; gap: 4px; }
+  .fu { display: flex; gap: 10px; width: calc(100% + 16px); text-align: left; font: inherit; color: inherit; background: none; border: 0;
+    border-radius: 8px; padding: 8px; margin: 0 -8px; cursor: pointer; transition: background-color .15s; animation: rise .18s var(--ease) both; }
+  .fu:hover { background: var(--surface-2); }
+  .fu .mark { width: 7px; height: 7px; border-radius: 999px; margin-top: 7px; flex: none; border: 1.5px solid var(--muted); }
+  .fu.high .mark { background: var(--accent); border-color: var(--accent); }
+  .fu .q { font-size: 14px; font-weight: 550; line-height: 1.4; color: var(--fg); }
+  .fu .why { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .fu .copied { font-size: 12px; color: var(--accent); margin-left: 6px; font-weight: 550; }
+  .source { margin: 10px 0 0; }
+  .writing { display: flex; align-items: center; gap: 8px; }
+  .writing .dot { color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
   .line .who { font-size: 12px; font-weight: 600; } .line.interviewer .who { color: var(--accent); }
   .line .text { font-size: 13.5px; color: var(--fg-soft); line-height: 1.5; }
   .empty { padding: 18px 4px; text-align: center; }
@@ -55,8 +72,8 @@
 </head>
 <body>
 <header class="topbar">
-  <span class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><circle cx="9.5" cy="12" r="5.5" stroke="#fff" stroke-width="2.2"/><circle cx="14.5" cy="12" r="5.5" stroke="#fff" stroke-opacity=".65" stroke-width="2.2"/></svg></span>OpenMeet <span class="muted" style="font-weight:500">Room</span></span>
-  <div class="mid"><span class="eyebrow">Interview</span><span class="mono soft" id="roomId"></span><span class="pill nums" id="clock">00:00</span></div>
+  <span class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><circle cx="9.5" cy="12" r="5.5" stroke="currentColor" stroke-width="2.2"/><circle cx="14.5" cy="12" r="5.5" stroke="currentColor" stroke-opacity=".65" stroke-width="2.2"/></svg></span>OpenMeet <span class="muted">Room</span></span>
+  <div class="mid"><span class="dot live live-dot" id="liveDot" hidden></span><span class="call-clock display idle" id="clock">00:00</span><span class="note" id="roomId"></span></div>
   <div class="pills">
     <span class="pill" id="pillPeer"><span class="dot"></span>candidate not joined</span>
     <span class="pill" id="pillAsr">transcription –</span>
@@ -68,8 +85,7 @@
     <div class="stage">
       <video id="remote" autoplay playsinline></video>
       <div class="waiting" id="waiting">
-        <div class="card rise">
-          <span class="brand-mark" style="width:44px;height:44px;border-radius:13px"><svg viewBox="0 0 24 24" width="26" height="26" fill="none"><circle cx="9.5" cy="12" r="5.5" stroke="#fff" stroke-width="2.2"/><circle cx="14.5" cy="12" r="5.5" stroke="#fff" stroke-opacity=".65" stroke-width="2.2"/></svg></span>
+        <div class="card">
           <h2>Waiting for the candidate</h2>
           <p class="note" style="font-size:13.5px">Send this link. A phone or laptop on the same Wi-Fi can open it; the browser warns about the certificate once
             because this computer made it.</p>
@@ -85,11 +101,19 @@
       <button class="round" id="btnCam" title="Turn camera off"></button>
       <span class="sep"></span>
       <button class="btn" id="btnEndAnswer" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>End answer now</button>
+      <button class="btn" id="btnFollowups" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.7 4.7 1.8-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8zM18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Suggest follow-ups</button>
       <button class="btn" id="btnReport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10.5M7.5 10l4.5 4.5 4.5-4.5M5 19.5h14"/></svg>Report</button>
     </div>
     <p class="note" style="text-align:center;margin:-6px 0 0">Use headphones so the candidate's voice doesn't reach your microphone.</p>
   </section>
   <aside class="panel">
+    <div class="card">
+      <div class="card-head"><h2>Ask next</h2><span class="note" id="askFor"></span></div>
+      <div class="card-body">
+        <div id="asknext"><p class="note empty">Follow-up questions for each answer appear here. Click one to copy it.</p></div>
+        <p class="note source" id="fuSource" hidden></p>
+      </div>
+    </div>
     <div class="card">
       <div class="card-head"><h2>Reading, last 10 seconds</h2><span class="level muted" id="liveL"></span></div>
       <div class="card-body">
@@ -133,7 +157,7 @@ const setPill = (id, text, tone) => { $(id).className = "pill" + (tone ? " " + t
 
 // ---- room and call ----
 const room = await post("/api/rooms");
-$("roomId").textContent = room.room;
+$("roomId").textContent = "Room " + room.room;
 const fake = new URLSearchParams(location.search).has("fake") ? "&fake=1" : "";
 const links = room.invites.map((u) => u + fake);
 $("invites").innerHTML = `<div class="invite"><code>${links[0]}</code><button class="btn primary sm" id="btnCopy">${ICON.copy}Copy link</button></div>` +
@@ -178,6 +202,7 @@ setInterval(() => {
   if (!connectedAt) return;
   const s = Math.floor((Date.now() - connectedAt) / 1000);
   $("clock").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  $("clock").classList.remove("idle"); $("liveDot").hidden = !pc;
 }, 1000);
 
 // ---- candidate's video -> gaze, ~10 frames a second ----
@@ -291,13 +316,50 @@ function renderAnswer(r) {
     <div class="row"><b>${pct(p)}</b><span class="level ${["low", "possible", "high"].includes(level) ? level : "muted"}">${LABEL[level] || level}</span></div>
     <div class="meter"><div style="width:${p == null ? 0 : Math.round(p * 100)}%;background:var(--${["possible", "high"].includes(level) ? level : "low"})"></div></div></div>`;
   const div = document.createElement("div"); div.className = "answer";
-  div.innerHTML = `<div class="eyebrow">Answer ${r.index} · ${Math.round(r.end - r.start)} s</div><div class="q"></div><div class="a"></div>
+  div.innerHTML = `<div class="head"><b>Answer ${r.index}</b><span class="note nums">${Math.round(r.end - r.start)} s</span></div><div class="q"></div><div class="a"></div>
     <div class="scores">${score("AI-written", r.echo && r.echo.ai_probability, r.echo ? r.echo.level : "too_short")}
     ${score("Reading", r.reading && r.reading.reading_probability, r.reading ? r.reading.level : "not_enough_gaze")}</div>`;
   div.querySelector(".q").textContent = r.question ? "Q: " + r.question : "";
   div.querySelector(".a").textContent = r.text || "(no transcript)";
   $("answers").prepend(div);
+  suggest(r.index);
 }
+
+// ---- follow-up questions for the latest answer ----
+let fuJob = 0;
+async function suggest(index) {
+  const job = ++fuJob;
+  $("btnFollowups").disabled = true;
+  $("askFor").textContent = index ? "for answer " + index : "";
+  $("asknext").innerHTML = '<p class="note writing"><span class="dot"></span>Writing follow-ups…</p>';
+  $("fuSource").hidden = true;
+  try {
+    const r = await post(`/api/rooms/${room.room}/followups`, index ? { answer: index } : {});
+    if (job !== fuJob) return;
+    $("askFor").textContent = "for answer " + r.answer;
+    $("asknext").innerHTML = "";
+    for (const f of r.items) {
+      const b = document.createElement("button");
+      b.className = "fu" + (f.priority === "high" ? " high" : ""); b.title = "Copy question";
+      b.innerHTML = '<span class="mark"></span><span><div class="q"></div><div class="why"></div></span>';
+      b.querySelector(".q").textContent = f.question; b.querySelector(".why").textContent = f.reason || "";
+      b.onclick = async () => {
+        await navigator.clipboard.writeText(f.question).catch(() => {});
+        if (!b.querySelector(".copied")) b.querySelector(".q").insertAdjacentHTML("beforeend", '<span class="copied">Copied</span>');
+      };
+      $("asknext").append(b);
+    }
+    $("fuSource").hidden = false;
+    $("fuSource").textContent = r.source === "ai"
+      ? `Written by ${r.model} from the answer and the transcript.`
+      : "Written by simple rules because no AI model is running. Start Ollama (ollama pull llama3.2) for AI follow-ups.";
+  } catch (e) {
+    if (job === fuJob) $("asknext").innerHTML = `<p class="note">Could not write follow-ups: ${e.message}</p>`;
+  } finally {
+    if (job === fuJob) $("btnFollowups").disabled = false;
+  }
+}
+$("btnFollowups").onclick = () => suggest(null);
 
 // ---- report ----
 $("btnReport").onclick = async () => {
@@ -311,6 +373,10 @@ $("btnReport").onclick = async () => {
     lines.push(`**Answer:** ${a.text || "(no transcript)"}`, ``,
       `- AI-written: ${a.echo ? pct(a.echo.ai_probability) + " (" + a.echo.level + ")" : "–"}`,
       `- Reading: ${a.reading && a.reading.reading_probability != null ? pct(a.reading.reading_probability) + " (" + a.reading.level + ")" : "not enough gaze"}`, ``);
+    if (a.followups && a.followups.items.length) {
+      lines.push(`**Follow-ups** (${a.followups.source === "ai" ? "by " + a.followups.model : "by rules"}):`, ``,
+        ...a.followups.items.map((f) => `- ${f.question}${f.reason ? " _" + f.reason + "_" : ""}`), ``);
+    }
   }
   lines.push(`## Transcript`, ``, ...r.transcript.map((s) => `- ${t(s.start)} **${s.speaker}:** ${s.text}`));
   const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/markdown" })), download: `interview-${r.room}.md` });

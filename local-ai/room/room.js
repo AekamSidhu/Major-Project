@@ -18,8 +18,8 @@ function fakeMedia() {
   const g = canvas.getContext("2d");
   const label = location.pathname.startsWith("/host") ? "interviewer (test video)" : "candidate (test video)";
   (function draw(t) {
-    g.fillStyle = "#1d2b3a"; g.fillRect(0, 0, 640, 360);
-    g.fillStyle = "#6c9cf0"; g.beginPath(); g.arc(320 + 150 * Math.sin(t / 900), 180, 40, 0, 7); g.fill();
+    g.fillStyle = "#2a2f2d"; g.fillRect(0, 0, 640, 360);
+    g.fillStyle = "#7cc4ae"; g.beginPath(); g.arc(320 + 150 * Math.sin(t / 900), 180, 40, 0, 7); g.fill();
     g.fillStyle = "#fff"; g.font = "20px sans-serif"; g.fillText(label, 20, 340);
     requestAnimationFrame(draw);
   })(0);

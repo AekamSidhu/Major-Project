@@ -13,6 +13,11 @@ share its address instead.
 
 Transcription (faster-whisper) and both integrity models run here; see
 room/__init__.py for what each side can reach.
+
+Follow-up questions come from a chat model: Ollama on this computer by
+default (`ollama pull llama3.2`), or any OpenAI-compatible endpoint set with
+OPENMEET_ROOM_LLM_URL, OPENMEET_ROOM_LLM_MODEL and OPENMEET_ROOM_LLM_KEY.
+Without one, simple rules suggest follow-ups and the page says so.
 """
 
 from __future__ import annotations
@@ -63,7 +68,8 @@ def self_signed_cert(folder: Path) -> tuple[Path, Path]:
     return cert, key
 
 
-def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None) -> FastAPI:  # type: ignore[no-untyped-def]
+def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None,  # type: ignore[no-untyped-def]
+                    followup_writer=None) -> FastAPI:
     import time
 
     app = FastAPI(title="OpenMeet Room", docs_url=None, redoc_url=None)
@@ -88,6 +94,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         port=port,
         scheme=scheme,
         whisper_model=whisper_model,
+        followup_writer=followup_writer,
     )
     return app
 

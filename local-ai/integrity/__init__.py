@@ -36,7 +36,7 @@ LOG = logging.getLogger("openmeet.local_ai.integrity")
 PAGE = Path(__file__).resolve().parent / "page.html"
 # The shared look of the sidecar's pages (same design system as the app).
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
-UI_FILES = {"openmeet.css": "text/css", "inter.woff2": "font/woff2"}
+UI_FILES = {"openmeet.css": "text/css", "instrument-sans.woff2": "font/woff2"}
 MAX_FRAME_BYTES = 4 * 1024 * 1024
 MAX_TEXT_CHARS = 20000
 

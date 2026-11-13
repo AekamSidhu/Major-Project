@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import urllib.error
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -9,6 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 import room_server
 import server
 from room import is_phantom
+from room.followups import FollowupWriter, parse_followups, rule_followups
 from test_integrity import AI_ANSWER, Clock, SawtoothTracker, feed
 from test_server import wav_bytes
 
@@ -27,10 +30,15 @@ class ScriptedTranscriber:
         return None
 
 
-def make(text: str = "I built the cache layer myself", confidence: float = 0.9, reading: bool = True):
+def no_model(messages):  # type: ignore[no-untyped-def]
+    raise urllib.error.URLError("connection refused")
+
+
+def make(text: str = "I built the cache layer myself", confidence: float = 0.9, reading: bool = True, chat=no_model):  # type: ignore[no-untyped-def]
     clock = Clock()
     app = room_server.create_room_app(8443, "https", "base.en", transcriber=ScriptedTranscriber(text, confidence),
-                                      tracker_factory=lambda: SawtoothTracker(clock, reading), clock=clock)
+                                      tracker_factory=lambda: SawtoothTracker(clock, reading), clock=clock,
+                                      followup_writer=FollowupWriter(chat=chat))
     return app, clock
 
 
@@ -106,3 +114,61 @@ def test_answer_check_and_report():
     assert answer["reading"]["reading_probability"] > 0.8
     report = local.get(f"/api/rooms/{room}/report").json()
     assert report["answers"][0]["question"] == "How would you scale it?"
+
+
+ANSWER = ("We moved the checkout service to Kubernetes and cut p99 latency by 40% over three months. "
+          "We also added a Redis cache in front of the product catalogue.")
+
+
+def test_followups_come_from_the_model_and_avoid_repeats():
+    prompts: list[str] = []
+
+    def chat(messages):  # type: ignore[no-untyped-def]
+        prompts.append(messages[-1]["content"])
+        n = len(prompts)
+        return (f'{{"question":"What happens to checkout if Redis goes down? ({n})","reason":"No failure handling.",'
+                f'"priority":"high","trigger":"added a Redis cache"}}\n'
+                f'{{"question":"How did you measure the 40% drop? ({n})","priority":"urgent"}}\nnot json')
+
+    app, _ = make(chat=chat)
+    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    room = local.post("/api/rooms").json()["room"]
+    assert local.post(f"/api/rooms/{room}/followups", json={}).status_code == 409  # no answers yet
+    local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 20, "text": ANSWER, "question": "Tell me about a project."})
+    assert remote.post(f"/api/rooms/{room}/followups", json={}).status_code == 403
+
+    first = local.post(f"/api/rooms/{room}/followups", json={"answer": 1}).json()
+    assert first["source"] == "ai" and first["model"] == "llama3.2" and first["answer"] == 1
+    assert [f["priority"] for f in first["items"]] == ["high", "normal"]  # unknown priority becomes normal
+    assert "<candidate_answer>" in prompts[0] and "Kubernetes" in prompts[0] and "Tell me about a project." in prompts[0]
+
+    local.post(f"/api/rooms/{room}/followups", json={})  # again for the latest answer
+    assert "What happens to checkout if Redis goes down? (1)" in prompts[1].split("<previous_suggestions>")[1]
+    report = local.get(f"/api/rooms/{room}/report").json()
+    assert report["answers"][0]["followups"]["items"][0]["question"].endswith("(2)")
+    assert local.get("/api/status").json()["followup_model_ok"] is True
+
+
+def test_followups_fall_back_to_rules_without_a_model():
+    app, _ = make()
+    local = TestClient(app, client=LOCAL)
+    room = local.post("/api/rooms").json()["room"]
+    local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 20, "text": ANSWER})
+    result = local.post(f"/api/rooms/{room}/followups", json={}).json()
+    assert result["source"] == "rules" and result["model"] is None
+    questions = " ".join(f["question"] for f in result["items"])
+    assert result["items"][0]["priority"] == "high"
+    assert "Kubernetes" in questions or "yourself" in questions
+    assert all(f["trigger"] for f in result["items"])  # each one quotes the answer
+    assert local.get("/api/status").json()["followup_model_ok"] is False
+
+
+def test_followup_parsing_and_rules_handle_odd_input():
+    assert parse_followups('```json\n[{"question": "Why Redis over Memcached?"}, {"question": "Why Redis over Memcached?"}]\n```') == [
+        {"question": "Why Redis over Memcached?", "reason": "", "priority": "normal", "trigger": ""}]
+    assert parse_followups('{"followups": [{"question": "short"}, "x"]}') == []
+    assert parse_followups("I cannot help with that.") == []
+    only = rule_followups("", "Yes.", [])
+    assert len(only) == 1 and "example" in only[0]["question"]
+    asked = rule_followups("", ANSWER, ["Which part of this did you build or decide yourself?"])
+    assert all("yourself" not in f["question"] for f in asked)

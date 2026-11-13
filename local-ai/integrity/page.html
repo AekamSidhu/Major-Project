@@ -7,40 +7,38 @@
 <link rel="stylesheet" href="/ui/openmeet.css">
 <style>
   header.top { max-width:1180px; margin:auto; padding:28px 24px 6px; }
-  header.top h1 { font-size:30px; font-weight:650; letter-spacing:-.03em; margin:18px 0 6px; }
+  header.top h1 { font-size:40px; line-height:1.05; margin:22px 0 8px; }
   .sub { color:var(--muted); margin:0; max-width:760px; }
   main { max-width:1180px; margin:auto; padding:16px 24px 48px; display:grid; gap:16px; grid-template-columns:1fr 1fr; }
   @media (max-width:900px) { main { grid-template-columns:1fr; } }
-  section { background:linear-gradient(180deg, var(--highlight), transparent 48px), var(--surface); border:1px solid var(--border);
-    border-radius:16px; box-shadow:var(--shadow-card); padding:20px; animation:rise .26s both; }
+  section { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px; }
   h2 { font-size:15px; font-weight:600; margin:0 0 12px; letter-spacing:-.01em; }
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0; }
-  button { display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 16px; border-radius:10px; border:1px solid var(--border);
-    background:var(--surface-2); color:var(--fg); font:inherit; font-size:13.5px; font-weight:550; cursor:pointer; transition:all .15s ease;
-    box-shadow:0 1px 0 var(--highlight) inset; }
-  button:hover { border-color:var(--border-strong); background:var(--raised); }
-  button.primary { background:var(--gradient); color:#fff; border-color:rgb(255 255 255 / .1); box-shadow:var(--shadow-glow); }
-  button.primary:hover { filter:brightness(1.1); }
+  button { display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 15px; border-radius:6px; border:1px solid var(--border-strong);
+    background:var(--surface); color:var(--fg); font:inherit; font-size:13.5px; font-weight:550; cursor:pointer; transition:background-color .15s; }
+  button:hover { background:var(--surface-2); }
+  button.primary { background:var(--accent); color:var(--accent-fg); border-color:transparent; }
+  button.primary:hover { background:var(--accent-strong); }
   button:disabled { opacity:.45; pointer-events:none; }
   input[type=number] { width:84px; padding:6px 8px; }
   textarea { min-height:130px; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; }
-  .chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:550;
-    border:1px solid var(--border); background:var(--surface-2); color:var(--fg-soft); }
-  .chip.ok { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 35%, transparent); background:color-mix(in srgb, var(--ok) 10%, transparent); }
+  .chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px; border-radius:6px; font-size:12.5px; font-weight:550;
+    border:1px solid var(--border); background:var(--surface); color:var(--fg-soft); }
+  .chip.ok { color:var(--ok); }
   .chip.bad { color:var(--danger); border-color:color-mix(in srgb, var(--danger) 35%, transparent); background:var(--danger-soft); }
-  .stage { position:relative; background:#05060a; border-radius:14px; overflow:hidden; aspect-ratio:16/9; border:1px solid var(--border-strong); }
+  .stage { position:relative; background:var(--stage); border-radius:10px; overflow:hidden; aspect-ratio:16/9; }
   .stage video, .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
   .stage .hint { position:absolute; left:12px; right:12px; bottom:12px; color:#fff; font-size:12.5px; padding:7px 12px; border-radius:10px;
-    background:rgb(8 9 14 / .6); backdrop-filter:blur(10px); border:1px solid rgb(255 255 255 / .1); }
+    background:rgb(16 20 19 / .72); }
   .meter { height:10px; }
   .low { color:var(--low); } .possible { color:var(--possible); } .high { color:var(--high); }
   .stats { display:flex; gap:16px; color:var(--muted); font-size:13px; margin-top:10px; }
   .result { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
-  .result > div { border:1px solid var(--border); border-radius:14px; padding:14px; background:var(--surface-2); }
+  .result > div { border:1px solid var(--border); border-radius:8px; padding:14px; background:var(--bg); }
   .result .big { margin:4px 0; }
   .history { width:100%; border-collapse:collapse; font-size:13px; margin-top:14px; }
-  .history th { text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:8px 6px; }
+  .history th { text-align:left; font-size:12.5px; color:var(--muted); font-weight:560; padding:8px 6px; }
   .history td { border-top:1px solid var(--border); padding:9px 6px; text-align:left; }
   .wide { grid-column:1 / -1; }
   #spark { width:100%; height:64px; display:block; margin:6px 0; }
@@ -49,7 +47,7 @@
 </head>
 <body>
 <header class="top">
-  <span class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><circle cx="9.5" cy="12" r="5.5" stroke="#fff" stroke-width="2.2"/><circle cx="14.5" cy="12" r="5.5" stroke="#fff" stroke-opacity=".65" stroke-width="2.2"/></svg></span>OpenMeet</span>
+  <span class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" width="17" height="17" fill="none"><circle cx="9.5" cy="12" r="5.5" stroke="currentColor" stroke-width="2.2"/><circle cx="14.5" cy="12" r="5.5" stroke="currentColor" stroke-opacity=".65" stroke-width="2.2"/></svg></span>OpenMeet</span>
   <h1>Integrity check</h1>
   <p class="sub">Two signals while a candidate answers: do their eyes move like someone reading, and does the answer read like an AI wrote it.
     Everything runs on this computer.</p>
