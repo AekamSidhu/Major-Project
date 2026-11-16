@@ -1,0 +1,2 @@
+participant,session,answer_no,question_id,question_type,question,condition,screen_position,material_id,ai_model,english,glasses,camera,notes,exclude,exclude_reason
+P01,,1,W01,warmup,How has your week been so far?,honest,,,,native|non_native,yes|no,laptop|external,,no,

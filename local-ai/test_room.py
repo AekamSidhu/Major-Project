@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import zlib
 from pathlib import Path
@@ -378,6 +379,16 @@ def test_study_mode_saves_labelled_answers_only_with_the_candidates_consent(tmp_
         local.post(f"/api/rooms/{rid}/answers", json={"start": 0, "end": 30, "text": WORDS23, "question": QUESTION})
     assert local.get(f"/api/rooms/{rid}/study").json()["consent"] is False
     assert len(list(sessions[0].iterdir())) == 2
+
+    # The collection kit's calibrate.py reads exactly what the room saved.
+    spec = importlib.util.spec_from_file_location(
+        "study_calibrate", Path(__file__).resolve().parents[1] / "training" / "data-collection" / "calibrate.py")
+    kit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kit)
+    rows = kit.load_sessions(tmp_path)
+    assert [(r["participant"], r["answer"], r["condition"]) for r in rows] == [("P07", 2, "read_script")]
+    assert kit.score_of(rows[0], kit.SIGNALS["ai_text"]["score"]) == saved["signals"]["ai_text"]["ai_probability"]
+    assert kit.score_of(rows[0], kit.SIGNALS["reading"]["score"]) == saved["signals"]["reading"]["reading_probability"]
 
 
 def test_followups_come_from_the_model_through_the_guardrails():
