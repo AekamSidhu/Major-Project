@@ -17,10 +17,14 @@ aiTextReady: boolean,
  */
 readingReady: boolean, 
 /**
- * Embedding model the sidecar serves (the echo check needs the one named
- * in the spec thresholds).
+ * Embedding model the sidecar serves.
  */
 embeddingModel: string | null, 
+/**
+ * The embedding model the echo-similarity check needs (named in the
+ * spec thresholds); with any other embedder that signal is unavailable.
+ */
+requiredEmbeddingModel: string, 
 /**
  * Plain-language status ("Ready", "Local AI is not running", ...).
  */

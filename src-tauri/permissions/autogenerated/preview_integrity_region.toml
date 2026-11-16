@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-integrity-region"
+description = "Enables the preview_integrity_region command without any pre-configured scope."
+commands.allow = ["preview_integrity_region"]
+
+[[permission]]
+identifier = "deny-preview-integrity-region"
+description = "Denies the preview_integrity_region command without any pre-configured scope."
+commands.deny = ["preview_integrity_region"]

@@ -235,9 +235,11 @@ pub struct IntegrityServiceView {
     pub ai_text_ready: bool,
     /// The reading model is loaded.
     pub reading_ready: bool,
-    /// Embedding model the sidecar serves (the echo check needs the one named
-    /// in the spec thresholds).
+    /// Embedding model the sidecar serves.
     pub embedding_model: Option<String>,
+    /// The embedding model the echo-similarity check needs (named in the
+    /// spec thresholds); with any other embedder that signal is unavailable.
+    pub required_embedding_model: String,
     /// Plain-language status ("Ready", "Local AI is not running", ...).
     pub message: String,
 }

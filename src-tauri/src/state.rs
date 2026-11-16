@@ -212,8 +212,9 @@ impl AppState {
                 "No audio source selected: transcription is off. Ask OpenMeet still works.",
             );
         }
-        // Make sure the local sidecar is up when transcription depends on it.
-        if (req.microphone || req.system_audio) && local_ai::sidecar_in_use(&settings) {
+        // Make sure the local sidecar is up when transcription (or the
+        // answer-integrity check) depends on it.
+        if local_ai::sidecar_needed(&settings, &req) {
             match self.local_ai.start(&settings).await {
                 Ok(_) => {}
                 Err(e) => {
@@ -222,10 +223,7 @@ impl AppState {
                         ComponentStatus::Error,
                         Some(e.to_string()),
                     );
-                    self.notice(
-                        NoticeLevel::Warning,
-                        format!("Local transcription unavailable: {e}"),
-                    );
+                    self.notice(NoticeLevel::Warning, format!("Local AI unavailable: {e}"));
                 }
             }
         }

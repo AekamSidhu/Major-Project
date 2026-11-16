@@ -84,6 +84,8 @@ pub fn run() {
             commands::providers::list_models,
             commands::providers::get_data_flow,
             commands::providers::get_local_ai_status,
+            commands::integrity::get_integrity_status,
+            commands::integrity::preview_integrity_region,
             commands::providers::start_local_ai,
             commands::providers::stop_local_ai,
             commands::devices::list_audio_devices,
