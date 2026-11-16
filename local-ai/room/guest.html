@@ -48,15 +48,17 @@
     <div class="terms">
       While you talk, that computer:
       <ul>
-        <li>transcribes the conversation,</li>
+        <li>transcribes the conversation, with the timing of each word,</li>
         <li>checks whether your eye movements look like reading,</li>
-        <li>checks whether your answers read like AI-written text.</li>
+        <li>checks whether your answers read like AI-written text, and compares them with answers an AI model gives to the same questions,</li>
+        <li>compares the pace and pauses of each answer with your first answers.</li>
       </ul>
       <div style="margin-top:8px">Nothing goes to an online service and nothing is recorded; the interviewer keeps a written summary.
         These signals can be wrong. They prompt questions, they don't decide anything.</div>
     </div>
     <input type="text" id="name" placeholder="Your name (optional)" maxlength="60">
     <label class="consent"><input type="checkbox" id="agree"> <span>I understand and agree to join on these terms.</span></label>
+    <!--study-consent-->
     <button class="btn primary lg" id="btnJoin" disabled style="width:100%">Join the interview</button>
     <p class="note" id="msg" style="margin-top:10px"></p>
   </div>
@@ -102,7 +104,8 @@ $("btnJoin").onclick = async () => {
   const enter = () => { showSelf($("self"), local); $("lobby").hidden = true; $("call").hidden = false; $("statusPill").textContent = "In the interview"; };
   if (document.startViewTransition) document.startViewTransition(enter); else enter();
   $("btnMic").innerHTML = ICON.mic; $("btnCam").innerHTML = ICON.cam; $("btnLeave").innerHTML = ICON.leave;
-  signal = connect(room, "guest", key, $("name").value.trim(), onSignal);
+  // Study mode only: the separate, optional study consent goes to the server, which enforces it.
+  signal = connect(room, "guest", key, $("name").value.trim(), onSignal, $("study") && $("study").checked ? { study_consent: "1" } : {});
   signal.ws.onclose = (e) => { if (e.code === 4403) setStatus("This invite link is not valid. Ask the interviewer for a new one.", "danger"); };
 };
 function setStatus(text, tone) {

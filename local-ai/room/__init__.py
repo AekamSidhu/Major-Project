@@ -7,10 +7,13 @@ directly between the two browsers (WebRTC); this server only introduces
 them (signaling) and serves the pages.
 
 The interviewer's browser then sends, to this computer only:
-- each speaker's speech, cut at pauses, for local transcription (Whisper);
+- each speaker's speech, cut at pauses, for local transcription (Whisper,
+  with word timings);
 - frames of the candidate's video, for the reading-gaze check;
-- each finished answer's transcript, for the AI-written-answer check and
-  for follow-up questions (room/followups.py: Ollama on this computer by
+- each finished answer, for the integrity signals (room/checks.py: AI-written
+  text, similarity to an LLM's answer to the same question, delivery timing
+  against the candidate's first answers, reading gaze, fused into one flag)
+  and for follow-up questions (room/followups.py: Ollama on this computer by
   default; Google Gemini in online mode, which the candidate's join page
   then states; simple rules when no model answers).
 
@@ -18,29 +21,41 @@ Who may call what:
 - interviewer endpoints (/host, /api/*, /v1/integrity/*) answer only to
   this computer (loopback), so nobody on the network can use them;
 - the candidate gets the join page and the signaling socket, nothing else,
-  and needs the room's guest key from the invite link.
+  and needs the room's guest key from the invite link. No score or flag
+  ever reaches the candidate's side.
 
 Nothing is recorded: audio segments are transcribed and dropped, frames
 become gaze samples and are dropped. Transcripts and scores live in memory
 until the server stops, and the interviewer can download them as a report.
+The one exception is study mode (room_server.py --study DIR, study.py):
+after the candidate ticks a separate study consent, each answer's
+transcript, word timings, gaze series and scores (never audio or video) are
+saved under an anonymous id.
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import secrets
 import socket
 import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
+
+from integrity.signals import DeliveryBaseline
+
+from . import checks
+from .report import markdown
 
 LOG = logging.getLogger("openmeet.room")
 HERE = Path(__file__).resolve().parent
@@ -48,8 +63,12 @@ MAX_SEGMENT_BYTES = 8 * 1024 * 1024
 SPEAKERS = ("interviewer", "candidate")
 MIN_CONFIDENCE = 0.35
 OFFLINE_TERMS = "Nothing goes to an online service and nothing is recorded;"
-ONLINE_TERMS = ("Nothing is recorded. To suggest follow-up questions, the text of your answers (not audio or video) "
-                "is sent to Google Gemini, with emails, phone numbers and your name removed;")
+ONLINE_TERMS = ("Nothing is recorded. To suggest follow-up questions and to write the comparison answers, the "
+                "interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini, "
+                "with emails, phone numbers and your name removed;")
+STUDY_TERMS_OFFLINE = "Nothing goes to an online service, and nothing is recorded unless you join the study below;"
+STUDY_TERMS_ONLINE = ONLINE_TERMS.replace("Nothing is recorded.", "Nothing is recorded unless you join the study below.")
+STUDY_SLOT = "<!--study-consent-->"
 PHANTOMS = {"thank you", "thanks for watching", "thank you for watching", "well see you in the next one",
             "see you in the next one", "bye", "you", "so", "okay", "subtitles by the amaraorg community"}
 
@@ -104,6 +123,13 @@ class Room:
     transcript: list[dict[str, Any]] = field(default_factory=list)
     answers: list[dict[str, Any]] = field(default_factory=list)
     candidate_name: str = ""
+    delivery: dict[str, DeliveryBaseline] = field(default_factory=dict)  # per candidate
+    study_consent: bool = False  # the candidate ticked the study consent (study mode only)
+    study_session: str = ""  # anonymous id of the saved session
+    participant: str = ""  # the study's participant id, set by the interviewer
+
+    def speaker_baseline(self) -> DeliveryBaseline:
+        return self.delivery.setdefault(self.candidate_name, DeliveryBaseline())
 
 
 class FollowupRequest(BaseModel):
@@ -115,10 +141,26 @@ class AnswerRequest(BaseModel):
     end: float
     text: str = Field(default="", max_length=20000)
     question: str = Field(default="", max_length=5000)
+    condition: str | None = Field(default=None, max_length=40)  # study mode: the condition label
+
+
+class ReferenceRequest(BaseModel):
+    question: str = Field(default="", max_length=5000)
+
+
+class StudyRequest(BaseModel):
+    participant: str | None = Field(default=None, max_length=40)
+
+
+class LabelRequest(BaseModel):
+    condition: str = Field(..., max_length=40)
 
 
 def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: Any, reading_factory: Any,
-                    port: int, scheme: str, whisper_model: str, followup_writer: Any = None) -> dict[str, Room]:
+                    port: int, scheme: str, whisper_model: str, followup_writer: Any = None,
+                    similarity: Any = None, study: Any = None) -> dict[str, Room]:
+    """`similarity`: a room.similarity.SimilarityChecker (None: echo similarity unavailable);
+    `study`: a room.study.StudyRecorder in study mode."""
     from .followups import FollowupWriter
 
     rooms: dict[str, Room] = {}
@@ -126,6 +168,10 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     followup_lock = threading.Lock()
     writer = followup_writer or FollowupWriter()
     models: dict[str, Any] = {}
+    similarity_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="similarity")
+    similarity_jobs: dict[tuple[str, int], Future] = {}
+    params = inspect.signature(transcriber.transcribe).parameters
+    timed = "word_timestamps" in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
 
     def host_only(request: Request) -> None:
         if not is_loopback(request.client.host if request.client else None):
@@ -165,7 +211,11 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     def join_page(room_id: str) -> str:
         html = page("guest.html")
-        if writer.online:  # the candidate agrees to what actually happens
+        # The candidate agrees to what actually happens.
+        if study is not None:
+            html = html.replace(OFFLINE_TERMS, STUDY_TERMS_ONLINE if writer.online else STUDY_TERMS_OFFLINE)
+            html = html.replace(STUDY_SLOT, study.consent_html())
+        elif writer.online:
             html = html.replace(OFFLINE_TERMS, ONLINE_TERMS)
         return html
 
@@ -182,7 +232,9 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     def status() -> dict[str, Any]:
         return {"transcription_model": whisper_model, "rooms": len(rooms), "followup_mode": writer.mode,
                 "followup_model": writer.model_name, "followup_model_ok": writer.model_ok,
-                "followup_error": writer.last_error}
+                "followup_error": writer.last_error,
+                "reference_model": similarity.writer.model_name if similarity and similarity.writer.available else None,
+                "study": {"enabled": True, "conditions": list(study.conditions)} if study else {"enabled": False}}
 
     @app.post("/api/rooms/{room_id}/transcribe", dependencies=[Depends(host_only)])
     async def transcribe(room_id: str, request: Request, speaker: str, start: float, end: float) -> dict[str, Any]:
@@ -199,37 +251,132 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"could not decode audio: {type(exc).__name__}") from exc
 
-        def run() -> str:
+        def run() -> tuple[str, list[dict[str, Any]]]:
             with infer_lock:
-                result = transcriber.transcribe(audio, whisper_model, "en", None)
+                if timed:  # word timings for the delivery signal
+                    result = transcriber.transcribe(audio, whisper_model, "en", None, word_timestamps=True)
+                else:
+                    result = transcriber.transcribe(audio, whisper_model, "en", None)
             text = " ".join(result.text.split())
             # The browser cuts speech by loudness, so noise and tones get through;
             # Whisper then invents stock phrases. Drop those and unsure results.
             if (result.confidence is not None and result.confidence < MIN_CONFIDENCE) or is_phantom(text):
-                return ""
-            return text
+                return "", []
+            # Words on the meeting clock: the segment's audio starts at `start`.
+            words = [{"word": w["word"], "start": round(start + w["start"], 3), "end": round(start + w["end"], 3)}
+                     for w in getattr(result, "words", None) or []]
+            return text, words
 
         try:
-            text = await asyncio.get_running_loop().run_in_executor(None, run)
+            text, words = await asyncio.get_running_loop().run_in_executor(None, run)
         except Exception as exc:  # faster-whisper missing or failing
             raise HTTPException(status_code=503, detail=f"transcription unavailable: {type(exc).__name__}: {exc}"[:300]) from exc
         segment = {"speaker": speaker, "start": start, "end": end, "text": text}
         if text:
-            room.transcript.append(segment)
+            room.transcript.append({**segment, "words": words})
         return segment
+
+    def save_study(room: Room, answer: dict[str, Any]) -> None:
+        if study is not None and room.study_consent:
+            try:
+                study.save_answer(room, answer, monitor)
+            except Exception as error:  # a full disk must not break the interview
+                LOG.warning("could not save the study answer (%s)", type(error).__name__)
+
+    @app.post("/api/rooms/{room_id}/references", dependencies=[Depends(host_only)])
+    def references(room_id: str, req: ReferenceRequest) -> dict[str, Any]:
+        """Start writing reference answers to a question (the host calls this when the candidate starts answering)."""
+        room = room_or_404(room_id)
+        started = similarity is not None and similarity.writer.available and bool(req.question.strip())
+        if started:
+            similarity.references(req.question, room.candidate_name)
+        return {"started": started}
+
+    def condition_label(value: str | None) -> str | None:
+        try:
+            return study.label(value) if study is not None else None
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.post("/api/rooms/{room_id}/answers", dependencies=[Depends(host_only)])
     def check_answer(room_id: str, req: AnswerRequest) -> dict[str, Any]:
         room = room_or_404(room_id)
+        condition = condition_label(req.condition)
         echo = model("echo").assess(req.text) if req.text.strip() else None
         reading = None
         if 0 < req.end - req.start <= 600:
             result = model("reading").assess(monitor.series(req.start, req.end))
             reading = result.as_dict() if result else {"reading_probability": None, "level": "not_enough_gaze"}
+        # Delivery: this answer's timing against the candidate's first answers.
+        utterances = checks.answer_utterances(room.transcript, req.start, req.end)
+        begins = min((u["start"] for u in utterances), default=req.start)
+        q_end = checks.question_end(room.transcript, begins, room.answers[-1]["end"] if room.answers else None)
+        speaker = room.speaker_baseline()
+        delivery = speaker.add(q_end, utterances)
         answer = {"index": len(room.answers) + 1, "start": req.start, "end": req.end, "question": req.question,
-                  "text": req.text, "echo": echo, "reading": reading}
+                  "text": req.text, "echo": echo, "reading": reading, "delivery": delivery, "question_end": q_end,
+                  "similarity": None, "flag": None, "followups": None, "condition": condition}
+        if similarity is not None:
+            answer["similarity"] = {"level": "pending"}
+            if similarity.writer.available and req.question.strip():
+                similarity.references(req.question, room.candidate_name)  # usually started already
+        answer["flag"] = checks.flag(answer, speaker.baseline)
         room.answers.append(answer)
+        save_study(room, answer)
+        if similarity is not None:
+            def run() -> None:
+                answer["similarity"] = similarity.check(req.question, req.text, room.candidate_name)
+                answer["flag"] = checks.flag(answer, speaker.baseline)
+                save_study(room, answer)
+
+            similarity_jobs[(room.id, answer["index"])] = similarity_pool.submit(run)
         return answer
+
+    def answer_or_404(room: Room, index: int) -> dict[str, Any]:
+        found = next((a for a in room.answers if a["index"] == index), None)
+        if found is None:
+            raise HTTPException(status_code=404, detail="no such answer")
+        return found
+
+    @app.post("/api/rooms/{room_id}/answers/{index}/similarity", dependencies=[Depends(host_only)])
+    async def answer_similarity(room_id: str, index: int) -> dict[str, Any]:
+        """Wait for the answer's echo similarity (written in the background) and return the updated answer."""
+        room = room_or_404(room_id)
+        answer = answer_or_404(room, index)
+        job = similarity_jobs.get((room.id, index))
+        if job is not None:
+            await asyncio.get_running_loop().run_in_executor(None, job.result)
+        return answer
+
+    @app.post("/api/rooms/{room_id}/answers/{index}/label", dependencies=[Depends(host_only)])
+    def label_answer(room_id: str, index: int, req: LabelRequest) -> dict[str, Any]:
+        """Study mode: the interviewer sets or corrects an answer's condition label."""
+        room = room_or_404(room_id)
+        if study is None:
+            raise HTTPException(status_code=409, detail="the room is not in study mode")
+        answer = answer_or_404(room, index)
+        answer["condition"] = condition_label(req.condition)
+        save_study(room, answer)
+        return {"index": index, "condition": answer["condition"], "saved": room.study_consent}
+
+    @app.get("/api/rooms/{room_id}/study", dependencies=[Depends(host_only)])
+    def study_state(room_id: str) -> dict[str, Any]:
+        room = room_or_404(room_id)
+        return {"enabled": study is not None, "consent": room.study_consent, "session": room.study_session or None,
+                "participant": room.participant or None}
+
+    @app.post("/api/rooms/{room_id}/study", dependencies=[Depends(host_only)])
+    def study_participant(room_id: str, req: StudyRequest) -> dict[str, Any]:
+        room = room_or_404(room_id)
+        if study is None:
+            raise HTTPException(status_code=409, detail="the room is not in study mode")
+        try:
+            room.participant = study.participant_id(req.participant or "")
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        if room.study_consent:
+            study.save_session(room)
+        return study_state(room_id)
 
     @app.post("/api/rooms/{room_id}/followups", dependencies=[Depends(host_only)])
     async def followups(room_id: str, req: FollowupRequest) -> dict[str, Any]:
@@ -254,10 +401,15 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     def report(room_id: str) -> dict[str, Any]:
         room = room_or_404(room_id)
         return {"room": room.id, "created": room.created, "candidate": room.candidate_name,
-                "transcript": room.transcript, "answers": room.answers}
+                "transcript": [{k: v for k, v in s.items() if k != "words"} for s in room.transcript],
+                "answers": room.answers}
+
+    @app.get("/api/rooms/{room_id}/report.md", dependencies=[Depends(host_only)])
+    def report_markdown(room_id: str) -> PlainTextResponse:
+        return PlainTextResponse(markdown(report(room_id)), media_type="text/markdown; charset=utf-8")
 
     @app.websocket("/ws/{room_id}")
-    async def signaling(ws: WebSocket, room_id: str, role: str, k: str, name: str = "") -> None:
+    async def signaling(ws: WebSocket, room_id: str, role: str, k: str, name: str = "", study_consent: str = "") -> None:
         room = rooms.get(room_id)
         client = ws.client.host if ws.client else None
         allowed = room is not None and (
@@ -278,6 +430,11 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         room.sockets[role] = ws
         if role == "guest":
             room.candidate_name = name[:60]
+            # Study mode saves answers only after the candidate's own, separate consent;
+            # joining again without it stops the saving.
+            room.study_consent = study is not None and study_consent == "1"
+            if room.study_consent:
+                study.save_session(room)
         other = "guest" if role == "host" else "host"
         await ws.send_text(json.dumps({"type": "hello", "role": role, "peer_present": other in room.sockets}))
         if other in room.sockets:

@@ -11,15 +11,21 @@ address; across networks, run a tunnel such as
 `cloudflared tunnel --url https://localhost:8443 --no-tls-verify` and
 share its address instead.
 
-Transcription (faster-whisper) and both integrity models run here; see
+Transcription (faster-whisper) and the integrity signals run here; see
 room/__init__.py for what each side can reach.
 
-Follow-up questions (room/followups.py, a LangChain chain with guardrails):
+Follow-up questions (room/followups.py, a LangChain chain with guardrails)
+and the reference answers for the echo-similarity signal (room/similarity.py)
+come from the same model:
     --followups local    Ollama on this computer (default; `ollama pull llama3.2`)
     --followups online   Google Gemini; set OPENMEET_GEMINI_API_KEY in the environment
                          or in ~/.openmeet/room.env. The candidate's join page says so.
-    --followups rules    no model, simple rules
+    --followups rules    no model, simple rules (no echo similarity)
 If the model is unreachable, the rules answer and the page says so.
+
+    --study DIR          study mode (room/study.py): with the candidate's separate consent,
+                         save each labelled answer's transcript, timings, gaze and scores
+                         under DIR, which must be outside the repository
 """
 
 from __future__ import annotations
@@ -71,10 +77,21 @@ def self_signed_cert(folder: Path) -> tuple[Path, Path]:
 
 
 def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None,  # type: ignore[no-untyped-def]
-                    followup_writer=None, followups: str | None = None) -> FastAPI:
+                    followup_writer=None, followups: str | None = None, reference_writer=None, embedder=None,
+                    embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None) -> FastAPI:
     from room.followups import FollowupWriter
+    from room.similarity import ReferenceWriter, SimilarityChecker
+    from room.study import StudyRecorder
 
     import time
+
+    writer = followup_writer or FollowupWriter(mode=followups)
+    references = reference_writer or ReferenceWriter(writer.mode, writer.settings)
+    similarity = SimilarityChecker(references, embedder or server.FastEmbedder(embed_model), embed_model)
+    study = None
+    if study_dir is not None:
+        study = StudyRecorder(study_dir, info={"whisper_model": whisper_model, "followup_mode": writer.mode,
+                                               "reference_model": references.model_name, "embedding_model": embed_model})
 
     app = FastAPI(title="OpenMeet Room", docs_url=None, redoc_url=None)
 
@@ -89,7 +106,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
             raise HTTPException(status_code=403, detail="only the interviewer's computer can use this")
 
     monitor = add_integrity_routes(app, host_only_auth, server.MODEL_DIR, tracker_factory=tracker_factory, clock=clock or time.time)
-    add_room_routes(
+    app.state.rooms = add_room_routes(
         app,
         transcriber=transcriber or server.WhisperTranscriber(whisper_model),
         monitor=monitor,
@@ -98,7 +115,9 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         port=port,
         scheme=scheme,
         whisper_model=whisper_model,
-        followup_writer=followup_writer or FollowupWriter(mode=followups),
+        followup_writer=writer,
+        similarity=similarity,
+        study=study,
     )
     return app
 
@@ -109,7 +128,9 @@ def main() -> None:
     parser.add_argument("--no-https", action="store_true", help="plain http on localhost only")
     parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "base.en"))
     parser.add_argument("--followups", choices=("local", "online", "rules"), default=None,
-                        help="where follow-up questions come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
+                        help="where follow-up questions and reference answers come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
+    parser.add_argument("--study", type=Path, default=None, metavar="DIR",
+                        help="study mode: with the candidate's consent, save labelled answers under DIR (outside the repository)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
@@ -118,7 +139,10 @@ def main() -> None:
     import uvicorn
 
     scheme = "http" if args.no_https else "https"
-    app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups)
+    try:
+        app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups, study_dir=args.study)
+    except ValueError as error:  # a study folder inside the repository
+        parser.error(str(error))
     host = "127.0.0.1" if args.no_https else "0.0.0.0"
     ssl = {}
     if not args.no_https:
@@ -133,7 +157,9 @@ def main() -> None:
     where = {"local": f"{settings.ollama_model} on this computer (Ollama)", "online": f"{settings.gemini_model} (Google, online)",
              "rules": "simple rules"}[mode]
     print(f"\nOpenMeet Room: open {scheme}://localhost:{args.port} on this computer.")
-    print(f"  follow-up questions: {where}")
+    print(f"  follow-up questions and reference answers: {where}")
+    if args.study:
+        print(f"  STUDY MODE: answers of candidates who tick the study consent are saved under {args.study.resolve()}")
     if not args.no_https:
         for ip in lan_addresses():
             print(f"  candidates on this network join through https://{ip}:{args.port}/join/... (the invite link)")
