@@ -1,0 +1,4 @@
+# Optional: live gaze for the integrity check's reading signal.
+# Face and iris landmarks (also brings OpenCV), and screen-region capture.
+mediapipe>=0.10.14
+mss>=9
