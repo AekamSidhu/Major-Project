@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use openmeet_core::error::StoreError;
 use openmeet_core::events::{EventSink, MeetingEvent, NoticeLevel};
+use openmeet_core::integrity::IntegrityFlag;
 use openmeet_core::store::{EmbeddingRecord, MeetingStore};
 use openmeet_core::types::*;
 use parking_lot::Mutex;
@@ -36,6 +37,7 @@ pub enum PersistOp {
     ActionItems(Vec<ActionItem>),
     Summary(MeetingSummary),
     Embedding(EmbeddingRecord),
+    IntegrityFlag(IntegrityFlag),
     /// Completes once every previously queued write has been applied.
     Barrier(oneshot::Sender<()>),
 }
@@ -55,6 +57,7 @@ impl PersistOp {
             PersistOp::ActionItems(a) => a.first().map(|a| a.meeting_id.as_str()),
             PersistOp::Summary(s) => Some(&s.meeting_id),
             PersistOp::Embedding(e) => Some(&e.meeting_id),
+            PersistOp::IntegrityFlag(f) => Some(&f.meeting_id),
             PersistOp::Pinned { .. } | PersistOp::Barrier(_) => None,
         }
     }
@@ -73,6 +76,7 @@ impl PersistOp {
             PersistOp::ActionItems(_) => "action_items",
             PersistOp::Summary(_) => "summary",
             PersistOp::Embedding(_) => "embedding",
+            PersistOp::IntegrityFlag(_) => "integrity_flag",
             PersistOp::Barrier(_) => "barrier",
         }
     }
@@ -167,6 +171,7 @@ fn apply(store: &dyn MeetingStore, op: PersistOp) -> Result<(), openmeet_core::S
         PersistOp::ActionItems(a) => store.save_action_items(&a),
         PersistOp::Summary(s) => store.save_summary(&s),
         PersistOp::Embedding(e) => store.save_embedding(&e),
+        PersistOp::IntegrityFlag(f) => store.save_integrity_flag(&f),
         PersistOp::Barrier(done) => {
             let _ = done.send(());
             Ok(())
@@ -251,6 +256,9 @@ mod tests {
             broken()
         }
         fn save_embedding(&self, _: &EmbeddingRecord) -> Result<(), StoreError> {
+            broken()
+        }
+        fn save_integrity_flag(&self, _: &IntegrityFlag) -> Result<(), StoreError> {
             broken()
         }
         fn load_meeting(&self, _: &str) -> Result<MeetingRecord, StoreError> {

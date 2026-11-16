@@ -14,13 +14,18 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures::StreamExt;
 use openmeet_core::error::ProviderError;
+use openmeet_core::integrity::{
+    AiTextResult, GazeStatus, IntegrityLevel, IntegrityService, IntegrityServiceStatus,
+    ReadingResult,
+};
+use openmeet_core::ipc::Rect;
 use openmeet_core::providers::{
     EmbeddingProvider, LlmChunk, LlmProvider, LlmRequest, LlmStream, OcrEngine, OcrOutput,
     TokenUsage, Transcriber, TranscriptionOutput, TranscriptionRequest, VisionContext,
     VisionProvider, VisionRequest, VisionResult,
 };
 use openmeet_core::types::{
-    AnswerSections, ProviderInfo, ProviderLocation, QuestionCategory, RequestKind,
+    AnswerSections, ProviderInfo, ProviderLocation, QuestionCategory, RequestKind, WordTiming,
 };
 use parking_lot::Mutex;
 use serde_json::json;
@@ -778,7 +783,27 @@ pub(crate) fn default_response(request: &LlmRequest) -> String {
         RequestKind::Compression => compression_text(&user),
         RequestKind::ScreenAnalysis => screen_text(&user),
         RequestKind::TopicAnalysis => topic_analysis_text(&user),
+        RequestKind::IntegrityReference => reference_answer_text(&question),
+        // Integrity checks never call an LLM themselves.
+        RequestKind::IntegrityCheck => String::new(),
     }
+}
+
+/// A plausible spoken reference answer (echo-similarity signal).
+fn reference_answer_text(question: &str) -> String {
+    let topic = short(question);
+    let entities = extract_entities(question);
+    let tech = if entities.is_empty() {
+        "the core components".to_string()
+    } else {
+        entities.join(" and ")
+    };
+    format!(
+        "To answer {topic}, I would start by clarifying the requirements and the expected load, \
+         then sketch a simple design around {tech}. I would explain the main trade-offs, how the \
+         system behaves when a component fails, and how I would measure it in production. Finally \
+         I would mention what I would improve with more time."
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -844,16 +869,39 @@ impl Transcriber for MockTranscriber {
         } else {
             self.texts.lock().front().cloned().unwrap_or_default()
         };
+        let words = request
+            .word_timestamps
+            .then(|| spread_words(&text, request.clip.duration_ms()))
+            .filter(|w| !w.is_empty());
         Ok(TranscriptionOutput {
             text,
             confidence: Some(0.95),
             language: request.language,
+            words,
         })
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {
         Ok(())
     }
+}
+
+/// Word timestamps spread evenly over `duration_ms` (relative to the clip).
+fn spread_words(text: &str, duration_ms: i64) -> Vec<WordTiming> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.is_empty() || duration_ms <= 0 {
+        return Vec::new();
+    }
+    let step = duration_ms / words.len() as i64;
+    words
+        .iter()
+        .enumerate()
+        .map(|(i, w)| WordTiming {
+            word: format!(" {w}"),
+            start_ms: i as i64 * step,
+            end_ms: i as i64 * step + (step * 3 / 4).max(1),
+        })
+        .collect()
 }
 
 /// Deterministic vision: derives the observation from OCR text / context.
@@ -903,12 +951,14 @@ impl VisionProvider for MockVisionProvider {
 /// Hashing embeddings labelled as a mock provider.
 pub struct MockEmbeddingProvider {
     inner: HashingEmbedder,
+    model: String,
 }
 
 impl Default for MockEmbeddingProvider {
     fn default() -> Self {
         MockEmbeddingProvider {
             inner: HashingEmbedder::new(HashingEmbedder::DEFAULT_DIMS),
+            model: "mock-hash".to_string(),
         }
     }
 }
@@ -918,6 +968,14 @@ impl MockEmbeddingProvider {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Reports `model` as its model name. Used by tests and demo mode to
+    /// stand in for the embedding model the echo-similarity thresholds are
+    /// set for; the vectors are still deterministic hashing embeddings.
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
+    }
 }
 
 #[async_trait]
@@ -926,7 +984,7 @@ impl EmbeddingProvider for MockEmbeddingProvider {
         ProviderInfo {
             id: "mock_embeddings".into(),
             display_name: "Mock embeddings".into(),
-            model: "mock-hash".into(),
+            model: self.model.clone(),
             location: ProviderLocation::Mock,
             endpoint: None,
         }
@@ -941,6 +999,243 @@ impl EmbeddingProvider for MockEmbeddingProvider {
             return Err(ProviderError::Cancelled);
         }
         Ok(texts.iter().map(|t| self.inner.embed_one(t)).collect())
+    }
+}
+
+/// Scripted answer-integrity sidecar (tests, demo mode).
+///
+/// Results are taken from the scripted queues in order; when a queue is
+/// empty, the AI-text score is derived deterministically from the text and
+/// the reading score is `low`. Cheap to clone (shared state).
+#[derive(Clone, Default)]
+pub struct MockIntegrityService {
+    state: Arc<Mutex<MockIntegrityState>>,
+}
+
+#[derive(Default)]
+struct MockIntegrityState {
+    ai_text: VecDeque<Result<(f64, IntegrityLevel), ProviderError>>,
+    reading: VecDeque<Result<(Option<f64>, IntegrityLevel), ProviderError>>,
+    calls: Vec<String>,
+    region: Option<Rect>,
+    capturing: bool,
+    embedding_model: Option<String>,
+    reading_windows: Vec<(f64, f64)>,
+}
+
+impl MockIntegrityService {
+    /// Service with no scripted results.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The embedding model `status` reports (the sidecar's `/health`).
+    pub fn with_embedding_model(self, model: impl Into<String>) -> Self {
+        self.state.lock().embedding_model = Some(model.into());
+        self
+    }
+
+    /// Next AI-text result.
+    pub fn push_ai_text(&self, probability: f64, level: IntegrityLevel) {
+        self.state
+            .lock()
+            .ai_text
+            .push_back(Ok((probability, level)));
+    }
+
+    /// Next AI-text request fails.
+    pub fn push_ai_text_failure(&self, error: ProviderError) {
+        self.state.lock().ai_text.push_back(Err(error));
+    }
+
+    /// Next reading result.
+    pub fn push_reading(&self, probability: Option<f64>, level: IntegrityLevel) {
+        self.state
+            .lock()
+            .reading
+            .push_back(Ok((probability, level)));
+    }
+
+    /// Next reading request fails.
+    pub fn push_reading_failure(&self, error: ProviderError) {
+        self.state.lock().reading.push_back(Err(error));
+    }
+
+    /// Names of the calls received, in order ("ai_text", "start_gaze", ...).
+    pub fn calls(&self) -> Vec<String> {
+        self.state.lock().calls.clone()
+    }
+
+    /// Gaze screen capture is running.
+    pub fn capturing(&self) -> bool {
+        self.state.lock().capturing
+    }
+
+    /// Region of the last `start_gaze`.
+    pub fn region(&self) -> Option<Rect> {
+        self.state.lock().region
+    }
+
+    /// Time windows (epoch seconds) of the reading requests received.
+    pub fn reading_windows(&self) -> Vec<(f64, f64)> {
+        self.state.lock().reading_windows.clone()
+    }
+
+    fn gaze(&self) -> GazeStatus {
+        let st = self.state.lock();
+        GazeStatus {
+            source: if st.capturing { "screen" } else { "none" }.to_string(),
+            capturing_screen: st.capturing,
+            frames_per_second: if st.capturing { 10.0 } else { 0.0 },
+            face_found_fraction: if st.capturing { 1.0 } else { 0.0 },
+            tracked_fraction: if st.capturing { 1.0 } else { 0.0 },
+            error: None,
+        }
+    }
+}
+
+/// Deterministic AI-text score: long, connective-rich answers score higher.
+fn mock_ai_probability(text: &str) -> (f64, IntegrityLevel) {
+    let words: Vec<String> = text
+        .split_whitespace()
+        .map(|w| {
+            w.trim_matches(|c: char| !c.is_alphanumeric())
+                .to_lowercase()
+        })
+        .filter(|w| !w.is_empty())
+        .collect();
+    if words.len() < 15 {
+        return (0.0, IntegrityLevel::TooShort);
+    }
+    let long = words.iter().filter(|w| w.len() >= 8).count() as f64 / words.len() as f64;
+    let fillers = words
+        .iter()
+        .filter(|w| matches!(w.as_str(), "um" | "uh" | "like" | "yeah" | "so"))
+        .count() as f64
+        / words.len() as f64;
+    let p = (0.15 + long * 2.0 - fillers * 3.0).clamp(0.02, 0.98);
+    let level = if p >= 0.8 {
+        IntegrityLevel::High
+    } else if p >= 0.5 {
+        IntegrityLevel::Possible
+    } else {
+        IntegrityLevel::Low
+    };
+    (p, level)
+}
+
+#[async_trait]
+impl IntegrityService for MockIntegrityService {
+    fn info(&self) -> ProviderInfo {
+        ProviderInfo {
+            id: "mock_integrity".into(),
+            display_name: "Mock integrity check".into(),
+            model: "mock".into(),
+            location: ProviderLocation::Mock,
+            endpoint: None,
+        }
+    }
+
+    async fn status(
+        &self,
+        _cancel: CancellationToken,
+    ) -> Result<IntegrityServiceStatus, ProviderError> {
+        self.state.lock().calls.push("status".into());
+        let gaze = self.gaze();
+        Ok(IntegrityServiceStatus {
+            ai_text_ready: true,
+            reading_ready: true,
+            ai_text_error: None,
+            reading_error: None,
+            gaze,
+            embedding_model: self.state.lock().embedding_model.clone(),
+        })
+    }
+
+    async fn ai_text(
+        &self,
+        text: String,
+        cancel: CancellationToken,
+    ) -> Result<AiTextResult, ProviderError> {
+        if cancel.is_cancelled() {
+            return Err(ProviderError::Cancelled);
+        }
+        let scripted = {
+            let mut st = self.state.lock();
+            st.calls.push("ai_text".into());
+            st.ai_text.pop_front()
+        };
+        let (probability, level) = match scripted {
+            Some(r) => r?,
+            None => mock_ai_probability(&text),
+        };
+        Ok(AiTextResult {
+            probability,
+            level,
+            words: text.split_whitespace().count() as u32,
+            model: "mock".into(),
+        })
+    }
+
+    async fn start_gaze(
+        &self,
+        region: Rect,
+        _cancel: CancellationToken,
+    ) -> Result<GazeStatus, ProviderError> {
+        {
+            let mut st = self.state.lock();
+            st.calls.push("start_gaze".into());
+            st.region = Some(region);
+            st.capturing = true;
+        }
+        Ok(self.gaze())
+    }
+
+    async fn stop_gaze(&self, _cancel: CancellationToken) -> Result<GazeStatus, ProviderError> {
+        {
+            let mut st = self.state.lock();
+            st.calls.push("stop_gaze".into());
+            st.capturing = false;
+        }
+        Ok(self.gaze())
+    }
+
+    async fn reset_gaze(&self, _cancel: CancellationToken) -> Result<GazeStatus, ProviderError> {
+        self.state.lock().calls.push("reset_gaze".into());
+        Ok(self.gaze())
+    }
+
+    async fn reading(
+        &self,
+        start_epoch_s: f64,
+        end_epoch_s: f64,
+        cancel: CancellationToken,
+    ) -> Result<ReadingResult, ProviderError> {
+        if cancel.is_cancelled() {
+            return Err(ProviderError::Cancelled);
+        }
+        let scripted = {
+            let mut st = self.state.lock();
+            st.calls.push("reading".into());
+            st.reading_windows.push((start_epoch_s, end_epoch_s));
+            st.reading.pop_front()
+        };
+        let (probability, level) = match scripted {
+            Some(r) => r?,
+            None => (Some(0.1), IntegrityLevel::Low),
+        };
+        let seconds = (end_epoch_s - start_epoch_s).max(0.0);
+        Ok(ReadingResult {
+            probability,
+            level,
+            valid_fraction: probability.map(|_| 0.95),
+            windows: if probability.is_some() {
+                ((seconds - 10.0) / 5.0).floor().max(0.0) as u32 + 1
+            } else {
+                0
+            },
+            seconds,
+        })
     }
 }
 
@@ -1272,6 +1567,7 @@ mod tests {
                     clip: clip.clone(),
                     language: None,
                     prompt: None,
+                    word_timestamps: false,
                 },
                 CancellationToken::new(),
             )
@@ -1284,13 +1580,42 @@ mod tests {
                     clip,
                     language: None,
                     prompt: None,
+                    word_timestamps: true,
                 },
                 CancellationToken::new(),
             )
             .await
             .unwrap();
         assert_eq!(out.text, "");
+        assert_eq!(out.words, None, "no words for empty text");
         assert_eq!(t.calls(), 2);
+        let t = MockTranscriber::new(vec!["one two three four".into()]);
+        let mut long_clip = AudioClip {
+            utterance_id: "u2".into(),
+            source: AudioSourceKind::System,
+            samples: vec![0.0; 16_000],
+            sample_rate: 16_000,
+            start_ms: 0,
+            end_ms: 1000,
+            is_final: true,
+        };
+        long_clip.end_ms = 1000;
+        let out = t
+            .transcribe(
+                TranscriptionRequest {
+                    clip: long_clip,
+                    language: None,
+                    prompt: None,
+                    word_timestamps: true,
+                },
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+        let words = out.words.unwrap();
+        assert_eq!(words.len(), 4);
+        assert_eq!(words[0].start_ms, 0);
+        assert!(words[3].end_ms <= 1000);
         let ocr = MockOcr {
             text: "line one\nline two".into(),
         };

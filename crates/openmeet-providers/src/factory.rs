@@ -23,6 +23,7 @@
 use std::sync::Arc;
 
 use openmeet_core::ProviderError;
+use openmeet_core::integrity::IntegrityService;
 use openmeet_core::ipc::SecretProvider;
 use openmeet_core::providers::{
     EmbeddingProvider, LlmProvider, SecretResolver, Transcriber, display_host, location_for_url,
@@ -36,6 +37,7 @@ use openmeet_core::types::{Component, ProviderLocation};
 
 use crate::anthropic::AnthropicLlm;
 use crate::http::{Endpoint, normalize_base_url, validate_endpoint_url};
+use crate::integrity::LocalAiIntegrity;
 use crate::ollama::{OllamaEmbeddings, OllamaLlm};
 use crate::openai::{OpenAiEmbeddings, OpenAiFlavor, OpenAiLlm, OpenAiTranscriber};
 
@@ -136,6 +138,7 @@ pub fn component_base_url(settings: &Settings, component: Component) -> Option<S
         Component::Vision => vision_base_url(settings)?,
         Component::Transcription => transcription_base_url(settings),
         Component::Embeddings => embeddings_base_url(settings)?,
+        Component::Integrity => integrity_base_url(settings),
         _ => return None,
     };
     (!url.is_empty()).then_some(url)
@@ -188,6 +191,20 @@ fn embeddings_base_url(settings: &Settings) -> Option<String> {
     };
     let configured = non_empty(e.base_url.as_deref()).or(inherited);
     Some(resolved_base_url(e.provider, configured))
+}
+
+/// The local AI sidecar serving the answer-integrity check: the transcription
+/// or embeddings URL when either uses the sidecar, else its default address.
+pub fn integrity_base_url(settings: &Settings) -> String {
+    if settings.transcription.provider == TranscriptionProviderKind::LocalAi {
+        return transcription_base_url(settings);
+    }
+    if settings.ai.embeddings.provider == EmbeddingProviderKind::LocalAi
+        && let Some(url) = embeddings_base_url(settings)
+    {
+        return url;
+    }
+    DEFAULT_LOCAL_AI_URL.to_string()
 }
 
 fn non_empty(value: Option<&str>) -> Option<&str> {
@@ -465,6 +482,23 @@ pub fn build_embeddings(
     Ok(Some(provider))
 }
 
+/// The local AI sidecar's answer-integrity endpoints; `Ok(None)` while the
+/// check is off. Local-only mode refuses a sidecar on another machine.
+pub fn build_integrity(
+    ctx: &BuildContext,
+) -> Result<Option<Arc<dyn IntegrityService>>, ProviderError> {
+    if !ctx.settings.integrity.enabled {
+        return Ok(None);
+    }
+    let endpoint = endpoint_for(
+        ctx,
+        Component::Integrity,
+        Service::LocalAi,
+        &integrity_base_url(ctx.settings),
+    )?;
+    Ok(Some(Arc::new(LocalAiIntegrity::new(endpoint)?)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -548,5 +582,16 @@ mod tests {
         s.ai.vision.provider = VisionProviderKind::Disabled;
         assert_eq!(component_base_url(&s, Component::Vision), None);
         assert_eq!(component_base_url(&s, Component::Microphone), None);
+        // The integrity check uses the sidecar transcription talks to...
+        assert_eq!(
+            component_base_url(&s, Component::Integrity).as_deref(),
+            Some("http://127.0.0.1:9000")
+        );
+        // ...or the default sidecar when nothing else uses it.
+        s.transcription.provider = TranscriptionProviderKind::Openai;
+        assert_eq!(
+            component_base_url(&s, Component::Integrity).as_deref(),
+            Some(DEFAULT_LOCAL_AI_URL)
+        );
     }
 }

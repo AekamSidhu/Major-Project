@@ -3,6 +3,7 @@ import type { ActionItem } from "./ActionItem";
 import type { AnswerRecord } from "./AnswerRecord";
 import type { Claim } from "./Claim";
 import type { DetectedQuestion } from "./DetectedQuestion";
+import type { IntegrityFlag } from "./IntegrityFlag";
 import type { Meeting } from "./Meeting";
 import type { MeetingSummary } from "./MeetingSummary";
 import type { ScreenObservation } from "./ScreenObservation";
@@ -13,4 +14,8 @@ import type { TranscriptSegment } from "./TranscriptSegment";
 /**
  * Everything stored about one meeting (history view, export).
  */
-export type MeetingRecord = { meeting: Meeting, segments: Array<TranscriptSegment>, questions: Array<DetectedQuestion>, answers: Array<AnswerRecord>, suggestions: Array<Suggestion>, topics: Array<Topic>, claims: Array<Claim>, observations: Array<ScreenObservation>, actionItems: Array<ActionItem>, summary: MeetingSummary | null, };
+export type MeetingRecord = { meeting: Meeting, segments: Array<TranscriptSegment>, questions: Array<DetectedQuestion>, answers: Array<AnswerRecord>, suggestions: Array<Suggestion>, topics: Array<Topic>, claims: Array<Claim>, observations: Array<ScreenObservation>, actionItems: Array<ActionItem>, summary: MeetingSummary | null, 
+/**
+ * Answer-integrity flags (interviewer mode, when the check was on).
+ */
+integrityFlags: Array<IntegrityFlag>, };

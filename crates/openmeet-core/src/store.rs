@@ -8,6 +8,7 @@ use parking_lot::Mutex;
 
 use crate::error::StoreError;
 use crate::ids::Id;
+use crate::integrity::IntegrityFlag;
 use crate::types::*;
 
 /// A stored embedding vector for retrieval across the meeting.
@@ -39,6 +40,9 @@ pub trait MeetingStore: Send + Sync {
     fn save_action_items(&self, items: &[ActionItem]) -> Result<(), StoreError>;
     fn save_summary(&self, summary: &MeetingSummary) -> Result<(), StoreError>;
     fn save_embedding(&self, embedding: &EmbeddingRecord) -> Result<(), StoreError>;
+    /// Upserts an answer-integrity flag (a re-check of the same answer
+    /// replaces the earlier revision).
+    fn save_integrity_flag(&self, flag: &IntegrityFlag) -> Result<(), StoreError>;
     fn load_meeting(&self, meeting_id: &str) -> Result<MeetingRecord, StoreError>;
 }
 
@@ -81,6 +85,9 @@ impl MeetingStore for NullStore {
         Ok(())
     }
     fn save_embedding(&self, _: &EmbeddingRecord) -> Result<(), StoreError> {
+        Ok(())
+    }
+    fn save_integrity_flag(&self, _: &IntegrityFlag) -> Result<(), StoreError> {
         Ok(())
     }
     fn load_meeting(&self, meeting_id: &str) -> Result<MeetingRecord, StoreError> {
@@ -143,6 +150,7 @@ impl MeetingStore for MemoryStore {
                 observations: Vec::new(),
                 action_items: Vec::new(),
                 summary: None,
+                integrity_flags: Vec::new(),
             });
         Ok(())
     }
@@ -217,6 +225,19 @@ impl MeetingStore for MemoryStore {
     fn save_embedding(&self, embedding: &EmbeddingRecord) -> Result<(), StoreError> {
         self.embeddings.lock().push(embedding.clone());
         Ok(())
+    }
+
+    /// An older revision never replaces a newer one.
+    fn save_integrity_flag(&self, flag: &IntegrityFlag) -> Result<(), StoreError> {
+        self.with_record(&flag.meeting_id, |r| {
+            let newer_stored = r
+                .integrity_flags
+                .iter()
+                .any(|f| f.id == flag.id && f.revision > flag.revision);
+            if !newer_stored {
+                upsert(&mut r.integrity_flags, flag, |f| &f.id)
+            }
+        })
     }
 
     fn load_meeting(&self, meeting_id: &str) -> Result<MeetingRecord, StoreError> {

@@ -88,6 +88,8 @@ pub struct MeetingRuntime {
     /// Last transcription error notice (unix ms) for throttling.
     pub last_transcription_notice: i64,
     pub last_level_emit: HashMap<AudioSourceKind, i64>,
+    /// Answer-integrity check state (interviewer mode, opt-in).
+    pub integrity: crate::integrity::IntegrityRun,
 }
 
 impl MeetingRuntime {
@@ -138,6 +140,7 @@ impl MeetingRuntime {
             vision_calls: VecDeque::new(),
             last_transcription_notice: 0,
             last_level_emit: HashMap::new(),
+            integrity: crate::integrity::IntegrityRun::default(),
             meeting,
         }
     }
@@ -362,6 +365,7 @@ impl MeetingRuntime {
             observations: self.observations.clone(),
             action_items: self.action_items.clone(),
             summary: self.summary.clone(),
+            integrity_flags: self.integrity.flags.clone(),
         }
     }
 }

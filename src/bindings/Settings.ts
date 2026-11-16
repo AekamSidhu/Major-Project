@@ -3,6 +3,7 @@ import type { AiSettings } from "./AiSettings";
 import type { AssistantSettings } from "./AssistantSettings";
 import type { AudioSettings } from "./AudioSettings";
 import type { GeneralSettings } from "./GeneralSettings";
+import type { IntegritySettings } from "./IntegritySettings";
 import type { Mode } from "./Mode";
 import type { OverlaySettings } from "./OverlaySettings";
 import type { PrivacySettings } from "./PrivacySettings";
@@ -11,4 +12,4 @@ import type { ShortcutSettings } from "./ShortcutSettings";
 import type { TranscriptionSettings } from "./TranscriptionSettings";
 import type { UserProfile } from "./UserProfile";
 
-export type Settings = { version: number, mode: Mode, ai: AiSettings, transcription: TranscriptionSettings, assistant: AssistantSettings, audio: AudioSettings, screen: ScreenSettings, privacy: PrivacySettings, overlay: OverlaySettings, shortcuts: ShortcutSettings, general: GeneralSettings, profile: UserProfile, };
+export type Settings = { version: number, mode: Mode, ai: AiSettings, transcription: TranscriptionSettings, assistant: AssistantSettings, audio: AudioSettings, screen: ScreenSettings, privacy: PrivacySettings, overlay: OverlaySettings, shortcuts: ShortcutSettings, general: GeneralSettings, profile: UserProfile, integrity: IntegritySettings, };

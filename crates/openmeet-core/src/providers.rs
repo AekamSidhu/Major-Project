@@ -16,9 +16,11 @@ use tokio_util::sync::CancellationToken;
 use crate::audio::{AudioClip, AudioFrame};
 use crate::error::ProviderError;
 use crate::ids::Id;
+use crate::integrity::IntegrityService;
 use crate::ipc::SecretProvider;
 use crate::types::{
     AudioSourceKind, Component, ProviderInfo, ProviderLocation, RequestKind, TranscriptDraft,
+    WordTiming,
 };
 
 // ---------------------------------------------------------------------------
@@ -187,6 +189,10 @@ pub struct TranscriptionRequest {
     pub language: Option<String>,
     /// Biasing prompt (vocabulary and/or recent transcript tail).
     pub prompt: Option<String>,
+    /// Ask for word timestamps (OpenAI `verbose_json` +
+    /// `timestamp_granularities[]=word`). Adapters that cannot provide them
+    /// ignore this and return no words.
+    pub word_timestamps: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -194,6 +200,9 @@ pub struct TranscriptionOutput {
     pub text: String,
     pub confidence: Option<f32>,
     pub language: Option<String>,
+    /// Word timestamps relative to the start of the clip, when requested and
+    /// provided by the recognizer.
+    pub words: Option<Vec<WordTiming>>,
 }
 
 /// Utterance-level recognizer (OpenAI /audio/transcriptions, faster-whisper
@@ -255,6 +264,9 @@ pub struct TranscriptionSessionConfig {
     pub vad_sensitivity: f32,
     /// Silence that ends an utterance.
     pub silence_ms: u32,
+    /// Request word timestamps for final transcripts (answer-integrity
+    /// delivery signal).
+    pub word_timestamps: bool,
 }
 
 /// A running streaming transcription for one audio source (spec §15:
@@ -398,6 +410,9 @@ pub struct ProviderSet {
     pub vision: Option<Arc<dyn VisionProvider>>,
     pub ocr: Option<Arc<dyn OcrEngine>>,
     pub embeddings: Option<Arc<dyn EmbeddingProvider>>,
+    /// The local AI sidecar's answer-integrity endpoints (only when the
+    /// integrity check is on).
+    pub integrity: Option<Arc<dyn IntegrityService>>,
     pub issues: Vec<ProviderIssue>,
 }
 
@@ -416,6 +431,7 @@ impl ProviderSet {
             self.vision.as_ref().map(|p| p.info().location),
             self.ocr.as_ref().map(|p| p.info().location),
             self.embeddings.as_ref().map(|p| p.info().location),
+            self.integrity.as_ref().map(|p| p.info().location),
         ];
         locs.into_iter()
             .flatten()
@@ -439,6 +455,7 @@ impl std::fmt::Debug for ProviderSet {
             .field("vision", &self.vision.as_ref().map(|p| p.info()))
             .field("ocr", &self.ocr.as_ref().map(|p| p.info()))
             .field("embeddings", &self.embeddings.as_ref().map(|p| p.info()))
+            .field("integrity", &self.integrity.as_ref().map(|p| p.info()))
             .field("issues", &self.issues)
             .finish()
     }

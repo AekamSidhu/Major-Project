@@ -38,6 +38,8 @@ pub enum ConvInput {
     Draft(TranscriptDraft),
     /// Interviewer mode: the turn-end timer for `version` fired.
     TurnTimer { version: u64 },
+    /// Interviewer mode, integrity check: the candidate may have paused.
+    IntegrityTimer { version: u64 },
 }
 
 /// Work decided while holding the state lock, executed after releasing it.
@@ -191,6 +193,7 @@ impl Engine {
                     if rt.mode() == Mode::Interviewer && rt.role_for(source) != SpeakerRole::User {
                         // The candidate keeps talking: invalidate the turn-end timer.
                         rt.turn.version += 1;
+                        crate::integrity::on_candidate_speech_started(rt);
                     }
                 }
             }
@@ -301,6 +304,7 @@ impl Engine {
                 }
             }
             ConvInput::TurnTimer { version } => self.on_turn_timer(meeting_id, version),
+            ConvInput::IntegrityTimer { version } => self.on_integrity_timer(meeting_id, version),
         }
     }
 
@@ -325,6 +329,7 @@ impl Engine {
         let mut actions: Vec<Action> = Vec::new();
         let mut embed_jobs: Vec<EmbedJob> = Vec::new();
         let mut persist_ops: Vec<PersistOp> = Vec::new();
+        let mut integrity_actions: Vec<crate::integrity::IntegrityAction> = Vec::new();
         let mut detection_ms: Option<f64> = None;
 
         let store = {
@@ -472,6 +477,15 @@ impl Engine {
                             // A new interviewer question starts a new candidate turn.
                             rt.turn.reset();
                         }
+                        if mode == Mode::Interviewer
+                            && (asker_is_user || role == SpeakerRole::Unknown)
+                        {
+                            // The candidate's previous answer is final; the
+                            // next one answers this question.
+                            integrity_actions.extend(crate::integrity::on_interviewer_question(
+                                rt, &settings, &q,
+                            ));
+                        }
                         if active
                             && mode == Mode::Candidate
                             && q.requires_response
@@ -516,6 +530,18 @@ impl Engine {
                     && !(is_accepted_question && role == SpeakerRole::Unknown)
                 {
                     rt.turn.push(&segment);
+                    let words = d.words.as_ref().map(|ws| {
+                        ws.iter()
+                            .map(|w| WordTiming {
+                                word: w.word.clone(),
+                                start_ms: rt.rel_ms(w.start_ms),
+                                end_ms: rt.rel_ms(w.end_ms),
+                            })
+                            .collect()
+                    });
+                    integrity_actions.extend(crate::integrity::on_candidate_segment(
+                        rt, &settings, &segment, words,
+                    ));
                     if active {
                         actions.push(Action::TurnTimer {
                             version: rt.turn.version,
@@ -578,6 +604,25 @@ impl Engine {
             let _ = self.inner.embed_tx.send(job);
         }
         self.run_actions(meeting_id, actions);
+        self.run_integrity_actions(meeting_id, integrity_actions);
+    }
+
+    /// The candidate paused: check the answer so far (background).
+    fn on_integrity_timer(&self, meeting_id: &str, version: u64) {
+        let settings = self.settings();
+        let job = {
+            let mut st = self.inner.state.lock();
+            st.runtime
+                .as_mut()
+                .filter(|r| r.meeting.id == meeting_id)
+                .and_then(|rt| crate::integrity::on_timer(rt, &settings, version))
+        };
+        if let Some(job) = job {
+            self.run_integrity_actions(
+                meeting_id,
+                vec![crate::integrity::IntegrityAction::Check(Box::new(job))],
+            );
+        }
     }
 
     fn on_turn_timer(&self, meeting_id: &str, version: u64) {

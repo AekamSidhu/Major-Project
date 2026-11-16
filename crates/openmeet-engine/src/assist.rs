@@ -574,7 +574,7 @@ async fn stream_text(
 }
 
 /// Collects a full response (background work).
-async fn complete(
+pub(crate) async fn complete(
     ticket: &RequestTicket,
     llm: Arc<dyn LlmProvider>,
     request: LlmRequest,

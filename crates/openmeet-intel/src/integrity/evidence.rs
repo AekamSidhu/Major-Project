@@ -172,31 +172,32 @@ pub fn delivery_signal(
     )];
     if let Some(f) = features {
         let z = |name: &str| score.z.get(name).copied().unwrap_or(0.0);
-        if let (Some(x), Some(m)) = (f.latency_s, med("latency_s")) {
-            if z("latency_s") >= 1.0 && x > m {
-                lines.push(format!("Started {:.1} s later than usual", x - m));
-            }
+        if let (Some(x), Some(m)) = (f.latency_s, med("latency_s"))
+            && z("latency_s") >= 1.0
+            && x > m
+        {
+            lines.push(format!("Started {:.1} s later than usual", x - m));
         }
-        if let (Some(x), Some(m)) = (f.rate_wpm, med("rate_wpm")) {
-            if z("rate_wpm") >= 1.0 {
-                lines.push(format!(
-                    "Spoke faster than usual ({x:.0} vs {m:.0} words/min)"
-                ));
-            }
+        if let (Some(x), Some(m)) = (f.rate_wpm, med("rate_wpm"))
+            && z("rate_wpm") >= 1.0
+        {
+            lines.push(format!(
+                "Spoke faster than usual ({x:.0} vs {m:.0} words/min)"
+            ));
         }
-        if let (Some(x), Some(m)) = (f.pause_per_min, med("pause_per_min")) {
-            if z("pause_per_min") <= -1.0 {
-                lines.push(format!(
-                    "Paused less than usual ({x:.1} vs {m:.1} pauses/min)"
-                ));
-            }
+        if let (Some(x), Some(m)) = (f.pause_per_min, med("pause_per_min"))
+            && z("pause_per_min") <= -1.0
+        {
+            lines.push(format!(
+                "Paused less than usual ({x:.1} vs {m:.1} pauses/min)"
+            ));
         }
-        if let (Some(x), Some(m)) = (f.filler_per_100w, med("filler_per_100w")) {
-            if z("filler_per_100w") <= -1.0 {
-                lines.push(format!(
-                    "Fewer filler words than usual ({x:.1} vs {m:.1} per 100 words)"
-                ));
-            }
+        if let (Some(x), Some(m)) = (f.filler_per_100w, med("filler_per_100w"))
+            && z("filler_per_100w") <= -1.0
+        {
+            lines.push(format!(
+                "Fewer filler words than usual ({x:.1} vs {m:.1} per 100 words)"
+            ));
         }
         if lines.len() == 1 && score.level == IntegrityLevel::Low {
             lines.push("Timing close to this candidate's usual".to_string());

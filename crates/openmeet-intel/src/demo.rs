@@ -2,15 +2,18 @@
 //! accounts or network access. The engine runs its real pipeline on scripted
 //! dialogue; [`demo_llm`] answers with scenario-specific, hand-written
 //! responses (falling back to the default mock for anything unexpected).
+//! The answer-integrity scenario also gets a scripted sidecar
+//! ([`demo_integrity`]) and a stand-in embedder ([`demo_embeddings`]).
 
 use std::sync::Arc;
 
+use openmeet_core::integrity::IntegrityLevel;
 use openmeet_core::ipc::DemoScenario;
 use openmeet_core::providers::LlmRequest;
 use openmeet_core::types::{AnswerSections, Mode, RequestKind, SpeakerRole};
 use serde_json::json;
 
-use crate::mock::{MockLlmProvider, render_sections};
+use crate::mock::{MockEmbeddingProvider, MockIntegrityService, MockLlmProvider, render_sections};
 use crate::prompts::shared::{extract_block, extract_question};
 
 /// One step of a demo script.
@@ -24,6 +27,9 @@ pub enum DemoStep {
         text: String,
         /// Pause before this step.
         delay_ms: u64,
+        /// Speaking pace; `None` streams the words quickly (no realistic
+        /// timing needed).
+        words_per_minute: Option<u32>,
     },
     /// The shared screen changes.
     Screen {
@@ -46,6 +52,8 @@ pub const RATE_LIMITER: &str = "rate-limiter-interviewer";
 pub const URL_SHORTENER: &str = "url-shortener-candidate";
 /// Candidate-mode scenario with a shared diagram.
 pub const ARCHITECTURE_SCREEN: &str = "architecture-screen";
+/// Interviewer-mode answer-integrity scenario.
+pub const INTEGRITY: &str = "integrity-interviewer";
 
 /// Available demo scenarios.
 pub fn scenarios() -> Vec<DemoScenario> {
@@ -63,6 +71,12 @@ pub fn scenarios() -> Vec<DemoScenario> {
             description: "You are the interviewer. OpenMeet listens to the candidate and suggests grounded follow-up questions, tracking topics as you go.".into(),
         },
         DemoScenario {
+            id: INTEGRITY.into(),
+            title: "Answer integrity check (interviewer)".into(),
+            mode: Mode::Interviewer,
+            description: "You are the interviewer with the answer-integrity check on. Three natural answers set the candidate's baseline; the fourth sounds read out, and OpenMeet shows a private flag with its evidence — a reason to ask a follow-up, never a verdict.".into(),
+        },
+        DemoScenario {
             id: ARCHITECTURE_SCREEN.into(),
             title: "Architecture on screen (candidate)".into(),
             mode: Mode::Candidate,
@@ -76,8 +90,25 @@ fn say(speaker: SpeakerRole, text: &str, delay_ms: u64) -> DemoStep {
         speaker,
         text: text.to_string(),
         delay_ms,
+        words_per_minute: None,
     }
 }
+
+fn say_paced(speaker: SpeakerRole, text: &str, delay_ms: u64, words_per_minute: u32) -> DemoStep {
+    DemoStep::Say {
+        speaker,
+        text: text.to_string(),
+        delay_ms,
+        words_per_minute: Some(words_per_minute),
+    }
+}
+
+/// The answer the integrity demo's candidate reads out (and the demo LLM's
+/// reference answer to the same question).
+const READ_ANSWER: &str = "Consistent hashing distributes keys across a logical ring, ensuring that adding or removing infrastructure only remaps a proportional fraction of keys, which significantly minimizes rebalancing overhead and maintains predictable performance characteristics.";
+/// The question the integrity demo's candidate answers by reading.
+const READ_QUESTION: &str =
+    "Let's go deeper. How does consistent hashing help when you add or remove cache nodes?";
 
 /// The script of a scenario.
 pub fn script(scenario_id: &str) -> Option<Vec<DemoStep>> {
@@ -99,6 +130,19 @@ pub fn script(scenario_id: &str) -> Option<Vec<DemoStep>> {
             say(Remote, "Makes sense. How would you generate the short codes so they never collide?", 3_000),
             say(User, "I'd hand out ranges from a counter and encode the IDs in base62, so codes are unique by construction.", 9_000),
             say(Remote, "We have a few minutes left. Do you have any questions for me?", 3_000),
+        ],
+        // Paced speech so delivery has realistic timing: three natural
+        // answers (quick start, ~150 words/min, fillers) form the baseline;
+        // the fourth starts late, runs fast and has no fillers.
+        INTEGRITY => vec![
+            say_paced(User, "Thanks for joining. Can you tell me about a project you're proud of?", 1_200, 170),
+            say_paced(Remote, "Um, sure. So last year I rebuilt our billing exports. Uh, the old job kept timing out, you know, so I split it into small batches and we added retries. It mostly just worked after that.", 1_200, 150),
+            say_paced(User, "Nice. How did you test it before launch?", 4_500, 170),
+            say_paced(Remote, "Hmm, mostly with a copy of production data. I mean, we ran the old and the new job side by side for a week, um, and compared the totals every morning before we switched over.", 1_400, 145),
+            say_paced(User, "What would you do differently next time?", 4_500, 170),
+            say_paced(Remote, "Uh, honestly I'd add better alerts earlier. You know, we only noticed one slow batch because a customer asked, so, um, I'd watch the batch times from day one.", 1_000, 155),
+            say_paced(User, READ_QUESTION, 4_500, 170),
+            say_paced(Remote, READ_ANSWER, 4_600, 215),
         ],
         ARCHITECTURE_SCREEN => vec![
             say(Remote, "Can you tell me about the reporting system you worked on?", 1_200),
@@ -323,12 +367,64 @@ fn architecture(r: &LlmRequest) -> Option<String> {
     }
 }
 
+/// Reference answers of the integrity demo: the read-out question gets the
+/// very answer the candidate reads; other questions the default mock answer.
+fn integrity(r: &LlmRequest) -> Option<String> {
+    if r.kind != RequestKind::IntegrityReference {
+        return None;
+    }
+    let question = extract_question(&user_of(r)).unwrap_or_default();
+    question
+        .to_lowercase()
+        .contains("consistent hashing")
+        .then(|| READ_ANSWER.to_string())
+}
+
+/// Scripted answer-integrity sidecar for a scenario (`None` for scenarios
+/// without the check). Reading scores are queued per answer in script order;
+/// AI-text scores come from the mock's deterministic text heuristic.
+pub fn demo_integrity(scenario_id: &str) -> Option<MockIntegrityService> {
+    if scenario_id != INTEGRITY {
+        return None;
+    }
+    let svc = MockIntegrityService::new().with_embedding_model(
+        crate::integrity::spec_thresholds()
+            .echo_similarity
+            .embedding_model
+            .clone(),
+    );
+    for (p, level) in [
+        (0.14, IntegrityLevel::Low),
+        (0.22, IntegrityLevel::Low),
+        (0.18, IntegrityLevel::Low),
+        (0.91, IntegrityLevel::High),
+    ] {
+        svc.push_reading(Some(p), level);
+    }
+    Some(svc)
+}
+
+/// Demo embedder for a scenario: deterministic hashing embeddings reported
+/// under the model name the echo thresholds are set for, so the demo can show
+/// the echo signal without the local AI sidecar. `None` for other scenarios.
+pub fn demo_embeddings(scenario_id: &str) -> Option<MockEmbeddingProvider> {
+    (scenario_id == INTEGRITY).then(|| {
+        MockEmbeddingProvider::new().with_model(
+            crate::integrity::spec_thresholds()
+                .echo_similarity
+                .embedding_model
+                .clone(),
+        )
+    })
+}
+
 /// Mock LLM preloaded with scenario-specific responses.
 pub fn demo_llm(scenario_id: &str) -> MockLlmProvider {
     let responder: crate::mock::Responder = match scenario_id {
         RATE_LIMITER => Arc::new(rate_limiter),
         URL_SHORTENER => Arc::new(url_shortener),
         ARCHITECTURE_SCREEN => Arc::new(architecture),
+        INTEGRITY => Arc::new(integrity),
         _ => Arc::new(|_: &LlmRequest| None),
     };
     let m = MockLlmProvider::with_responder(responder);
@@ -358,6 +454,7 @@ mod tests {
                     speaker,
                     text,
                     delay_ms,
+                    ..
                 } = step
                 {
                     assert!((1_000..=10_000).contains(delay_ms));
@@ -486,5 +583,112 @@ mod tests {
             assert!(!s.overview.is_empty());
             assert_eq!(s.interviewer.is_some(), mode == Mode::Interviewer);
         }
+    }
+
+    #[test]
+    fn integrity_demo_questions_are_detected_and_answers_are_not() {
+        use crate::detect::{DetectionInput, detect};
+        use openmeet_core::types::{AudioSourceKind, TranscriptSegment};
+        for step in script(INTEGRITY).unwrap() {
+            let DemoStep::Say { speaker, text, .. } = step else {
+                continue;
+            };
+            let seg = TranscriptSegment {
+                id: "s".into(),
+                meeting_id: "m".into(),
+                utterance_id: "s".into(),
+                speaker_id: None,
+                speaker_role: speaker,
+                source: AudioSourceKind::System,
+                start_time: 10_000,
+                end_time: 14_000,
+                text: text.clone(),
+                is_final: true,
+                confidence: None,
+            };
+            let r = detect(&DetectionInput {
+                segment: &seg,
+                recent: &[],
+                mode: Mode::Interviewer,
+                last_question: None,
+            });
+            // Interviewer questions are accepted at 0.85 x the default
+            // detection threshold (0.6).
+            let accepted = r.is_question && r.confidence >= 0.6 * 0.85;
+            assert_eq!(accepted, speaker == SpeakerRole::User, "{text}: {r:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn integrity_demo_has_a_baseline_and_a_read_answer() {
+        use crate::integrity::is_echo_embedding_model;
+        use crate::prompts::integrity_reference;
+        use openmeet_core::integrity::IntegrityService;
+        use openmeet_core::providers::EmbeddingProvider;
+
+        let steps = script(INTEGRITY).unwrap();
+        let answers: Vec<&DemoStep> = steps
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s,
+                    DemoStep::Say {
+                        speaker: SpeakerRole::Remote,
+                        ..
+                    }
+                )
+            })
+            .collect();
+        // Three baseline answers plus the one that is checked.
+        assert_eq!(answers.len(), 4);
+        assert!(steps.iter().all(|s| matches!(
+            s,
+            DemoStep::Say {
+                words_per_minute: Some(_),
+                ..
+            }
+        )));
+
+        // The mock sidecar scores the natural answers low and the read one high.
+        let svc = demo_integrity(INTEGRITY).unwrap();
+        let mut levels = Vec::new();
+        for a in &answers {
+            let DemoStep::Say { text, .. } = a else {
+                unreachable!()
+            };
+            levels.push(
+                svc.ai_text(text.clone(), CancellationToken::new())
+                    .await
+                    .unwrap()
+                    .level,
+            );
+        }
+        assert_eq!(&levels[..3], &[IntegrityLevel::Low; 3], "{levels:?}");
+        assert_eq!(levels[3], IntegrityLevel::High);
+        let status = svc.status(CancellationToken::new()).await.unwrap();
+        assert!(is_echo_embedding_model(
+            status.embedding_model.as_deref().unwrap(),
+            crate::integrity::spec_thresholds()
+        ));
+        assert!(demo_integrity(RATE_LIMITER).is_none());
+
+        // The demo LLM's reference for the read question is the read answer.
+        let m = demo_llm(INTEGRITY);
+        m.set_chunk_delay_ms(0);
+        m.set_first_token_latency_ms(0);
+        let p = integrity_reference::build(READ_QUESTION, 0);
+        let out = complete_text(
+            &m,
+            request(RequestKind::IntegrityReference, p.system, p.user),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(integrity_reference::parse(&out), READ_ANSWER);
+        let e = demo_embeddings(INTEGRITY).unwrap();
+        assert!(is_echo_embedding_model(
+            &e.info().model,
+            crate::integrity::spec_thresholds()
+        ));
     }
 }

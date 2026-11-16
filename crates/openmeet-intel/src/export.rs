@@ -96,6 +96,32 @@ fn speaker(record: &MeetingRecord, role: SpeakerRole) -> &'static str {
     role.label(record.meeting.mode)
 }
 
+/// Explains what an integrity flag is (every export that contains flags).
+const INTEGRITY_NOTE: &str = "Signals for the interviewer, never verdicts: each flag is a reason \
+to ask a follow-up question. Uncalibrated signals are marked; thresholds are not yet calibrated on \
+real interviews.";
+
+/// Integrity flags in answer order.
+fn integrity_flags(record: &MeetingRecord) -> Vec<&openmeet_core::integrity::IntegrityFlag> {
+    let mut flags: Vec<_> = record.integrity_flags.iter().collect();
+    flags.sort_by_key(|f| (f.answer_start_ms, f.created_at));
+    flags
+}
+
+/// Evidence lines of a flag: the answer range, then every signal's evidence.
+fn integrity_lines(flag: &openmeet_core::integrity::IntegrityFlag) -> Vec<String> {
+    let mut lines = vec![crate::integrity::evidence::answer_range(
+        flag.answer_start_ms,
+        flag.answer_end_ms,
+    )];
+    for s in &flag.signals {
+        for e in &s.evidence {
+            lines.push(format!("{}: {}", s.name.label(), e.trim()));
+        }
+    }
+    lines
+}
+
 /// Markdown export.
 pub fn render_markdown(record: &MeetingRecord, parts: &ExportParts) -> String {
     let m = &record.meeting;
@@ -182,6 +208,21 @@ pub fn render_markdown(record: &MeetingRecord, parts: &ExportParts) -> String {
                     },
                     f.reason.trim()
                 ));
+            }
+        }
+    }
+    if parts.integrity {
+        let flags = integrity_flags(record);
+        if !flags.is_empty() {
+            out.push_str(&format!("\n## Answer integrity\n\n_{INTEGRITY_NOTE}_\n"));
+            for f in flags {
+                out.push_str(&format!("\n### {}\n\n", f.headline.trim()));
+                if let Some(q) = f.question_text.as_deref().filter(|q| !q.trim().is_empty()) {
+                    out.push_str(&format!("Question: {}\n\n", q.trim()));
+                }
+                for line in integrity_lines(f) {
+                    out.push_str(&format!("- {line}\n"));
+                }
             }
         }
     }
@@ -294,6 +335,21 @@ pub fn render_text(record: &MeetingRecord, parts: &ExportParts) -> String {
             }
         }
     }
+    if parts.integrity {
+        let flags = integrity_flags(record);
+        if !flags.is_empty() {
+            out.push_str(&format!("\nANSWER INTEGRITY\n\n{INTEGRITY_NOTE}\n"));
+            for f in flags {
+                out.push_str(&format!("\n{}\n", f.headline.trim()));
+                if let Some(q) = f.question_text.as_deref().filter(|q| !q.trim().is_empty()) {
+                    out.push_str(&format!("  Question: {}\n", q.trim()));
+                }
+                for line in integrity_lines(f) {
+                    out.push_str(&format!("  - {line}\n"));
+                }
+            }
+        }
+    }
     if parts.transcript {
         out.push_str("\nTRANSCRIPT\n\n");
         for s in record.segments.iter().filter(|s| s.is_final) {
@@ -359,6 +415,13 @@ pub fn render_json(record: &MeetingRecord, parts: &ExportParts) -> String {
             "followups".into(),
             serde_json::to_value(f).unwrap_or(Value::Null),
         );
+    }
+    if parts.integrity && !record.integrity_flags.is_empty() {
+        root.insert(
+            "integrityFlags".into(),
+            serde_json::to_value(integrity_flags(record)).unwrap_or(Value::Null),
+        );
+        root.insert("integrityNote".into(), json!(INTEGRITY_NOTE));
     }
     if parts.transcript {
         let segs: Vec<&TranscriptSegment> = record.segments.iter().filter(|s| s.is_final).collect();
@@ -733,6 +796,7 @@ mod tests {
             observations: vec![],
             action_items: vec![],
             summary: None,
+            integrity_flags: vec![],
         }
     }
 
@@ -756,10 +820,61 @@ mod tests {
                 transcript: true,
                 questions: false,
                 followups: false,
+                integrity: false,
             },
         );
         assert!(!only.contains("## Summary"));
         assert!(only.contains("## Transcript"));
+        assert!(!all.contains("## Answer integrity"), "no flags, no section");
+    }
+
+    fn flagged(mode: Mode) -> MeetingRecord {
+        use openmeet_core::integrity::*;
+        let mut r = record(mode);
+        r.integrity_flags.push(IntegrityFlag {
+            id: "a1".into(),
+            meeting_id: "m1".into(),
+            question_id: Some("q1".into()),
+            question_text: Some("How would you design a rate limiter?".into()),
+            answer_start_ms: 1_434_000,
+            answer_end_ms: 1_500_000,
+            answer_words: 120,
+            level: IntegrityLevel::Possible,
+            elevated: vec![IntegritySignalName::AiText],
+            headline: crate::integrity::evidence::headline(IntegrityLevel::Possible).into(),
+            signals: vec![crate::integrity::evidence::ai_text_signal(
+                0.91,
+                IntegrityLevel::High,
+                true,
+            )],
+            revision: 2,
+            spec_version: 1,
+            created_at: 1,
+            updated_at: 2,
+        });
+        r
+    }
+
+    #[test]
+    fn integrity_flags_are_exported_as_signals_not_verdicts() {
+        let r = flagged(Mode::Interviewer);
+        let md = render_markdown(&r, &ExportParts::default());
+        assert!(md.contains("## Answer integrity"), "{md}");
+        assert!(md.contains("never verdicts"));
+        assert!(md.contains("### Possible AI-assisted answer — worth a follow-up"));
+        assert!(md.contains("- Answer at 23:54–25:00"));
+        assert!(md.contains("- AI-written text: AI-written text score 0.91 (high)"));
+        let t = render_text(&r, &ExportParts::default());
+        assert!(t.contains("ANSWER INTEGRITY"));
+        let j: Value = serde_json::from_str(&render_json(&r, &ExportParts::default())).unwrap();
+        assert_eq!(j["integrityFlags"][0]["level"], "possible");
+        let off = ExportParts {
+            integrity: false,
+            ..ExportParts::default()
+        };
+        assert!(!render_markdown(&r, &off).contains("Answer integrity"));
+        let j: Value = serde_json::from_str(&render_json(&r, &off)).unwrap();
+        assert!(j.get("integrityFlags").is_none());
     }
 
     #[test]
@@ -782,6 +897,7 @@ mod tests {
                 transcript: false,
                 questions: false,
                 followups: true,
+                integrity: false,
             },
         ))
         .unwrap();

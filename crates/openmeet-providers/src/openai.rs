@@ -16,6 +16,7 @@
 //! the adapter adjusts that parameter, retries, and remembers the adjustment
 //! for later requests.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -28,7 +29,7 @@ use openmeet_core::providers::{
     Transcriber, TranscriptionOutput, TranscriptionRequest,
 };
 use openmeet_core::settings::ReasoningEffort;
-use openmeet_core::types::ProviderInfo;
+use openmeet_core::types::{ProviderInfo, WordTiming};
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::multipart::{Form, Part};
 use reqwest::{Method, RequestBuilder, Response};
@@ -1008,9 +1009,53 @@ fn log_failure(provider: &'static str, request_id: &str, error: &ProviderError) 
 // ---------------------------------------------------------------------------
 
 /// Utterance transcription through `POST /v1/audio/transcriptions`.
+///
+/// When a request asks for word timestamps (answer-integrity delivery
+/// signal), the form carries `response_format=verbose_json` and
+/// `timestamp_granularities[]=word`. Servers that reject that (HTTP 400/422)
+/// get the plain request again and are not asked for words again; responses
+/// without `words` simply yield none. Without word timestamps the request is
+/// exactly the plain `response_format=json` form.
 pub struct OpenAiTranscriber {
     base: Base,
     model: String,
+    /// Cleared once the server rejected a word-timestamp request.
+    words_supported: AtomicBool,
+}
+
+/// Whether the transcription model can return word timestamps. On the OpenAI
+/// API only `whisper-1` supports `verbose_json`; other servers are tried and
+/// remembered when they refuse.
+pub fn transcription_supports_words(flavor: OpenAiFlavor, model: &str) -> bool {
+    match flavor {
+        OpenAiFlavor::OpenAi => base_model(model) == "whisper-1",
+        OpenAiFlavor::Compatible | OpenAiFlavor::LocalAi => true,
+    }
+}
+
+/// Parses the `words` array of a `verbose_json` transcription (seconds) into
+/// millisecond timings relative to the clip; malformed entries are skipped.
+/// `None` when there are no usable words.
+pub fn parse_transcription_words(value: &Value) -> Option<Vec<WordTiming>> {
+    let words: Vec<WordTiming> = value
+        .get("words")?
+        .as_array()?
+        .iter()
+        .filter_map(|w| {
+            let word = w.get("word")?.as_str()?;
+            let start = w.get("start")?.as_f64().filter(|t| t.is_finite())?;
+            let end = w.get("end")?.as_f64().filter(|t| t.is_finite())?;
+            if word.trim().is_empty() || start < 0.0 || end < start {
+                return None;
+            }
+            Some(WordTiming {
+                word: word.to_string(),
+                start_ms: (start * 1000.0).round() as i64,
+                end_ms: (end * 1000.0).round() as i64,
+            })
+        })
+        .collect();
+    (!words.is_empty()).then_some(words)
 }
 
 impl OpenAiTranscriber {
@@ -1030,12 +1075,61 @@ impl OpenAiTranscriber {
         if flavor == OpenAiFlavor::LocalAi {
             base.display_name = LOCAL_AI_TRANSCRIPTION_NAME;
         }
-        Ok(OpenAiTranscriber { base, model })
+        let words_supported = AtomicBool::new(transcription_supports_words(flavor, &model));
+        Ok(OpenAiTranscriber {
+            base,
+            model,
+            words_supported,
+        })
     }
 
     /// Configured model.
     pub fn model(&self) -> &str {
         &self.model
+    }
+
+    /// Whether word timestamps are still requested when asked for.
+    pub fn word_timestamps_supported(&self) -> bool {
+        self.words_supported.load(Ordering::Relaxed)
+    }
+
+    /// The multipart form; `words` adds the word-timestamp fields.
+    fn form(
+        &self,
+        wav: Vec<u8>,
+        request: &TranscriptionRequest,
+        words: bool,
+    ) -> Result<Form, ProviderError> {
+        let file = Part::bytes(wav)
+            .file_name("audio.wav")
+            .mime_str("audio/wav")
+            .map_err(|_| ProviderError::Other("could not build the audio upload".to_string()))?;
+        let mut form = Form::new()
+            .part("file", file)
+            .text("model", self.model.clone());
+        form = if words {
+            form.text("response_format", "verbose_json")
+                .text("timestamp_granularities[]", "word")
+        } else {
+            form.text("response_format", "json")
+        };
+        if let Some(language) = request
+            .language
+            .as_deref()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.eq_ignore_ascii_case("auto"))
+        {
+            form = form.text("language", language.to_ascii_lowercase());
+        }
+        if let Some(prompt) = request
+            .prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
+            form = form.text("prompt", tail_chars(prompt, MAX_TRANSCRIPTION_PROMPT_CHARS));
+        }
+        Ok(form)
     }
 }
 
@@ -1073,30 +1167,7 @@ impl Transcriber for OpenAiTranscriber {
         }
         let wav = encode_wav_pcm16(&clip.samples, rate);
         let wav_bytes = wav.len();
-        let file = Part::bytes(wav)
-            .file_name("audio.wav")
-            .mime_str("audio/wav")
-            .map_err(|_| ProviderError::Other("could not build the audio upload".to_string()))?;
-        let mut form = Form::new()
-            .part("file", file)
-            .text("model", self.model.clone())
-            .text("response_format", "json");
-        if let Some(language) = request
-            .language
-            .as_deref()
-            .map(str::trim)
-            .filter(|l| !l.is_empty() && !l.eq_ignore_ascii_case("auto"))
-        {
-            form = form.text("language", language.to_ascii_lowercase());
-        }
-        if let Some(prompt) = request
-            .prompt
-            .as_deref()
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-        {
-            form = form.text("prompt", tail_chars(prompt, MAX_TRANSCRIPTION_PROMPT_CHARS));
-        }
+        let mut words = request.word_timestamps && self.word_timestamps_supported();
         let started = Instant::now();
         tracing::debug!(
             provider,
@@ -1104,24 +1175,40 @@ impl Transcriber for OpenAiTranscriber {
             utterance_id = %clip.utterance_id,
             audio_ms = clip.duration_ms(),
             wav_bytes,
+            words,
             "sending transcription request"
         );
-        let builder = self
-            .base
-            .request(Method::POST, "/audio/transcriptions")?
-            .header(ACCEPT, "application/json")
-            .multipart(form);
         let deadline = self.base.timeouts.request;
-        let response = send(builder, &cancel, deadline, &self.base.host)
-            .await
-            .inspect_err(|e| log_failure(provider, &clip.utterance_id, e))?;
-        if !response.status().is_success() {
-            let error = HttpFailure::read(response, &cancel, self.base.secret(), &self.base.host)
+        let response = loop {
+            let builder = self
+                .base
+                .request(Method::POST, "/audio/transcriptions")?
+                .header(ACCEPT, "application/json")
+                .multipart(self.form(wav.clone(), &request, words)?);
+            let response = send(builder, &cancel, deadline, &self.base.host)
                 .await
-                .into_error();
+                .inspect_err(|e| log_failure(provider, &clip.utterance_id, e))?;
+            if response.status().is_success() {
+                break response;
+            }
+            let failure =
+                HttpFailure::read(response, &cancel, self.base.secret(), &self.base.host).await;
+            if words && matches!(failure.status.as_u16(), 400 | 422) {
+                // The server does not accept word timestamps: ask plainly
+                // from now on.
+                self.words_supported.store(false, Ordering::Relaxed);
+                words = false;
+                tracing::info!(
+                    provider,
+                    status = failure.status.as_u16(),
+                    "word timestamps rejected; transcribing without them"
+                );
+                continue;
+            }
+            let error = failure.into_error();
             log_failure(provider, &clip.utterance_id, &error);
             return Err(error);
-        }
+        };
         let remaining = deadline
             .saturating_sub(started.elapsed())
             .max(Duration::from_secs(1));
@@ -1152,17 +1239,24 @@ impl Transcriber for OpenAiTranscriber {
             .and_then(Value::as_f64)
             .filter(|c| c.is_finite())
             .map(|c| c.clamp(0.0, 1.0) as f32);
+        let words = if words {
+            parse_transcription_words(&value)
+        } else {
+            None
+        };
         tracing::debug!(
             provider,
             utterance_id = %clip.utterance_id,
             elapsed_ms = started.elapsed().as_millis() as u64,
             chars = text.chars().count(),
+            words = words.as_ref().map_or(0, Vec::len),
             "transcription completed"
         );
         Ok(TranscriptionOutput {
             text,
             confidence,
             language,
+            words,
         })
     }
 
