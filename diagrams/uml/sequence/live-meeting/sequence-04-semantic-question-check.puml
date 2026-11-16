@@ -1,0 +1,68 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-engine/src/conversation.rs (handle_final -> Action::Semantic, run_actions),
+' crates/openmeet-engine/src/assist.rs (spawn_semantic_check, complete, answer_question),
+' crates/openmeet-engine/src/requests.rs (RequestManager::begin/set_state, Background slot),
+' crates/openmeet-intel/src/prompts/question_detection.rs (build, parse), crates/openmeet-core/src/providers.rs (background_llm, complete_text)
+title Optional semantic question check (ambiguous heuristic result, candidate mode)
+skinparam maxMessageSize 240
+
+participant "conversation loop\nrun_actions" as Conv
+participant "RequestManager" as Req
+participant "semantic check\n<<tokio task>>" as Task
+participant "question_detection\n(prompt module)" as Prompt
+participant "background LLM\nProviderSet::background_llm()\n(fast_llm, else llm)" as LLM
+participant "MeetingRuntime" as RT
+participant "Persister" as Per
+participant "embedder\n<<tokio task>>" as Emb
+participant "TauriSink" as Sink
+
+note over Conv
+Triggered from handle_final only when the meeting is Active, mode is Candidate,
+assistant.semantic_detection is on and detect() returned ambiguous = true
+(see sequence-03).
+end note
+
+Conv -> Conv : Action::Semantic { segment, heuristic, recent }\n-> assist::spawn_semantic_check(..)
+activate Conv
+alt background_llm() is None
+  Conv -> Conv : return (heuristic result stands)
+else LLM available
+  Conv -> Req : begin(RequestSlot::Background,\nRequestKind::QuestionClassification, |_| None)
+  activate Req
+  Req --> Conv : RequestTicket (no ANSWER_STARTED for Background)
+  deactivate Req
+  Conv ->> Task : handle.spawn(async ..)
+end
+deactivate Conv
+
+activate Task
+Task -> Prompt : question_detection::build(&segment.text, &recent, mode)
+Prompt --> Task : PromptParts
+Task -> Req : set_state(&ticket, Requesting)  (not emitted: Background)
+Task -> LLM : complete(&ticket, llm, LlmRequest { max_output_tokens: 300,\ntemperature: 0.0, json_output: true, latency_sensitive: true }, 5 s)\n= complete_text(..) raced with ticket.cancel
+activate LLM
+LLM --> Task : Result<String, ProviderError>
+deactivate LLM
+Task -> Prompt : question_detection::parse(text)
+Prompt --> Task : Option<SemanticClassification>
+Task -> Req : set_state(&ticket, Complete | Failed)
+
+alt classification missing, or !(is_question && requires_response && confidence >= 0.5)
+  Task -> Task : return (no question recorded)
+else confirmed question
+  Task -> RT : lock; runtime for meeting_id && state == Active (else return)
+  activate RT
+  Task -> RT : DetectedQuestion { method: DetectionMethod::Semantic,\nconfidence: max(llm, heuristic), requires_response: true, .. }\nquestions.push(q)
+  Task -> RT : open_answer_for(&q) -> previous AnswerRecord\n(remember_answer if it has text)
+  Task -> RT : memory.add(MemoryItem { kind: Question })
+  deactivate RT
+  Task ->> Per : persist(PersistOp::Question(q)) [+ PersistOp::Answer(prev)]
+  Task ->> Emb : embed_tx.send(EmbedJob) for a remembered answer
+  Task -> Sink : QuestionDetected { question }
+  opt assistant.auto_answer && engine.mode() == Candidate
+    Task -> Task : answer_question(&engine, &question, engine.style())\n(Primary slot answer, sequence-06)
+  end
+end
+deactivate Task
+@enduml

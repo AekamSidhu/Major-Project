@@ -1,0 +1,110 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-core/src/providers.rs (LlmProvider, Transcriber, TranscriptionProvider,
+' TranscriptionSession, VisionProvider, OcrEngine, EmbeddingProvider, SecretResolver, ProviderSet),
+' crates/openmeet-core/src/store.rs (MeetingStore, NullStore), crates/openmeet-core/src/events.rs (EventSink),
+' crates/openmeet-platform/src/privacy.rs (CapturePrivacy), crates/openmeet-platform/src/ocr.rs (WindowsOcr),
+' crates/openmeet-engine/src/engine.rs (EngineDeps, Inner, embedder()), crates/openmeet-engine/src/transcription.rs,
+' crates/openmeet-intel/src/{vision,text}.rs, crates/openmeet-providers/src/{openai,anthropic,ollama,factory}.rs,
+' crates/openmeet-store/src/records.rs, src-tauri/src/{sink,secrets,overlay,providers_build}.rs
+title Trait seams - provided (lollipop) and required (socket) interfaces
+
+skinparam nodesep 25
+skinparam ranksep 70
+skinparam linetype polyline
+
+package "src-tauri" {
+  [TauriSink] as SINK
+  [SecretStore] as SEC
+  [OverlayController] as OVC
+}
+
+package "openmeet-store" {
+  [Database] as DB
+}
+
+package "openmeet-core" {
+  [NullStore] as NULLS
+}
+
+package "openmeet-providers" {
+  [factory::build_*] as FAC
+  [OpenAiLlm] as OAL
+  [AnthropicLlm] as ANL
+  [OllamaLlm] as OLL
+  [OpenAiTranscriber] as OAT
+  [OpenAiEmbeddings] as OAE
+  [OllamaEmbeddings] as OLE
+}
+
+package "openmeet-platform" {
+  [WindowsOcr\n(ocr::system_ocr, Windows only)] as WOCR
+  [WindowsCapturePrivacy /\nMacCapturePrivacy /\nUnsupportedCapturePrivacy] as CPI
+}
+
+package "openmeet-intel" {
+  [LlmVisionProvider] as LVP
+  [OcrVisionProvider] as OVP
+  [HashingEmbedder] as HASH
+}
+
+package "openmeet-engine" {
+  [VadTranscriptionProvider] as VAD
+  [Engine] as E
+}
+
+interface EventSink as IES
+interface MeetingStore as IMS
+interface SecretResolver as ISR
+interface LlmProvider as ILLM
+interface Transcriber as ITR
+interface TranscriptionProvider as ITP
+interface VisionProvider as IVP
+interface OcrEngine as IOCR
+interface EmbeddingProvider as IEMB
+interface CapturePrivacy as ICP
+
+SINK -- IES
+DB -- IMS
+NULLS -- IMS
+SEC -- ISR
+OAL -- ILLM
+ANL -- ILLM
+OLL -- ILLM
+OAT -- ITR
+OAE -- IEMB
+OLE -- IEMB
+HASH -- IEMB
+WOCR -- IOCR
+CPI -- ICP
+LVP -- IVP
+OVP -- IVP
+VAD -- ITP
+
+FAC -up-( ISR
+
+LVP -up-( ILLM
+OVP -up-( IOCR
+VAD -up-( ITR
+OVC -up-( ICP
+
+E -up-( IES
+E -up-( IMS
+E -up-( ILLM
+E -up-( ITP
+E -up-( IVP
+E -up-( IOCR
+E -up-( IEMB
+
+note as N1
+  The engine never names a concrete provider: it receives
+  <b>EngineDeps</b> { sink, store, providers: <b>ProviderSet</b>, settings }.
+  ProviderSet = llm, fast_llm, transcription, vision, ocr,
+  embeddings (each Option) + issues.
+  NullStore is used for meetings that are not retained;
+  HashingEmbedder is the fallback when ProviderSet.embeddings is None.
+  Test/demo doubles (MockLlmProvider, MockTranscriber,
+  MockVisionProvider, MockEmbeddingProvider, MockOcr,
+  CollectingSink, MemoryStore) implement the same traits (omitted).
+end note
+@enduml

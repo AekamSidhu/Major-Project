@@ -1,0 +1,44 @@
+// Derived from: crates/openmeet-engine/src/conversation.rs (on_transcription_event SpeechStarted, handle_final,
+// run_actions Action::TurnTimer, on_conv_input, on_turn_timer), crates/openmeet-engine/src/runtime.rs (CandidateTurn),
+// crates/openmeet-engine/src/assist.rs (start_followups, run_followups, is_duplicate, store_suggestion),
+// crates/openmeet-intel/src/prompts (interviewer_followup::build, FollowupStreamParser, FollowupItem),
+// crates/openmeet-engine/src/requests.rs (RequestManager).
+// UML communication diagram drawn with Graphviz (PlantUML has no native notation):
+// objects are boxes with an underlined "name : Type", each link carries its numbered
+// messages, and the open arrowhead on the link shows the direction of those messages.
+digraph communication03 {
+  graph [fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.45, ranksep=0.7, pad=0.3, bgcolor="#FFFFFF",
+         label=<<B>Communication 03: candidate turn ends -&gt; streamed follow-up questions (Interviewer mode)</B>>];
+  node  [fontname="Segoe UI", fontsize=11, shape=box, style="rounded,filled", fillcolor="#F6F7FD", color="#4F5BD5", margin="0.15,0.08"];
+  edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756", arrowhead=vee, arrowsize=0.7];
+
+  loop   [label=<<U>conversation loop</U><BR/><FONT POINT-SIZE="9">tokio task from spawn_conversation</FONT>>];
+  engine [label=<<U>engine : Engine</U>>, fillcolor="#E6E9FB"];
+  timer  [label=<<U>turn timer</U><BR/><FONT POINT-SIZE="9">tokio task: sleep(turn_end_silence_ms)</FONT>>];
+  rt     [label=<<U>rt : MeetingRuntime</U><BR/><FONT POINT-SIZE="9">turn : CandidateTurn</FONT>>];
+  assist [label=<<U>assist module</U><BR/><FONT POINT-SIZE="9">start_followups, then the spawned run_followups task</FONT>>, fillcolor="#E6E9FB"];
+  req    [label=<<U>requests : RequestManager</U>>];
+  intel  [label=<<U>openmeet_intel</U><BR/><FONT POINT-SIZE="9">claims, prompts::interviewer_followup, text</FONT>>];
+  parser [label=<<U>parser : FollowupStreamParser</U>>];
+  llm    [label=<<U>llm : dyn LlmProvider</U>>, fillcolor="#FFFFFF"];
+  per    [label=<<U>persist : Persister</U>>, fillcolor="#EEF7F1"];
+  sink   [label=<<U>sink : TauriSink</U>>];
+
+  loop -> engine [label="1: on_transcription_event(Draft(d))   [final, candidate speech]\l2: on_conv_input(ConvInput::TurnTimer{version})\l    -> on_turn_timer(meeting_id, version)\l"];
+  engine -> rt [label="1.1: turn.push(&segment)\l2.1: [turn.version == version, no candidate speaking,\l      word_count >= followup_min_words]\l      last_turn_text = turn.text; turn.reset()\l"];
+  engine -> timer [label="1.2: spawn(sleep(delay_ms))\l      (Action::TurnTimer{version, delay_ms})\l"];
+  timer -> loop [label="1.2.1: conv_tx.send(ConvInput::TurnTimer{version})"];
+  engine -> assist [label="2.2: start_followups(turn_text)\l      [settings.assistant.auto_followups]\l"];
+  assist -> req [label="2.2.1: begin(Followups, InterviewerFollowups, AnswerStarted)\l3.1: set_state(ContextBuilding)\l3.4: set_state(Requesting)\l3.6: set_state(Streaming)   [first delta]\l3.8*: emit_if_current(FollowupsReady{done: false})\l3.12: emit_if_current(FollowupsReady{done: true})\l3.15: emit_if_current(AnswerComplete)\l3.16: set_state(Complete)\l"];
+  req -> sink [label="emit(...) of 2.2.1, 3.x   [only while current;\l  AnswerStateChanged also when terminal]\l"];
+  assist -> rt [label="2.2.2: latest_followups.clear()\l3.2: build_prompt_context(turn_text)\l3.8.1*: latest_followups = accepted\l3.10*: topics.apply_analysis([(name, status)]); gaps.push(text)\l3.13: all_followups.extend(accepted)\l3.14: store_suggestion -> push_suggestion(suggestion)\l"];
+  assist -> intel [label="3.3: extract_claims(&pseudo segment);\l      interviewer_followup::build(ctx, turn_text, claims, MAX_FOLLOWUPS=4, budget)\l3.7.1*: is_duplicate -> lexical_similarity >= 0.6 or cosine >= 0.82\l"];
+  assist -> llm [label="3.5: stream(LlmRequest{json_output: true}, cancel)"];
+  assist -> parser [label="3.7*: push(delta) -> Vec<FollowupItem>\l3.11: finish()\l"];
+  assist -> per [label="3.9*: persist(PersistOp::Claims)   [FollowupItem::Claim]\l3.10.1*: persist(PersistOp::Topics)   [FollowupItem::Topic]\l3.14.1: persist(PersistOp::Suggestion)\l"];
+  assist -> sink [label="3.9.1*: emit(ClaimsExtracted)\l3.10.2*: emit(TopicsUpdated)\l"];
+
+  note [shape=note, style=filled, fillcolor="#FFF8E1", color="#C9A227", fontsize=10,
+        label="A TranscriptionEvent::SpeechStarted from the candidate increments turn.version, so an older\ltimer finds a version mismatch and does nothing (2.1 guard). When the candidate's speech\lends with no text (Empty / Error / discarded), reschedule_turn re-arms the timer.\l3.x run in the run_followups tokio task; * = repeated per streamed delta / parsed item.\lDuplicates of asked questions and earlier suggestions are dropped; at most 4 are accepted.\l"];
+  sink -> note [style=invis];
+}

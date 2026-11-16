@@ -1,0 +1,150 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/settings.rs (AudioSettings, ScreenSettings,
+' ScreenFrequency, PrivacySettings, RetentionPolicy, GeneralSettings), ipc.rs
+' (ScreenSourceSpec, ScreenSourceKind, Rect) and types.rs (UserProfile).
+title openmeet-core: Settings - audio, screen, privacy, general, profile (settings.rs)
+
+hide empty members
+skinparam nodesep 35
+skinparam ranksep 50
+
+class Settings <<struct>>
+
+class AudioSettings <<struct>> {
+  +microphone_enabled: bool = true
+  +microphone_device: Option<String> = None
+  {field} +system_audio_enabled: bool = cfg!(target_os = "windows")
+  +system_audio_device: Option<String> = None
+  +vad_sensitivity: f32 = 0.6
+  +silence_ms: u32 = 700
+}
+
+class ScreenSettings <<struct>> {
+  +enabled: bool = false
+  +source: Option<ScreenSourceSpec> = None
+  +frequency: ScreenFrequency = Fps1
+  +change_threshold: f32 = 0.08
+  +store_screenshots: bool = false
+  +max_vision_per_minute: u32 = 6
+}
+
+enum ScreenFrequency {
+  Manual
+  Fps1  <<default>>
+  Fps2
+  Fps5
+  --
+  +interval_ms(): Option<u64>
+}
+
+class ScreenSourceSpec <<struct>> {
+  +kind: ScreenSourceKind
+  +id: String
+  +label: String
+  +region: Option<Rect>
+}
+
+enum ScreenSourceKind {
+  Display
+  Window
+  Application
+  Region
+}
+
+class Rect <<struct>> {
+  +x: i32
+  +y: i32
+  +width: u32
+  +height: u32
+  --
+  +parse_csv(s: &str): Option<Rect>
+  +contains(p: Point): bool
+}
+
+class PrivacySettings <<struct>> {
+  +capture_exclusion: bool = true
+  +local_only: bool = false
+  +retention: RetentionPolicy = SevenDays
+}
+
+enum RetentionPolicy {
+  None
+  OneDay
+  SevenDays  <<default>>
+  ThirtyDays
+  Forever
+  --
+  +max_age_ms(): Option<i64>
+  +persists(): bool
+}
+
+class GeneralSettings <<struct>> {
+  +onboarding_complete: bool = false
+  +launch_at_startup: bool = false
+  {field} +developer_mode: bool = cfg!(debug_assertions)
+  +voice_commands: bool = false
+  +notifications: bool = true
+}
+
+class UserProfile <<struct>> {
+  +background: String
+  +role_context: String
+  +planned_topics: String
+  +custom_instructions: String
+  --
+  +planned_topic_list(): Vec<String>
+}
+
+Settings *-- "1" AudioSettings : audio
+Settings *-- "1" ScreenSettings : screen
+Settings *-- "1" PrivacySettings : privacy
+Settings *-- "1" GeneralSettings : general
+Settings *-- "1" UserProfile : profile
+
+ScreenSettings --> "1" ScreenFrequency : frequency
+ScreenSettings *-- "0..1" ScreenSourceSpec : source
+ScreenSourceSpec --> "1" ScreenSourceKind : kind
+ScreenSourceSpec *-- "0..1" Rect : region
+PrivacySettings --> "1" RetentionPolicy : retention
+
+note bottom of ScreenSettings
+  Screen context is OFF by default and needs
+  explicit activation. Raw screenshots are not
+  kept on disk unless store_screenshots is on.
+end note
+
+note bottom of PrivacySettings
+  capture_exclusion: ask the OS to exclude the
+  overlay from screen capture where supported
+  (best effort, platform dependent).
+  local_only: refuse to construct any provider
+  that sends data off the device.
+end note
+
+note bottom of RetentionPolicy
+  max_age_ms: None -> Some(0), OneDay -> 1 day,
+  SevenDays -> 7 days, ThirtyDays -> 30 days,
+  Forever -> None (keep until deleted).
+  persists() == (self != None):
+  None writes nothing about meetings to disk.
+end note
+
+note bottom of ScreenFrequency
+  interval_ms: Manual -> None,
+  Fps1 -> 1000, Fps2 -> 500, Fps5 -> 200
+end note
+
+note bottom of GeneralSettings
+  launch_at_startup never starts any
+  capture by itself.
+end note
+
+note bottom of UserProfile
+  Candidate mode: background (resume notes).
+  Interviewer mode: planned_topics, one per line.
+  sanitized() truncates: background 20000 chars,
+  role_context 10000, planned_topics 4000,
+  custom_instructions 4000.
+end note
+@enduml

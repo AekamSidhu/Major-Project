@@ -1,0 +1,84 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-core/src/types.rs (Mode, SpeakerRole, AudioSourceKind),
+' crates/openmeet-core/src/settings.rs (LlmProviderKind, TranscriptionProviderKind, VisionProviderKind,
+' EmbeddingProviderKind), src-tauri/src/lib.rs (registered commands), src-tauri/src/commands/*.rs,
+' src-tauri/src/{shortcuts,tray,secrets,local_ai}.rs, src/main/App.tsx (NAV sections), src/overlay/actions.ts,
+' local-ai/server.py, docs/ARCHITECTURE.md
+title OpenMeet - system use case overview
+
+left to right direction
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam nodesep 12
+skinparam ranksep 70
+
+actor "User" as User
+actor "Candidate-mode user\n<size:10>Mode::Candidate</size>" as Cand
+actor "Interviewer-mode user\n<size:10>Mode::Interviewer</size>" as Intv
+User <|-- Cand
+User <|-- Intv
+
+actor "Remote participants /\nmeeting app\n<size:10>system audio = SpeakerRole::Remote</size>" as Remote
+actor "Operating system\n<size:10>audio + screen capture, shortcuts, tray,</size>\n<size:10>credential store, capture exclusion, OCR</size>" as OS
+actor "AI provider\n<size:10>LLM / transcription / vision / embeddings:</size>\n<size:10>Ollama, OpenAI, Anthropic, OpenAI-compatible</size>" as AI
+actor "Local AI sidecar\n<size:10>local-ai/server.py (127.0.0.1)</size>\n<size:10>faster-whisper + fastembed</size>" as Sidecar
+actor "File system\n<size:10>native save dialog</size>" as FS
+AI <|-- Sidecar
+
+rectangle "OpenMeet desktop app" {
+  usecase "Run a live meeting session\n<size:10>start / pause / resume / stop</size>" as UC_Meet
+  usecase "Get suggested answers" as UC_Answer
+  usecase "Get follow-up question\nsuggestions" as UC_Follow
+  usecase "Ask OpenMeet\n(free-form prompt)" as UC_Ask
+  usecase "Add screen context\n<size:10>opt-in: screen.enabled</size>" as UC_Screen
+  usecase "Use voice commands\n<size:10>opt-in: general.voice_commands</size>" as UC_Voice
+  usecase "Control the overlay HUD" as UC_Overlay
+  usecase "Use global shortcuts\nand the tray menu" as UC_Keys
+  usecase "Manage API keys" as UC_Keys2
+  usecase "Manage privacy & data" as UC_Privacy
+  usecase "Manage the local AI sidecar" as UC_Local
+  usecase "Configure settings" as UC_Settings
+  usecase "Review meeting history" as UC_History
+  usecase "Export a meeting" as UC_Export
+  usecase "Complete onboarding" as UC_Onboard
+  usecase "Diagnostics, benchmark\nand demo scenarios" as UC_Diag
+}
+
+User --> UC_Meet
+Cand --> UC_Answer
+Intv --> UC_Follow
+User --> UC_Ask
+User --> UC_Voice
+User --> UC_Screen
+User --> UC_Overlay
+User --> UC_Keys
+User --> UC_History
+User --> UC_Settings
+User --> UC_Keys2
+User --> UC_Local
+User --> UC_Privacy
+User --> UC_Onboard
+User --> UC_Diag
+
+UC_Meet --> Remote
+UC_Meet --> AI
+UC_Answer --> AI
+UC_Follow --> AI
+UC_Ask --> AI
+UC_Screen --> AI
+UC_Screen --> OS
+UC_Keys --> OS
+UC_Keys2 --> OS
+UC_Privacy --> OS
+UC_Local --> Sidecar
+UC_Export --> FS
+
+UC_Export .[norank].> UC_History : <<extend>>
+
+note bottom of UC_Meet
+  Audio and screen are captured only during a meeting the user
+  starts (plus the audio level test the user starts in settings).
+  The app never speaks: suggestions are shown as text only.
+end note
+@enduml

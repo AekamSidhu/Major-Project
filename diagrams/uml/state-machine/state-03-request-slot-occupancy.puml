@@ -1,0 +1,35 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-core/src/types.rs (RequestSlot, RequestKind),
+' crates/openmeet-engine/src/requests.rs (Slots { current, entries }, begin, is_current, emit_if_current, set_state, cancel, cancel_all),
+' crates/openmeet-engine/src/assist.rs (start_primary, interviewer follow-ups, background begin calls), crates/openmeet-engine/src/screen.rs
+title Request slots - RequestManager.current pointer per exclusive RequestSlot (Primary, Followups)
+
+hide empty description
+skinparam StateFontSize 12
+left to right direction
+
+state "No current request\n(slot not in Slots.current)" as Empty
+
+state "Occupied: Slots.current[slot] = id" as Occupied {
+  state "Request running\n(AnswerState not terminal)" as Running : is_current(ticket) = true\nemit_if_current: AnswerDelta, FollowupsReady,\nAnswerComplete delivered
+  state "Request finished\n(Complete / Failed / Cancelled)" as Finished : pointer kept, so late events of\nolder requests stay suppressed
+  Running --> Finished : set_state(terminal)\n/ emit AnswerStateChanged
+  Running --> Finished : cancel(request_id)\n(cancel_request, dismiss_suggestion)\nor cancel_all(..)
+}
+
+[*] --> Empty
+Empty --> Running : begin(slot, kind)\n/ emit AnswerStarted
+Occupied --> Running : begin(slot, kind) / previous ticket\ncancelled -> Cancelled, then\nemit AnswerStarted (under slot lock)
+
+note bottom of Occupied
+  Slot use (begin call sites):
+  Primary   - CandidateAnswer, AskAi, Refinement, Clarification (start_primary)
+  Followups - InterviewerFollowups
+  Background (never exclusive, not tracked in Slots.current; cancelled only by
+  cancel_all(true) / cancel(id)): QuestionClassification, Compression,
+  TopicAnalysis, Summary, ScreenAnalysis.
+  The finished entry of a request that is no longer current is dropped
+  from Slots.entries; the current one is kept until the next begin.
+end note
+@enduml

@@ -1,0 +1,60 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-platform/src/audio/mod.rs (system_audio_support, loopback_on_output_devices),
+' crates/openmeet-platform/src/privacy.rs (WINDOWS_MECHANISM, WindowsCapturePrivacy, platform_support),
+' crates/openmeet-platform/src/win.rs (BUILD_EXCLUDE_FROM_CAPTURE = 19041, os_build_number, DpiAwareGuard),
+' crates/openmeet-platform/src/ocr.rs (system_ocr, WindowsOcr), crates/openmeet-platform/src/focus.rs (Windows imp),
+' src-tauri/src/windows.rs (create_overlay focusable(false)), src-tauri/src/overlay.rs (apply_capture_privacy),
+' src-tauri/src/local_ai.rs (venv_python, CREATE_NO_WINDOW), src-tauri/src/secrets.rs + Cargo.lock
+' (keyring -> windows-native-keyring-store), src-tauri/src/main.rs (windows_subsystem), PRIVACY.md (data path)
+
+title OpenMeet on Windows 10/11 (platform-specific deployment)
+
+skinparam nodesep 30
+skinparam ranksep 45
+
+node "Windows 10/11 PC" <<device>> as PC {
+  node "Windows 10/11" <<executionEnvironment>> as WIN {
+
+    node "openmeet.exe  (release build: windows_subsystem = windows, no console window)" <<executionEnvironment>> as APP {
+      node "WebView2 runtime" <<executionEnvironment>> as WV2 {
+        artifact "index.html\n(window main)" as MAINW
+        artifact "overlay.html\n(window overlay, focusable(false)\n-> WS_EX_NOACTIVATE)" as OVW
+      }
+      component "privacy: WindowsCapturePrivacy\nSetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE),\nread back with GetWindowDisplayAffinity;\nsupported only if OS build >= 19041\n(Windows 10 2004, BUILD_EXCLUDE_FROM_CAPTURE)" as PRIV
+      component "audio (cpal, WASAPI host)\nmicrophone: input device\nsystem audio: WASAPI loopback on an\noutput device (exclusive-mode audio\nis not captured)" as AUD
+      component "screen (xcap) with DpiAwareGuard\nDisplay / Window / Application / Region" as SCR
+      component "ocr: WindowsOcr\nWindows.Media.Ocr\n(TryCreateFromUserProfileLanguages)\nlocal OCR exists only on Windows" as OCR
+      component "focus\nGetForegroundWindow /\nSetForegroundWindow" as FOC
+      component "SecretStore\nkeyring crate\n(windows-native-keyring-store)" as SEC
+    }
+
+    node "Audio endpoint devices\n(microphone, playback device)" <<device>> as DEV
+    node "Displays and\napplication windows" <<device>> as DISP
+    node "Windows Credential Manager\nservice dev.openmeet.desktop" <<executionEnvironment>> as CM
+
+    folder "%APPDATA%\dev.openmeet.desktop\" as DATA {
+      database "openmeet.db\n(+ -wal, -shm)" as DB
+      folder "screenshots\\n(opt-in)" as SHOTS
+    }
+
+    node "python.exe from local-ai\.venv\Scripts\\nserver.py (CREATE_NO_WINDOW)" <<executionEnvironment>> as PY
+    node "Ollama for Windows\n127.0.0.1:11434" <<executionEnvironment>> as OLL
+  }
+}
+
+PRIV -up-> WV2 : set_excluded_from_capture on\noverlay and main (when enabled)
+AUD -down-> DEV : WASAPI capture /\nloopback capture
+SCR -down-> DISP : capture (only during a\nmeeting with screen context)
+SEC -down-> CM : read / write keys
+APP -down-> DB : rusqlite
+APP -down-> SHOTS : PNG (opt-in)
+APP -down-> PY : HTTP 127.0.0.1:8765
+APP -down-> OLL : HTTP 127.0.0.1:11434
+
+note bottom of WIN
+  Capture exclusion is best effort: it only affects capture tools that honor the OS flag;
+  hardware capture devices, phone cameras, some remote-desktop tools and older capture APIs are not affected.
+end note
+
+@enduml

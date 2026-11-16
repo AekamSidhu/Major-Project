@@ -1,0 +1,193 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-core/src/providers.rs (traits),
+' crates/openmeet-providers/src/factory.rs, ollama.rs, openai.rs, anthropic.rs, http.rs (Endpoint)
+title openmeet-providers: provider adapters and the settings-driven factory
+
+skinparam linetype ortho
+left to right direction
+hide empty members
+
+package "openmeet_core::providers" {
+  interface LlmProvider <<trait>> {
+    +info(): ProviderInfo
+    +supports_images(): bool
+    +stream(request: LlmRequest, cancel: CancellationToken): Result<LlmStream>
+    +health_check(): Result<()>
+    +list_models(): Result<Vec<String>>
+  }
+  interface Transcriber <<trait>> {
+    +info(): ProviderInfo
+    +transcribe(request: TranscriptionRequest, cancel): Result<TranscriptionOutput>
+    +health_check(): Result<()>
+  }
+  interface EmbeddingProvider <<trait>> {
+    +info(): ProviderInfo
+    +embed(texts: Vec<String>, cancel): Result<Vec<Vec<f32>>>
+  }
+  interface SecretResolver <<trait>> {
+    +api_key(provider: SecretProvider): Option<String>
+  }
+}
+
+package "openmeet_providers::factory" {
+  class BuildContext <<struct>> {
+    +settings: &Settings
+    +secrets: &dyn SecretResolver
+  }
+  interface ProviderKind <<trait>> {
+    +default_base_url(): Option<&str>
+  }
+  note bottom of ProviderKind
+    implemented for LlmProviderKind,
+    VisionProviderKind,
+    TranscriptionProviderKind,
+    EmbeddingProviderKind
+  end note
+  enum Service <<private>> {
+    OpenAi
+    Anthropic
+    OpenAiCompatible
+    Ollama
+    LocalAi
+    --
+    secret(): Option<SecretProvider>
+    key_required_when_remote(): Option<&str>
+    for_llm(kind): Service
+  }
+  class factory <<module>> {
+    +build_llm(ctx): Result<Arc<dyn LlmProvider>>
+    +build_fast_llm(ctx): Option<Result<Arc<dyn LlmProvider>>>
+    +build_vision_llm(ctx): Result<Option<Arc<dyn LlmProvider>>>
+    +build_transcriber(ctx): Result<Arc<dyn Transcriber>>
+    +build_embeddings(ctx): Result<Option<Arc<dyn EmbeddingProvider>>>
+    +resolved_base_url(kind: K, configured): String
+    +component_base_url(settings, component): Option<String>
+    -endpoint_for(ctx, component, service, base_url): Result<Endpoint>
+    -build_llm_for(ctx, component, kind, base_url, model, effort, force_images)
+  }
+}
+
+package "openmeet_providers::openai" {
+  enum OpenAiFlavor {
+    OpenAi
+    Compatible
+    LocalAi
+    --
+    +provider_id(): &str
+    +display_name(): &str
+  }
+  class "Base" as OaBase <<private>> {
+    flavor: OpenAiFlavor
+    base_url / api_base / root / host
+    api_key: Option<String>
+    timeouts: Timeouts
+    client: reqwest::Client
+  }
+  class OpenAiLlm {
+    -model: String
+    -reasoning_effort: ReasoningEffort
+    -supports_images: bool
+    -quirks: Mutex<ChatQuirks>
+    +new(flavor, endpoint, model)
+    +with_reasoning_effort(effort): Self
+    +with_image_support(bool): Self
+  }
+  class OpenAiTranscriber {
+    -model: String
+    +new(flavor, endpoint, model)
+  }
+  class OpenAiEmbeddings {
+    -model: String
+    +new(flavor, endpoint, model)
+  }
+}
+
+package "openmeet_providers::anthropic" {
+  class AnthropicLlm {
+    -api_key: Option<String>
+    -timeouts: Timeouts
+    -model: String
+    -rules: ModelRules
+    -reasoning_effort: ReasoningEffort
+    -quirks: Mutex<Quirks>
+    +new(endpoint, model)
+    +with_reasoning_effort(effort): Self
+    +rules(): ModelRules
+  }
+  class ModelRules <<struct>> {
+    +sampling: bool
+    +effort: bool
+    +thinking_headroom: u32
+    +refusal_fallbacks: bool
+    +CONSERVATIVE: ModelRules
+    +for_model(model): ModelRules
+  }
+}
+
+package "openmeet_providers::ollama" {
+  class "Base" as OlBase <<private>> {
+    base_url / root / host
+    api_key: Option<String>
+    timeouts: Timeouts
+    client: reqwest::Client
+  }
+  class OllamaLlm {
+    -model: String
+    -reasoning_effort: ReasoningEffort
+    -supports_images: bool
+    -quirks: Mutex<Quirks>
+    +new(endpoint, model)
+    +with_reasoning_effort(effort): Self
+    +with_image_support(bool): Self
+  }
+  class OllamaEmbeddings {
+    -model: String
+    -legacy: Mutex<bool>
+    +new(endpoint, model)
+  }
+}
+
+class Endpoint <<struct>> {
+  +base_url: String
+  +api_key: Option<String>
+  +timeouts: Timeouts
+}
+
+BuildContext --> SecretResolver : secrets
+factory ..> BuildContext : reads
+factory ..> Service
+factory ..> ProviderKind
+factory ..> Endpoint : creates
+factory ..> OpenAiLlm : creates
+factory ..> AnthropicLlm : creates
+factory ..> OllamaLlm : creates
+factory ..> OpenAiTranscriber : creates
+factory ..> OpenAiEmbeddings : creates
+factory ..> OllamaEmbeddings : creates
+
+OpenAiLlm ..|> LlmProvider
+AnthropicLlm ..|> LlmProvider
+OllamaLlm ..|> LlmProvider
+OpenAiTranscriber ..|> Transcriber
+OpenAiEmbeddings ..|> EmbeddingProvider
+OllamaEmbeddings ..|> EmbeddingProvider
+
+OpenAiLlm *-- OaBase
+OpenAiTranscriber *-- OaBase
+OpenAiEmbeddings *-- OaBase
+OaBase --> OpenAiFlavor
+AnthropicLlm *-- ModelRules
+OllamaLlm *-- OlBase
+OllamaEmbeddings *-- OlBase
+
+note as N1
+  Endpoint is consumed by every adapter's new().
+  Service decides the API key: OpenAi / Anthropic / OpenAiCompatible
+  ask SecretResolver; Ollama and LocalAi need none.
+  endpoint_for fails with BlockedByLocalOnly for a remote URL
+  when settings.privacy.local_only is set.
+  build_embeddings returns Ok(None) for EmbeddingProviderKind::LocalHash;
+  build_vision_llm returns Ok(None) for Disabled / OcrOnly.
+end note
+@enduml

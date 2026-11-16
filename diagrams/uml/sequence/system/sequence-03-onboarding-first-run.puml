@@ -1,0 +1,68 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: src/main/App.tsx (App, init effect, onboarding gate), src/main/store.ts (init, updateSettings,
+' reloadSettings), src/main/onboarding/Onboarding.tsx (STEPS, ModeStep, MicrophoneStep, ScreenStep, PrivacyStep,
+' Onboarding.go/finish), src/main/components/save.ts (saveSettings, settleSettings), src/lib/ipc.ts,
+' src-tauri/src/commands/{app,assistant,devices,privacy}.rs, src-tauri/src/capture.rs (start_test)
+title Onboarding (first run): main window until general.onboarding_complete
+
+autonumber
+actor User
+participant "App / Onboarding\n(src/main)" as UI
+participant "useMain store\n+ save.ts" as Store
+participant "Tauri commands" as Cmd
+participant "AppState" as AS
+participant "CaptureManager" as Cap
+
+note over UI : setup() shows the main window when\n!autostarted || !onboarding_complete
+UI -> Store : init()
+Store -> Cmd : get_app_info, get_settings, get_snapshot (parallel)
+Cmd --> Store : AppInfo, Settings, EngineSnapshot
+Store --> UI : ready; settings.general.onboardingComplete == false\n-> render <Onboarding/> instead of the sections
+
+== welcome -> mode ==
+User -> UI : choose Candidate or Interviewer
+UI -> Cmd : set_mode(mode)
+Cmd -> AS : engine.set_mode(mode);\nmodify_settings(s.mode = mode)
+UI -> Store : reloadSettings()
+
+== AI provider / transcription ==
+User -> UI : LlmProviderForm / TranscriptionProviderForm
+UI -> Store : saveSettings(mutate) -> updateSettings
+Store -> Cmd : update_settings(draft)
+note right of Cmd : see "Saving settings";\nAPI keys and Test connection\nhave their own diagrams
+
+== microphone ==
+User -> UI : run the level test
+UI -> Cmd : start_audio_test(source, device)
+Cmd -> Cap : start_test(source, device)
+Cap --> UI : MeetingEvent::AudioLevel every ~100 ms\n(stops after AUDIO_TEST_SECONDS; nothing saved)
+User -> UI : "Also capture system audio"
+UI -> Store : saveSettings(audio.systemAudioEnabled)
+
+== screen (optional) ==
+opt user turns on "Use screen context" and picks a source
+  UI -> Cmd : set_screen_capture(true, spec)
+  Cmd -> AS : modify_settings(screen.enabled, screen.source);\nsync_screen_capture() (no-op: no live meeting)
+end
+
+== privacy ==
+User -> UI : retention / local-only
+UI -> Store : saveSettings(privacy.retention | privacy.localOnly)
+User -> UI : "Hide the overlay from screen capture"
+UI -> Cmd : set_capture_exclusion(enabled)
+Cmd --> UI : CapturePrivacyStatus
+
+== finish ==
+User -> UI : Finish
+UI -> Store : settleSettings() (flush debounced edits,\nawait in-flight saves)
+UI -> Store : saveSettings(general.onboardingComplete = true)
+Store -> Cmd : update_settings(draft)
+Cmd --> Store : stored Settings
+Store --> UI : onboardingComplete -> main sections (Home)
+
+note over User, Cap
+Every step can be skipped (go(next) only calls settleSettings()). Nothing is captured
+during onboarding except the explicit, time-limited microphone level test.
+end note
+@enduml

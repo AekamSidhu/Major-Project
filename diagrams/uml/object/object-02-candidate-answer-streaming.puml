@@ -1,0 +1,157 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-core/src/types.rs, ipc.rs (ActiveRequestView), providers.rs (LlmRequest, ChatMessage),
+' settings.rs (AssistantSettings / LlmSettings defaults), crates/openmeet-engine/src/assist.rs
+' (answer_question, answer_spec, start_primary, run_primary), requests.rs, runtime.rs (answerer_for,
+' open_answer_for), crates/openmeet-intel/src/prompts/candidate_answer.rs (ID, VERSION, parse),
+' src/overlay/state.ts (OverlayState, PrimaryRequest, onAnswerStarted, ANSWER_DELTA), src/lib/answer.ts (ParsedAnswer, parseAnswer).
+title Object diagram: candidate-mode meeting with an answer streaming into the Primary slot
+
+left to right direction
+skinparam nodesep 22
+skinparam ranksep 45
+
+package "openmeet-engine (Rust, in-process)" {
+  object "state : EngineState" as es {
+    mode = Mode::Candidate
+    style = AnswerStyle::Concise
+    processing_stopped = false
+  }
+  object "rt : MeetingRuntime" as rt {
+    system_audio_active = true
+    microphone_active = true
+    sessions_running = true
+    ..
+  }
+  object "meeting : Meeting" as m {
+    id = "0192e0aa..01"
+    title = "Platform engineer interview"
+    mode = Mode::Candidate
+    state = MeetingState::Active
+    persisted = true
+  }
+  object "s1 : TranscriptSegment" as s1 {
+    id = "0192e0b3..21"
+    speaker_id = Some("remote")
+    speaker_role = SpeakerRole::Remote
+    source = AudioSourceKind::System
+    text = "How would you design a rate limiter for a public API?"
+    is_final = true
+  }
+  object "q1 : DetectedQuestion" as q1 {
+    id = "0192e0b3..q1"
+    segment_ids = ["0192e0b3..21"]
+    confidence = 0.91
+    category = QuestionCategory::SystemDesign
+    speaker_role = SpeakerRole::Remote
+    requires_response = true
+    method = DetectionMethod::Heuristic
+    detected_at = 1760782845210
+  }
+  object "open_answer : AnswerRecord" as oa {
+    question_id = Some("0192e0b3..q1")
+    speaker_role = SpeakerRole::User
+    text = ""
+    segment_ids = []
+  }
+  object "active_primary : ActiveRequestView" as av {
+    request_id = "0192e0b3..r1"
+    kind = RequestKind::CandidateAnswer
+    slot = RequestSlot::Primary
+    state = AnswerState::Streaming
+    question_text = Some("How would you design a rate limiter ...")
+    category = Some(QuestionCategory::SystemDesign)
+    style = Some(AnswerStyle::Concise)
+    text = "~[[STRUCTURE]] - Requirements - Algorithm ~[[ANSWER]] I'd use a token bucket ..."
+    error = None
+  }
+  map "requests.slots.current : HashMap<RequestSlot, Id>" as cur {
+    Primary => "0192e0b3..r1"
+  }
+  object "ticket : RequestTicket" as tk {
+    id = "0192e0b3..r1"
+    slot = RequestSlot::Primary
+    kind = RequestKind::CandidateAnswer
+  }
+  object "machine : AnswerStateMachine" as asm {
+    state = AnswerState::Streaming
+  }
+  object "request : LlmRequest" as lr {
+    request_id = "0192e0b3..r1"
+    kind = RequestKind::CandidateAnswer
+    system = "<candidate-answer v1 system prompt>"
+    max_output_tokens = 1200
+    temperature = Some(0.3)
+    json_output = false
+    latency_sensitive = true
+  }
+  object "msg : ChatMessage" as cm {
+    role = ChatRole::User
+    content = "<header + context + question line>"
+    images = []
+  }
+}
+
+package "overlay webview (React, src/overlay)" {
+  object "overlay : OverlayState" as os {
+    meetingId = "0192e0aa..01"
+    meetingState = "active"
+    mode = "candidate"
+    style = "concise"
+    pendingQuestion = null
+    retired = ["0192e0a9..r0"]
+    ..
+  }
+  object "primary : PrimaryRequest" as pr {
+    requestId = "0192e0b3..r1"
+    kind = "candidate_answer"
+    questionId = "0192e0b3..q1"
+    category = "system_design"
+    style = "concise"
+    refinement = null
+    state = "streaming"
+    text = "~[[STRUCTURE]] ... token bucket per API key ..."
+    final = false
+    pinned = false
+    firstContent = true
+  }
+  object "parsed : ParsedAnswer" as pa {
+    structure = ["Requirements", "Algorithm"]
+    answer = "I'd use a token bucket per API key ..."
+    keyPoints = []
+    example = ""
+    caveat = ""
+    current = "answer"
+    preamble = ""
+  }
+}
+
+es --> rt : runtime
+rt --> m : meeting
+rt --> s1 : segments
+rt --> q1 : questions
+rt --> oa : open_answer
+rt --> av : active_primary
+q1 ..> s1 : segment_ids
+oa ..> q1 : question_id
+cur ..> tk : current id
+tk --> asm : Entry.machine
+lr --> cm : messages
+lr ..> tk : request_id
+av ..> q1 : started by answer_question(q1)
+os --> pr : primary
+pr --> pa : parseAnswer(text)
+av ..> pr : ANSWER_DELTA (same text, via openmeet://event)
+
+note bottom of pa
+  Recomputed from the streamed text on every delta.
+  The Rust counterpart AnswerSections
+  (candidate_answer::parse) has the same sections.
+end note
+
+note bottom of lr
+  Built by run_primary from the default LlmSettings
+  (temperature 0.3, max_output_tokens 1200);
+  lives only inside the spawned request task.
+end note
+@enduml

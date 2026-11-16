@@ -1,0 +1,130 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-engine/src/persist.rs (PersistOp, Cmd, Persister, apply),
+' engine.rs (Engine::persist, is_deleted, forget_meeting, forget_all_meetings, flush_persistence,
+' current_store, start_meeting_inner store choice, Inner.deleted / summaries, MAX_DELETED),
+' assist.rs (spawn_meeting_summary registers its CancellationToken in Inner.summaries),
+' metrics.rs (HealthRegistry), crates/openmeet-core/src/store.rs (MeetingStore, NullStore,
+' MemoryStore, EmbeddingRecord), crates/openmeet-store/src/database.rs (Database).
+title openmeet-engine: persistence queue and forgetting deleted meetings
+
+hide empty members
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 45
+
+package "openmeet-engine" {
+  class Engine {
+    ~ persist(store, op: PersistOp)
+    ~ is_deleted(meeting_id): bool
+    ~ current_store(): Arc<dyn MeetingStore>
+    + forget_meeting(meeting_id) <<async>>: Result<(), CoreError>
+    + forget_all_meetings() <<async>>: Result<(), CoreError>
+    + flush_persistence() <<async>>
+  }
+
+  class Inner {
+    + db_store: Arc<dyn MeetingStore>
+    + persist: Persister
+    + health: Arc<HealthRegistry>
+    + deleted: Mutex<VecDeque<Id>>
+    + summaries: Mutex<HashMap<Id, CancellationToken>>
+  }
+
+  class Persister <<Clone>> {
+    - tx: mpsc::UnboundedSender<Cmd>
+    --
+    + {static} spawn(sink, health): Persister
+    + send(store, op: PersistOp)
+    + flush(store) <<async>>
+  }
+  note right of Persister
+    spawn() starts the dedicated thread
+    "openmeet-persist": blocking_recv() each Cmd,
+    apply() it, report failures:
+    * NotFound -> skipped (meeting was deleted)
+    * other error -> Database = Error in
+      HealthRegistry + Notice (at most 1/60 s)
+    flush() queues a Barrier and waits up to 10 s
+  end note
+
+  class Cmd {
+    store: Arc<dyn MeetingStore>
+    op: PersistOp
+  }
+
+  enum PersistOp {
+    Meeting : Meeting
+    Segment : TranscriptSegment
+    Question : DetectedQuestion
+    Answer : AnswerRecord
+    Suggestion : Suggestion
+    Pinned : { id, pinned }
+    Topics : { meeting_id, topics: Vec<Topic> }
+    Claims : Vec<Claim>
+    Observation : ScreenObservation
+    ActionItems : Vec<ActionItem>
+    Summary : MeetingSummary
+    Embedding : EmbeddingRecord
+    Barrier : oneshot::Sender<()>
+    --
+    ~ meeting_id(): Option< &str >
+    ~ name(): &'static str
+  }
+
+  class apply <<fn>> {
+    (store: &dyn MeetingStore, op: PersistOp)
+    : Result<(), StoreError>
+  }
+
+  class HealthRegistry
+}
+
+package "openmeet-core" #FFFFFF {
+  interface MeetingStore <<trait>> {
+    + save_meeting / save_segment / save_question
+    + save_answer / save_suggestion
+    + set_suggestion_pinned(id, pinned)
+    + save_topics(meeting_id, topics)
+    + save_claims / save_observation / save_action_items
+    + save_summary / save_embedding
+    + load_meeting(meeting_id): MeetingRecord
+  }
+  class NullStore
+  class MemoryStore
+  class EmbeddingRecord
+}
+
+package "openmeet-store" #FFFFFF {
+  class Database
+}
+
+Engine *-- Inner
+Inner *-- "1" Persister
+Inner o-- "1" MeetingStore : db_store
+Persister ..> "*" Cmd : queues
+Cmd *-- "1" PersistOp
+Cmd o-- "1" MeetingStore : store
+Persister ..> apply : worker thread
+apply ..> MeetingStore : one save_* per variant
+PersistOp ..> EmbeddingRecord
+Persister ..> HealthRegistry : Component::Database
+NullStore ..|> MeetingStore
+MemoryStore ..|> MeetingStore
+Database ..|> MeetingStore
+
+note bottom of Engine
+  start_meeting_inner: store = db_store when
+  settings.privacy.retention.persists() and not a demo,
+  otherwise NullStore (kept as MeetingRuntime.store).
+  persist(): drops a write whose meeting_id() is in
+  Inner.deleted, else Persister.send(store, op).
+  forget_meeting(): refuses while the meeting is live,
+  Starting or Stopping (CoreError::InvalidState);
+  records the id in deleted (at most MAX_DELETED = 256),
+  cancels and removes its summary token, awaits
+  flush_persistence(), and clears the runtime (emits
+  MeetingStateChanged with meeting_id None, state Idle)
+  if it was the current meeting.
+end note
+@enduml

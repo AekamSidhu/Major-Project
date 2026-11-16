@@ -1,0 +1,113 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: src-tauri/src/capture.rs (CaptureManager::start_audio callbacks),
+' crates/openmeet-engine/src/engine.rs (push_audio, audio_router, AUDIO_QUEUE),
+' crates/openmeet-engine/src/transcription.rs (VadSession, transcribe_final/transcribe_interim, Shared::complete),
+' crates/openmeet-intel/src/vad.rs (Segmenter, SegmenterEvent), crates/openmeet-providers/src/openai.rs (OpenAiTranscriber),
+' crates/openmeet-providers/src/factory.rs (build_transcriber), local-ai/server.py (POST /v1/audio/transcriptions),
+' crates/openmeet-engine/src/conversation.rs (on_transcription_event, handle_partial, handle_final),
+' src-tauri/src/sink.rs, src/overlay/OverlayApp.tsx, src/overlay/store.ts, src/overlay/state.ts
+title Audio capture -> VAD -> transcription -> transcript events -> overlay
+skinparam maxMessageSize 230
+
+participant "AudioCapture\n<<cpal thread>>" as AC
+participant "Engine" as Eng
+participant "audio_router\n<<tokio task>>" as Router
+participant "VadSession\n(Segmenter)" as VS
+participant "utterance task\n<<tokio::spawn per clip>>" as Task
+participant "OpenAiTranscriber\n<<Transcriber>>" as Tr
+participant "local-ai/server.py\nor remote endpoint" as Srv
+participant "conversation loop\n<<tokio task>>" as Conv
+participant "TauriSink" as Sink
+participant "Overlay webview\nuseOverlay" as Ov
+
+note over AC
+16 kHz mono f32 AudioFrame,
+captured_at_ms timestamps
+end note
+loop every captured chunk
+  AC -> Eng : on_frame -> push_audio(frame)
+  activate Eng
+  alt !accepting_audio (paused / stopped)
+    Eng -> Eng : drop frame
+  else audio_tx.try_send(frame) fails (queue of AUDIO_QUEUE = 1024 full)
+    Eng -> Eng : dropped_frames += 1; every 100th drop:\nhealth Transcription = Degraded
+  else queued
+    Eng ->> Router : AudioFrame (bounded mpsc)
+  end
+  deactivate Eng
+  Router -> VS : sessions[frame.source].push_audio(frame)
+  activate VS
+  VS -> VS : segmenter.push(&frame) -> Vec<SegmenterEvent>\nhandle_events(events)
+  opt every LEVEL_INTERVAL (125 ms)
+    VS ->> Conv : TranscriptionEvent::Level { source, level }
+    Conv -> Sink : AudioLevel (throttled to >= 100 ms per source)
+  end
+  opt SegmenterEvent::SpeechStarted
+    VS ->> Conv : TranscriptionEvent::SpeechStarted
+    note right of Conv : rt.speaking.insert(source);\ninterviewer + candidate source:\nturn.version += 1
+  end
+  opt SegmenterEvent::Interim(clip) (interim_results on)
+    VS ->> Task : transcribe_interim(clip)\n(only one in flight, never when final permits are exhausted;\nresult sent directly as Draft { is_final: false }\nunless the utterance is already finalized)
+  end
+  alt SegmenterEvent::Utterance(clip)
+    VS ->> Conv : TranscriptionEvent::SpeechEnded { discarded: false }
+    note right of Conv : rt.pending_utterances.insert(utterance_id)
+    VS ->> Task : transcribe_final(clip): seq = next_seq++,\nTranscriptionRequest { clip, language, prompt = vocabulary + last_text tail }
+  else SegmenterEvent::Discarded (shorter than min_utterance_ms)
+    VS ->> Conv : TranscriptionEvent::SpeechEnded { discarded: true }
+  end
+  deactivate VS
+end
+
+== one finalized utterance (async, up to MAX_CONCURRENT_FINALS = 2 per source) ==
+Task -> Task : finals.acquire_owned() (Semaphore)
+Task -> Tr : transcribe(request, cancel)\n(timeout TRANSCRIBE_TIMEOUT = 30 s)
+activate Tr
+Tr -> Tr : encode_wav_pcm16(clip.samples)
+Tr -> Srv : multipart POST /v1/audio/transcriptions\n(file, model, language, prompt, response_format=json)
+activate Srv
+note right of Srv
+TranscriptionProviderKind::LocalAi -> sidecar on loopback
+(WhisperTranscriber, faster-whisper);
+Openai / OpenaiCompatible -> configured remote or local URL
+end note
+Srv --> Tr : { "text": … }
+deactivate Srv
+Tr --> Task : TranscriptionOutput | ProviderError
+deactivate Tr
+alt Ok and text non-empty after clean_transcript and !is_probable_hallucination
+  Task -> Task : event = Draft(TranscriptDraft { is_final: true, .. })
+else empty / hallucination
+  Task -> Task : event = Empty { source, utterance_id }
+else Err(Cancelled)
+  Task -> Task : event = None
+else Err(error) (incl. Timeout)
+  Task -> Task : event = Error { source, utterance_id, error }
+end
+Task -> Task : shared.complete(seq, utterance_id, event)\nemits every consecutive ready seq in order
+Task ->> Conv : TranscriptionEvent (utterance order preserved)
+
+activate Conv
+Conv -> Conv : on_transcription_event(meeting_id, ev)
+alt Draft with is_final = true
+  Conv -> Conv : handle_final(meeting_id, d, measured = true)\npending_utterances.remove; segment_from_draft\n(speaker role from audio source); rt.add_final(segment)
+  Conv -> Sink : TranscriptFinal { segment }
+  note right of Conv : persistence, memory, detection, topics,\nclaims: see sequence-03
+else Draft with is_final = false (interim)
+  Conv -> Conv : handle_partial: segment id "partial-<utterance_id>"
+  Conv -> Sink : TranscriptPartial { segment }
+else Error
+  Conv -> Conv : pending_utterances.remove(id);\nhealth Transcription = Degraded
+  opt more than 30 s since last notice
+    Conv -> Sink : Notice(Warning, "Transcription problem: …")
+  end
+else Empty
+  Conv -> Conv : pending_utterances.remove(id);\nreschedule_turn(..) in interviewer mode
+end
+deactivate Conv
+Sink -> Ov : app.emit("openmeet://event", event)
+activate Ov
+Ov -> Ov : onMeetingEvent -> applyEvent(ev)\n-> reduceOverlay(core, ev)\n(TRANSCRIPT_PARTIAL / TRANSCRIPT_FINAL)
+deactivate Ov
+@enduml

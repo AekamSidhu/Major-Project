@@ -1,0 +1,181 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-platform/src/screen/mod.rs, screen/capture.rs, screen/diff.rs,
+' screen/geometry.rs, screen/rules.rs, win.rs (DpiAwareGuard),
+' crates/openmeet-core/src/ipc.rs, types.rs, settings.rs (ScreenSourceSpec, ScreenFrame, PrivacyRule, ScreenFrequency)
+title openmeet-platform: privacy-aware screen sampler (xcap)
+
+hide empty members
+left to right direction
+skinparam nodesep 30
+skinparam ranksep 45
+
+package "openmeet_platform::screen" {
+  class "screen fns" as ScreenFns <<module>> {
+    +list_sources(rules): Result<Vec<ScreenSourceInfo>>
+    +capture_once(..): Result<ScreenFrame>
+    -preflight(spec, own_pid): Result<()>
+    -run_sampler(config, rx, on_frame, on_status)
+    -finish_frame(..) / downscale(image, max_width) / encode_png(image)
+  }
+  class SamplerConfig <<struct>> {
+    +spec: ScreenSourceSpec
+    +frequency: ScreenFrequency
+    +change_threshold: f32
+    +rules: Vec<PrivacyRule>
+    +max_width: u32
+    +own_process_id: u32
+    +new(spec): SamplerConfig
+  }
+  class ScreenSampler {
+    -tx: mpsc::Sender<Command>
+    {field} -thread: Option<JoinHandle<()>>
+    +start(config, on_frame, on_status): Result<ScreenSampler>
+    +capture_now()
+    +update_rules(rules)
+    +stop()
+  }
+  enum Command <<private>> {
+    CaptureNow
+    {field} UpdateRules(Vec<PrivacyRule>)
+    Stop
+  }
+  enum ScreenStatus {
+    Capturing
+    Unchanged
+    {field} SkippedPrivacy(String)
+    {field} PermissionDenied(String)
+    {field} Error(String)
+  }
+}
+
+package "screen::capture (pub(crate))" {
+  class Capturer {
+    -apps: AppNameCache
+    +capture(spec, rules, own_pid): Result<CaptureOutcome>
+    -capture_display(..)
+  }
+  enum CaptureOutcome {
+    {field} Frame(Captured)
+    {field} Skipped(String)
+  }
+  class Captured {
+    +image: RgbaImage
+    +application: Option<String>
+    +window_title: Option<String>
+    +label: String
+  }
+  class AppNameCache
+  class WinInfo {
+    +meta: WinMeta
+    +handle: xcap::Window
+  }
+  class WinMeta {
+    +id / pid: u32
+    +app / title: String
+    +rect: IRect
+    +minimized / focused / opaque: bool
+    +z: i64
+    +excluded(rules): Option<String>
+  }
+  class AreaPrivacy {
+    +front: Option<usize>
+    +skip_reason: Option<String>
+    +masks: Vec<IRect>
+  }
+  class MonitorGeometry {
+    +x / y / width / height: i64
+    +estimated_scale: f64
+    +label: String
+    +is_primary: bool
+  }
+  class "capture fns" as CaptureFns <<module>> {
+    +snapshot_windows(cache): Result<Vec<WinInfo>>
+    +evaluate_area_privacy(..): AreaPrivacy
+    +apply_global_masks(..)
+    +ensure_screen_permission(): Result<()>
+  }
+}
+
+package "screen::geometry / diff / rules" {
+  class IRect <<pub(crate)>> {
+    +x0 / y0 / x1 / y1: i64
+    +intersect(other): Option<IRect>
+    +subtract(cut): Vec<IRect>
+  }
+  class ChangeDetector {
+    -threshold: f32
+    -reference: Option<Reference>
+    +evaluate(frame): (bool, f32, u64)
+    +force_accept(frame): (f32, u64)
+    +reset()
+  }
+  class "rules fns" as RulesFns <<module>> {
+    +excluded_by(app, title, rules): Option<String>
+    +apply_region_masks(img, rules, scale)
+    +default_sensitive_apps(): Vec<&str>
+  }
+}
+
+class DpiAwareGuard <<cfg(windows), win.rs>>
+
+package "openmeet_core" {
+  class ScreenSourceSpec <<ipc>> {
+    +kind: ScreenSourceKind
+    +id: String
+    +label: String
+    +region: Option<Rect>
+  }
+  enum ScreenSourceKind {
+    Display
+    Window
+    Application
+    Region
+  }
+  class ScreenFrame {
+    +id / captured_at / source_label
+    +application / window_title
+    +width / height: u32
+    +png: Vec<u8>
+    +hash: u64
+    +change_score: f32
+    +manual: bool
+  }
+  class PrivacyRule {
+    +rule_type: PrivacyRuleType
+    +value: String
+    +action: PrivacyAction
+  }
+}
+
+ScreenSampler ..> SamplerConfig : start(config)
+ScreenSampler --> Command : sends
+ScreenSampler ..> ScreenFns : thread "openmeet-screen"\nruns run_sampler
+ScreenFns ..> Capturer : uses
+ScreenFns ..> ChangeDetector : evaluate (auto)\nforce_accept (manual)
+ScreenFns ..> ScreenFrame : on_frame
+ScreenFns ..> ScreenStatus : on_status
+SamplerConfig *-- ScreenSourceSpec
+SamplerConfig o-- "*" PrivacyRule
+ScreenSourceSpec --> ScreenSourceKind
+Capturer *-- AppNameCache
+Capturer ..> CaptureOutcome
+CaptureOutcome *-- "0..1" Captured
+Capturer ..> CaptureFns
+CaptureFns ..> WinInfo
+WinInfo *-- WinMeta
+WinMeta *-- IRect
+CaptureFns ..> AreaPrivacy
+CaptureFns ..> MonitorGeometry
+AreaPrivacy o-- "*" IRect : masks
+WinMeta ..> RulesFns : excluded_by
+Capturer ..> RulesFns : apply_region_masks
+Capturer ..> DpiAwareGuard : <<cfg(windows)>>
+
+note bottom of ScreenFns
+  Per frame: privacy rules (front window match => skip, other matches masked),
+  region masks, downscale to max_width (default 1280), change detection
+  (bypassed by capture_now: manual = true), PNG encoded in memory.
+  OpenMeet's own process windows are never a source.
+end note
+@enduml

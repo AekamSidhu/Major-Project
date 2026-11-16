@@ -1,0 +1,104 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-engine/src/requests.rs (RequestTicket, Entry, Slots, RequestManager),
+' state.rs (AnswerStateMachine), engine.rs (Inner.requests, cancel_request, active_request_count),
+' crates/openmeet-core/src/types.rs (RequestSlot, RequestKind, AnswerState), events.rs (EventSink).
+title openmeet-engine: RequestManager, slots and stale-response suppression
+
+hide empty members
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 50
+
+class RequestManager {
+  - sink: Arc<dyn EventSink>
+  - slots: Mutex<Slots>
+  --
+  + new(sink): RequestManager
+  + begin(slot, kind, started_event: FnOnce(&Id) -> Option<MeetingEvent>): RequestTicket
+  + is_current(ticket): bool
+  + emit_if_current(ticket, event: MeetingEvent): bool
+  + set_state(ticket, state: AnswerState, error: Option<String>)
+  + state_of(request_id): Option<AnswerState>
+  + cancel(request_id): bool
+  + cancel_all(include_background: bool)
+  + current(slot: RequestSlot): Option<Id>
+  + active_count(): usize
+  + background_running(kind: RequestKind): bool
+  + reset()
+}
+
+class Slots <<Default>> {
+  current: HashMap<RequestSlot, Id>
+  entries: HashMap<Id, Entry>
+}
+
+class Entry {
+  ticket: RequestTicket
+  machine: AnswerStateMachine
+}
+
+class RequestTicket <<Clone>> {
+  + id: Id
+  + slot: RequestSlot
+  + kind: RequestKind
+  + cancel: CancellationToken
+  + started: Instant
+  --
+  + is_cancelled(): bool
+}
+
+class AnswerStateMachine {
+  + advance(to: AnswerState): bool
+  + state(): AnswerState
+}
+
+package "openmeet-core" #FFFFFF {
+  enum RequestSlot {
+    Primary
+    Followups
+    Background
+  }
+  enum RequestKind {
+    CandidateAnswer
+    InterviewerFollowups
+    AskAi
+    Refinement
+    Clarification
+    Summary
+    Compression
+    QuestionClassification
+    TopicAnalysis
+    ScreenAnalysis
+  }
+}
+interface EventSink <<core trait>> {
+  + emit(event: MeetingEvent)
+}
+
+class CancellationToken <<tokio_util>>
+
+RequestManager *-- "1" Slots
+RequestManager o-left- "1" EventSink : sink
+Slots *-- "*" Entry : entries
+Slots --> "0..1 per slot" RequestTicket : current (by id)
+Entry *-- "1" RequestTicket
+Entry *-- "1" AnswerStateMachine
+RequestTicket --> RequestSlot
+RequestTicket --> RequestKind
+RequestTicket *-- CancellationToken
+RequestManager ..> RequestTicket : creates (begin)
+
+note right of RequestManager
+  begin(): for Primary / Followups the previous request of
+  the slot is cancelled (token + AnswerStateChanged Cancelled)
+  and started_event is emitted under the same lock.
+  Background requests never cancel each other.
+  emit_if_current(): check + emit happen under the slot lock,
+  so a stale delta cannot follow a newer ANSWER_STARTED.
+  set_state(): AnswerStateChanged only for UI slots, while
+  current, or always when the state is terminal.
+  cancel_all(false) (start_meeting, pause, stop_meeting) keeps
+  Background work alive; emergency_stop uses cancel_all(true).
+end note
+@enduml

@@ -1,0 +1,67 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-core/src/types.rs (MeetingState, can_transition_to, is_live, PauseReason),
+' crates/openmeet-engine/src/state.rs (MeetingStateMachine), crates/openmeet-engine/src/runtime.rs (MeetingRuntime::transition),
+' crates/openmeet-engine/src/engine.rs (start_meeting_inner, pause, resume, emergency_stop, stop_meeting, forget_meeting, meeting_state),
+' crates/openmeet-engine/src/assist.rs (spawn_meeting_summary), src-tauri/src/state.rs, src-tauri/src/commands/meeting.rs,
+' src-tauri/src/tray.rs, src-tauri/src/shortcuts.rs, src-tauri/src/commands/history.rs (delete_meeting, delete_all_data),
+' crates/openmeet-store/src/history.rs (recover_interrupted_meetings)
+title Meeting lifecycle - MeetingState with PauseReason (Engine, one MeetingRuntime per meeting)
+
+hide empty description
+skinparam StateFontSize 12
+left to right direction
+
+state Idle : Engine has no MeetingRuntime\n(meeting_state() falls back to Idle)
+
+state Starting : entry / new MeetingRuntime,\nrequests.cancel_all(false)\nentry / spawn_conversation,\nstart_sessions(sources)
+
+state "Live (MeetingState::is_live)" as Live {
+  state Active : entry / accepting_audio = true\nentry / health Meeting = Active
+  state Paused {
+    state "paused_reason = User" as PUser
+    state "paused_reason = Emergency" as PEmergency
+    PUser : entry / accepting_audio = false\nentry / AudioControl::Flush(None)\nentry / requests.cancel_all(false)\nentry / capture.stop_all
+    PEmergency : entry / AudioControl::Stop, cancel_all(true)\nentry / processing_stopped = true\nentry / capture.stop_all, overlay.hide()\nentry / emit ProcessingStopped
+    PUser --> PEmergency : emergency_stop
+  }
+  Active --> PUser : pause_meeting / toggle_pause\n(tray "pause", PauseResume hotkey)
+  Active --> PEmergency : emergency_stop\n(command, tray "emergency",\nEmergencyStop hotkey)
+  Paused --> Active : resume_meeting / toggle_pause\n(tray "resume")\n/ paused_reason = None,\nprocessing_stopped = false,\nrestart sessions
+}
+
+state Stopping : entry / accepting_audio = false\nentry / AudioControl::Flush(ack), wait for\npending_utterances (STOP_DRAIN_TIMEOUT)\nexit / AudioControl::Stop,\nrequests.cancel_all(false)
+
+state "Ended" as Ended {
+  state Summarizing : entry / close_answer(), ended_at = now\nentry / emit MeetingStopped\nentry / spawn_meeting_summary\n(summarize_with: LLM or fallback_summary)
+  state Completed : entry / summary stored on runtime\nentry / emit SummaryReady, notice
+  Summarizing --> Completed : summary ready, or summary\ncancelled (meeting deleted)
+}
+
+[*] --> Idle
+Idle --> Starting : start_meeting\n[no meeting Starting/Active/\nPaused/Stopping]
+Starting --> Active : after sessions started\n/ emit MeetingStarted
+Live --> Stopping : stop_meeting\n(command, tray "end")\n[is_live()]
+Stopping --> Summarizing : drain finished\nor timed out
+Ended --> Idle : delete_meeting / delete_all_data\n-> forget_meeting (runtime = None)
+Completed --> Starting : start_meeting (new MeetingRuntime\nreplaces the old one)
+
+note as N1
+  forget_meeting emits MeetingStateChanged
+  { meeting_id: None, state: Idle } so windows
+  drop the meeting. It is refused while the
+  meeting is Starting / Active / Paused / Stopping.
+end note
+
+note as N2
+  Every change calls emit_state -> MeetingEvent::MeetingStateChanged
+  { meeting_id, state, mode, paused_reason }.
+  can_transition_to also permits Starting -> Idle and Stopping -> Completed;
+  the Engine never requests them. Same-state moves are no-ops.
+  emergency_stop outside a live meeting changes no MeetingState;
+  it still sets processing_stopped, stops capture and hides the overlay.
+  Crash recovery (store): rows left starting / active / paused /
+  stopping / summarizing become completed at next launch
+  (recover_interrupted_meetings).
+end note
+@enduml

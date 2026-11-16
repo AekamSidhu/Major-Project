@@ -128,7 +128,9 @@ A Rust core (Tauri 2) runs the real-time pipeline — audio capture, VAD,
 transcription, question detection, context assembly, request orchestration with
 cancellation and stale-response protection, streaming, storage — and emits
 typed events to two React windows: the overlay and the secondary main window.
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Diagrams of the whole system
+(data flow diagrams, all 14 UML diagram types, ER diagrams, flowcharts and C4
+views) are in [diagrams/](diagrams/README.md).
 
 | Layer | Technology |
 |-------|-----------|

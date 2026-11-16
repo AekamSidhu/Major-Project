@@ -1,0 +1,71 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: src-tauri/src/main.rs, src-tauri/src/lib.rs (run, setup), src-tauri/src/logging.rs,
+' src-tauri/src/state.rs (AppState::new, apply_retention, spawn_retention_task),
+' crates/openmeet-store/src/database.rs (Database::open, initialize, configure), migrations.rs (migrate),
+' history.rs (recover_interrupted_meetings), crates/openmeet-engine/src/engine.rs (Engine::new),
+' src-tauri/src/windows.rs (create_main, create_overlay), overlay.rs, tray.rs, shortcuts.rs
+title App startup: openmeet_lib::run() and setup()
+
+autonumber
+participant "main()" as Main
+participant "openmeet_lib::run\n/ setup()" as Run
+participant "Database\n(openmeet-store)" as DB
+database "openmeet.db\n(app data dir)" as File
+participant "SecretStore" as Sec
+participant "providers_build" as PB
+participant "Engine\n(openmeet-engine)" as Eng
+participant "AppState" as AS
+participant "windows" as Win
+participant "OverlayController" as Ovl
+participant "tray /\nShortcutManager" as TS
+
+Main -> Run : run()
+Run -> Run : logging::init()\n(EnvFilter from OPENMEET_LOG or default)
+Run -> Run : tauri::Builder + plugins\n(single_instance, global_shortcut, dialog,\nclipboard_manager, notification, opener,\nautostart --autostart), invoke_handler
+Run -> DB : setup(app): create_dir_all(app_data_dir);\nDatabase::open(data_dir/openmeet.db)
+activate DB
+DB -> File : Connection::open
+DB -> DB : configure(): foreign_keys, secure_delete,\ntemp_store=MEMORY, WAL (+ synchronous=NORMAL)
+DB -> DB : migrations::migrate()\n(PRAGMA user_version -> SCHEMA_VERSION,\none IMMEDIATE transaction per migration)
+alt open failed
+  DB --> Run : Err(StoreError)
+  Run -> DB : Database::open_in_memory()\n(db_error = Some)
+end
+deactivate DB
+Run -> DB : load_settings()
+DB --> Run : Ok(Some(s)) -> s.sanitized()\nOk(None) / Err -> Settings::default()
+Run -> DB : recover_interrupted_meetings(now)
+note right of DB : in-progress meetings\nbecome Completed\n(crash recovery)
+
+Run -> Sec : SecretStore::new()
+Run -> PB : build(&settings, secrets)
+PB --> Run : ProviderSet (+ issues)
+Run -> Run : TauriSink::new(app, general.notifications)
+Run -> Eng : Engine::new(EngineDeps{sink, store: db,\nproviders, settings}, async runtime handle)
+activate Eng
+Eng -> Eng : Persister::spawn, spawn audio_router,\nspawn_screen_worker, spawn_embedder
+Eng -> Eng : refresh_provider_health();\nMeeting = Inactive
+deactivate Eng
+Run -> AS : AppState::new(app, engine, db, secrets, sink, data_dir)
+note right of AS : creates CaptureManager, OverlayController,\nShortcutManager, LocalAiManager (locates\nlocal-ai dir only, nothing started),\nProcessStats, ScreenshotStore
+Run -> Run : app.manage(state)
+
+Run -> Win : create_main(visible = !autostarted\n|| !onboarding_complete)
+Run -> Win : create_overlay(settings.overlay)\n(transparent, always_on_top, skip_taskbar,\nfocusable(false), visible(false))
+Run -> Ovl : apply_layout(overlay)
+opt overlay.click_through
+  Run -> Ovl : set_click_through(true)
+end
+Run -> Ovl : apply_capture_privacy(privacy.capture_exclusion)
+Ovl --> Run : CapturePrivacyStatus
+Run -> Run : sink.emit(PrivacyStateChanged{enabled, supported, active})
+Run -> Eng : set_component_status(CapturePrivacy | Overlay | Database)
+Run -> TS : tray::create(app);\nshortcuts.register_all(app, settings.shortcuts)
+Run -> AS : spawn apply_retention() now;\nspawn_retention_task() (hourly)
+note over Main, TS
+The local AI sidecar is not started here: AppState::start_meeting starts it when
+transcription or embeddings use LocalAi, or the user runs start_local_ai.
+No meeting and no capture begins at start-up.
+end note
+@enduml

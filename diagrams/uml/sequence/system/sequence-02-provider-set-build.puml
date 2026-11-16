@@ -1,0 +1,57 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: src-tauri/src/providers_build.rs (build), crates/openmeet-providers/src/factory.rs
+' (build_llm, build_fast_llm, build_transcriber, build_vision_llm, build_embeddings, endpoint_for),
+' src-tauri/src/secrets.rs (SecretResolver for SecretStore), crates/openmeet-platform/src/ocr.rs (system_ocr),
+' crates/openmeet-core/src/providers.rs (ProviderSet, ProviderIssue)
+title Building the ProviderSet from settings (start-up and every provider rebuild)
+
+autonumber
+participant "caller\n(setup / AppState::rebuild_providers)" as C
+participant "providers_build::build" as PB
+participant "factory\n(openmeet-providers)" as F
+participant "endpoint_for()" as EP
+participant "SecretStore\n(SecretResolver)" as Sec
+participant "openmeet_platform::ocr" as OCR
+
+C -> PB : build(&settings, secrets)
+PB -> PB : ctx = BuildContext{settings, secrets};\nset = ProviderSet::default()
+
+group each builder below calls endpoint_for(ctx, component, service, base_url)
+  EP -> EP : base URL set and valid http(s)?\nelse NotConfigured
+  EP -> EP : privacy.local_only && location_for_url == Remote?\nthen BlockedByLocalOnly
+  EP -> Sec : api_key(SecretProvider)
+  Sec --> EP : OS credential store value,\nelse environment variable, else None
+  EP -> EP : no key && Remote && (OpenAI | Anthropic)?\nthen NotConfigured("... API key is not set")
+end
+
+PB -> F : build_llm(&ctx)
+F --> PB : Ok -> set.llm  |  Err -> issues += ProviderIssue{Llm}
+PB -> F : build_fast_llm(&ctx)
+F --> PB : None (no fast_model) | Some(Ok) -> set.fast_llm\n| Some(Err) -> warning only, main model used
+PB -> F : build_transcriber(&ctx)
+F --> PB : Ok(t) -> set.transcription = VadTranscriptionProvider::new(t)\n| Err -> issues += ProviderIssue{Transcription}
+
+opt want_ocr (vision OcrOnly, or use_ocr for a vision model)
+  PB -> OCR : system_ocr()
+  OCR --> PB : Some(WindowsOcr) on Windows, else None -> set.ocr
+end
+PB -> F : build_vision_llm(&ctx)
+alt Ok(Some(llm))
+  F --> PB : set.vision = LlmVisionProvider::new(llm)
+else Ok(None) and provider == OcrOnly
+  F --> PB : set.vision = OcrVisionProvider::new(ocr)\n(or issue{Vision} when no local OCR)
+else Err
+  F --> PB : issues += ProviderIssue{Vision}
+end
+PB -> F : build_embeddings(&ctx)
+F --> PB : Ok(e) -> set.embeddings (None = LocalHash)\n| Err -> issue{Embeddings} "Using built-in local embeddings."
+PB --> C : ProviderSet{llm, fast_llm, transcription,\nvision, ocr, embeddings, issues}
+
+note over C, OCR
+The engine never refers to a concrete provider: Engine::set_providers / EngineDeps receive the set,
+and refresh_provider_health() marks Llm / Transcription / Vision Active, Error (with the issue message) or Disabled;
+Embeddings stay Active (built-in hashing embeddings when no provider is set).
+API keys are only read through SecretResolver; they never appear in errors, logs or SQLite.
+end note
+@enduml
