@@ -462,3 +462,51 @@ async fn the_check_is_off_by_default_and_in_candidate_mode() {
 fn now() -> i64 {
     openmeet_core::ids::now_ms()
 }
+
+/// The integrity demo end to end in real time (about 90 s, so not run by
+/// default): `cargo test -p openmeet-engine --test integrity -- --ignored`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "runs the integrity demo in real time (~90 s)"]
+async fn integrity_demo_flags_the_read_answer() {
+    let sink = Arc::new(TestSink::default());
+    let engine = Engine::new(
+        EngineDeps {
+            sink: sink.clone(),
+            store: Arc::new(MemoryStore::new()),
+            providers: ProviderSet::default(),
+            settings: Settings::default(),
+        },
+        tokio::runtime::Handle::current(),
+    );
+    engine.start_demo(demo::INTEGRITY).await.unwrap();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(150);
+    while sink.flags().iter().filter(|f| f.answer_words > 0).count() < 4 {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "{:#?}",
+            sink.flags()
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let flags = sink.flags();
+    let last = flags.last().unwrap();
+    for f in &flags {
+        eprintln!(
+            "{} {:?}: {:?}",
+            f.answer_words,
+            f.level,
+            f.signals
+                .iter()
+                .map(|s| (s.name.as_str(), s.level.as_str()))
+                .collect::<Vec<_>>()
+        );
+    }
+    assert_eq!(last.level, IntegrityLevel::High, "{last:#?}");
+    assert_eq!(last.elevated.len(), 4, "{last:#?}");
+    assert!(
+        flags[..flags.len() - 1]
+            .iter()
+            .all(|f| f.level == IntegrityLevel::Low)
+    );
+    engine.stop_demo().await.unwrap();
+}
