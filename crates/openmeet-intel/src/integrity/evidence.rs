@@ -235,11 +235,11 @@ pub fn reading_signal(
     };
     let line = if level.is_elevated() {
         format!(
-            "Eye movements look like reading (score {p:.2}) {}",
+            "Eye movements look like reading: score {p:.2} {}",
             bracket(level, calibrated)
         )
     } else {
-        format!("Eye movements do not look like reading (score {p:.2})")
+        format!("Eye movements do not look like reading: score {p:.2}")
     };
     IntegritySignal {
         name: IntegritySignalName::Reading,

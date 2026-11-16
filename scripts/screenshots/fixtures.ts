@@ -85,6 +85,7 @@ const BASE_SNAPSHOT: Omit<EngineSnapshot, "meeting" | "mode"> = {
   lastSummary: null,
   demoRunning: true,
   processingStopped: false,
+  integrityFlags: [],
 };
 
 // --- Candidate: URL shortener ------------------------------------------------
@@ -117,8 +118,16 @@ export function candidateSnapshot(): EngineSnapshot {
     meeting: meeting("candidate", "Demo: System design interview"),
     mode: "candidate",
     transcript: [
-      seg("remote", "Hi, thanks for joining! To get started, could you give me a quick overview of your background?", 2),
-      seg("user", "Sure. I'm a backend engineer, and for the last few years I've mostly worked on APIs and data pipelines.", 9),
+      seg(
+        "remote",
+        "Hi, thanks for joining! To get started, could you give me a quick overview of your background?",
+        2,
+      ),
+      seg(
+        "user",
+        "Sure. I'm a backend engineer, and for the last few years I've mostly worked on APIs and data pipelines.",
+        9,
+      ),
       seg("remote", "Great. Let's do a design exercise. How would you design a URL shortener?", 21),
     ],
     active: {
@@ -137,8 +146,23 @@ export function candidateSnapshot(): EngineSnapshot {
 
 // --- Interviewer: rate limiter -------------------------------------------------
 
-function followup(id: string, question: string, category: FollowUpQuestion["category"], reason: string, priority: FollowUpQuestion["priority"]): FollowUpQuestion {
-  return { id, requestId: "req-fu", question, category, reason, priority, trigger: null, createdAt: T0 };
+function followup(
+  id: string,
+  question: string,
+  category: FollowUpQuestion["category"],
+  reason: string,
+  priority: FollowUpQuestion["priority"],
+): FollowUpQuestion {
+  return {
+    id,
+    requestId: "req-fu",
+    question,
+    category,
+    reason,
+    priority,
+    trigger: null,
+    createdAt: T0,
+  };
 }
 
 export const RATE_LIMITER_FOLLOWUPS: FollowUpQuestion[] = [
@@ -202,7 +226,11 @@ export function interviewerSnapshot(): EngineSnapshot {
     meeting: meeting("interviewer", "Demo: Rate limiter deep-dive"),
     mode: "interviewer",
     transcript: [
-      seg("user", "Thanks for taking the time today. Let's start with a design question: how would you design a rate limiter for a public API?", 3),
+      seg(
+        "user",
+        "Thanks for taking the time today. Let's start with a design question: how would you design a rate limiter for a public API?",
+        3,
+      ),
       seg(
         "remote",
         "I'd probably use Redis. Each API key gets a token bucket stored in Redis, and every request runs a small Lua script that refills tokens based on the elapsed time and takes one atomically. If the bucket is empty we return a 429 with a Retry-After header. I'd run the check in the API gateway so every service gets it for free.",
@@ -227,14 +255,56 @@ export function interviewerSnapshot(): EngineSnapshot {
 
 export const DATA_FLOW_LOCAL: DataFlowReport = {
   nodes: [
-    { component: "microphone", label: "Microphone", location: "local", provider: "WASAPI", endpoint: null },
-    { component: "system_audio", label: "System audio", location: "local", provider: "WASAPI loopback", endpoint: null },
-    { component: "transcription", label: "Transcription", location: "local", provider: "Local AI (Whisper base.en)", endpoint: "127.0.0.1:8765" },
-    { component: "llm", label: "AI provider", location: "local", provider: "Ollama (llama3.2)", endpoint: "127.0.0.1:11434" },
+    {
+      component: "microphone",
+      label: "Microphone",
+      location: "local",
+      provider: "WASAPI",
+      endpoint: null,
+    },
+    {
+      component: "system_audio",
+      label: "System audio",
+      location: "local",
+      provider: "WASAPI loopback",
+      endpoint: null,
+    },
+    {
+      component: "transcription",
+      label: "Transcription",
+      location: "local",
+      provider: "Local AI (Whisper base.en)",
+      endpoint: "127.0.0.1:8765",
+    },
+    {
+      component: "llm",
+      label: "AI provider",
+      location: "local",
+      provider: "Ollama (llama3.2)",
+      endpoint: "127.0.0.1:11434",
+    },
     { component: "screen", label: "Screen", location: "disabled", provider: "Off", endpoint: null },
-    { component: "vision", label: "Vision", location: "local", provider: "Windows OCR", endpoint: null },
-    { component: "embeddings", label: "Embeddings", location: "local", provider: "Built-in", endpoint: null },
-    { component: "database", label: "Storage", location: "local", provider: "SQLite", endpoint: null },
+    {
+      component: "vision",
+      label: "Vision",
+      location: "local",
+      provider: "Windows OCR",
+      endpoint: null,
+    },
+    {
+      component: "embeddings",
+      label: "Embeddings",
+      location: "local",
+      provider: "Built-in",
+      endpoint: null,
+    },
+    {
+      component: "database",
+      label: "Storage",
+      location: "local",
+      provider: "SQLite",
+      endpoint: null,
+    },
   ],
   localOnlyMode: false,
   allLocal: true,

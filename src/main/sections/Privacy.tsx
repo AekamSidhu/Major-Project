@@ -13,6 +13,7 @@ import { api, errorMessage } from "@/lib/ipc";
 import { formatDateTime } from "@/lib/format";
 import {
   audioFlow,
+  integrityNodes,
   otherNodes,
   privacyStatement,
   screenFlow,
@@ -81,6 +82,7 @@ function Flow({ steps, muted }: { steps: FlowStep[]; muted?: boolean }) {
 function DataFlow({ report }: { report: DataFlowReport }) {
   const statement = privacyStatement(report);
   const others = otherNodes(report);
+  const integrity = integrityNodes(report);
   return (
     <Section
       title="Where your meeting data goes"
@@ -109,6 +111,32 @@ function DataFlow({ report }: { report: DataFlowReport }) {
             {screenFlowDisabled(report) && <span className="font-normal text-muted">(off)</span>}
           </div>
           <Flow steps={screenFlow(report)} muted={screenFlowDisabled(report)} />
+        </div>
+        <div>
+          <div className="mb-1.5 text-[0.78rem] font-medium text-fg-soft">
+            Answer integrity{" "}
+            {integrity.length === 0 && <span className="font-normal text-muted">(off)</span>}
+          </div>
+          {integrity.length === 0 ? (
+            <p className="text-[0.76rem] text-muted">
+              The interviewer-mode answer check is off. When on, its parts are listed here.
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-2" aria-label="Answer integrity data flow">
+              {integrity.map((n) => (
+                <li
+                  key={n.label}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[0.76rem]"
+                >
+                  <span className="text-fg-soft">{n.label.replace(/^Integrity: /, "")}</span>
+                  <span className="max-w-64 truncate text-muted" title={n.provider}>
+                    {n.endpoint ? `${n.provider} · ${n.endpoint}` : n.provider}
+                  </span>
+                  <LocationBadge location={n.location} endpoint={n.endpoint} />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {others.length > 0 && (
           <ul className="flex flex-wrap gap-2 pt-1">

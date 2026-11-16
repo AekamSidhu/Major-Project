@@ -47,6 +47,7 @@ const EMPTY_SNAPSHOT: EngineSnapshot = {
   lastSummary: null,
   demoRunning: false,
   processingStopped: false,
+  integrityFlags: [],
 };
 
 describe("reduceLive", () => {
@@ -96,7 +97,13 @@ describe("history helpers", () => {
   });
 
   it("requires at least one export part", () => {
-    const none = { summary: false, transcript: false, questions: false, followups: false };
+    const none = {
+      summary: false,
+      transcript: false,
+      questions: false,
+      followups: false,
+      integrity: false,
+    };
     expect(buildExportRequest("m1", "markdown", none).error).not.toBeNull();
     expect(buildExportRequest("m1", "json", { ...none, transcript: true }).request).toEqual({
       meetingId: "m1",

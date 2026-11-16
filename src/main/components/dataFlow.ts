@@ -151,11 +151,20 @@ const SHOWN_IN_FLOWS: ReadonlyArray<Component> = [
   "screen",
   "vision",
   "overlay",
+  "integrity",
 ];
 
 /** Report nodes not drawn in the two flows (embeddings, storage, …). */
 export function otherNodes(report: DataFlowReport): DataFlowNode[] {
   return report.nodes.filter((n) => !SHOWN_IN_FLOWS.includes(n.component));
+}
+
+/**
+ * Parts of the answer-integrity check (interviewer mode) and where each runs.
+ * Empty while the check is off.
+ */
+export function integrityNodes(report: DataFlowReport): DataFlowNode[] {
+  return report.nodes.filter((n) => n.component === "integrity");
 }
 
 /** True when the screen pipeline is entirely off. */

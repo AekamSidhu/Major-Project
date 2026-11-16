@@ -5,6 +5,8 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { FollowUpQuestion, MeetingRecord, MeetingSummary, Mode, Suggestion } from "@/bindings";
 import { categoryLabel, formatDateTime, formatOffset } from "@/lib/format";
 import { api, errorMessage } from "@/lib/ipc";
+import { IntegrityFlagView } from "@/lib/IntegrityFlagView";
+import { FLAG_NOTE, isElevated, sortFlags } from "@/lib/integrity";
 import { useMain } from "@/main/store";
 import { Badge, Button, EmptyState, TextInput, cx } from "@/main/ui";
 import { InlineError } from "@/main/sections/home/controls";
@@ -343,6 +345,37 @@ export function FollowupsTab({ record }: { record: MeetingRecord }) {
               <FollowupItem key={f.id} f={f} />
             ))}
           </ul>
+        </Panel>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Answer integrity
+// ---------------------------------------------------------------------------
+
+export function IntegrityTab({ record }: { record: MeetingRecord }) {
+  const flags = useMemo(() => sortFlags(record.integrityFlags).reverse(), [record.integrityFlags]);
+  if (flags.length === 0) {
+    return (
+      <EmptyState title="No answer checks">
+        Answers are checked only in interviewer meetings with Answer integrity turned on.
+      </EmptyState>
+    );
+  }
+  const raised = flags.filter((f) => isElevated(f.level)).length;
+  return (
+    <div className="space-y-4">
+      <p className="text-[0.82rem] text-muted">
+        {raised === 0
+          ? "No answer raised a signal."
+          : `${raised} of ${flags.length} answers raised a signal.`}{" "}
+        {FLAG_NOTE} Thresholds are not calibrated on real interviews yet.
+      </p>
+      {flags.map((f) => (
+        <Panel key={f.id}>
+          <IntegrityFlagView flag={f} />
         </Panel>
       ))}
     </div>
