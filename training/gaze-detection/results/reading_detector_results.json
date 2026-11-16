@@ -1,0 +1,3276 @@
+{
+  "about": "OpenMeet reading detector: is this person reading? 10 s gaze windows at 10 fps, GazeBase degraded to webcam quality.",
+  "protocol": {
+    "split": "258 development / 64 test people (protocol.split_people, seed 2026); test people scored once",
+    "selection": "highest mean development window balanced accuracy over the four conditions; thresholds from development nominal scores",
+    "thresholds": "balanced = best development balanced accuracy; low_fpr = at most 5% of development non-reading flagged",
+    "recording": "recording score = mean of its top half of window scores"
+  },
+  "chosen": "network",
+  "development_cv": {
+    "boosting": {
+      "mean_window_balanced_accuracy": 0.8923117534359373,
+      "gazebase_nominal": {
+        "window_balanced_accuracy": 0.9784774186205427,
+        "window_accuracy": 0.9810158677472594,
+        "window_roc_auc": 0.9975587966133261,
+        "window_recall_at_low_fpr": 0.986517153918035,
+        "window_fpr_at_low_fpr": 0.049990906854092465,
+        "recording_balanced_accuracy": 0.996911225127235,
+        "recording_roc_auc": 0.9998318239120145,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.049899013900439604
+      },
+      "gazebase_hard": {
+        "window_balanced_accuracy": 0.9257212712938164,
+        "window_accuracy": 0.9352935210540388,
+        "window_roc_auc": 0.9804903854393235,
+        "window_recall_at_low_fpr": 0.972633827259378,
+        "window_fpr_at_low_fpr": 0.15306439017084417,
+        "recording_balanced_accuracy": 0.9700639788921227,
+        "recording_roc_auc": 0.9989860319851274,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.15100392063680645
+      },
+      "gazebase_small": {
+        "window_balanced_accuracy": 0.9268295280395291,
+        "window_accuracy": 0.9313104491098019,
+        "window_roc_auc": 0.9804323500227117,
+        "window_recall_at_low_fpr": 0.974836470431184,
+        "window_fpr_at_low_fpr": 0.16366592851717532,
+        "recording_balanced_accuracy": 0.9742217219656346,
+        "recording_roc_auc": 0.9991097506480411,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.1687061898538672
+      },
+      "gazebase_small_hard": {
+        "window_balanced_accuracy": 0.7382187957898612,
+        "window_accuracy": 0.8033358227532985,
+        "window_roc_auc": 0.8396217028234875,
+        "window_recall_at_low_fpr": 0.8883326658657055,
+        "window_fpr_at_low_fpr": 0.3892187382992608,
+        "recording_balanced_accuracy": 0.5662861478030707,
+        "recording_roc_auc": 0.9539952024934094,
+        "recording_recall_at_low_fpr": 0.9964362081254454,
+        "recording_fpr_at_low_fpr": 0.40762742069621005
+      }
+    },
+    "network": {
+      "mean_window_balanced_accuracy": 0.9474563850637903,
+      "gazebase_nominal": {
+        "window_balanced_accuracy": 0.9873154416878075,
+        "window_accuracy": 0.9897288376252777,
+        "window_roc_auc": 0.9989864641489469,
+        "window_recall_at_low_fpr": 0.9943932719263116,
+        "window_fpr_at_low_fpr": 0.049990906854092465,
+        "recording_balanced_accuracy": 0.9979210437824343,
+        "recording_roc_auc": 0.999911508553905,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.049899013900439604
+      },
+      "gazebase_hard": {
+        "window_balanced_accuracy": 0.9728413679414323,
+        "window_accuracy": 0.9738610903659447,
+        "window_roc_auc": 0.9966198652307049,
+        "window_recall_at_low_fpr": 0.9941930316379656,
+        "window_fpr_at_low_fpr": 0.12023278453523323,
+        "recording_balanced_accuracy": 0.9909716284568506,
+        "recording_roc_auc": 0.999727243112084,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.10538196507069031
+      },
+      "gazebase_small": {
+        "window_balanced_accuracy": 0.9728413679414323,
+        "window_accuracy": 0.9738610903659447,
+        "window_roc_auc": 0.9966198659447497,
+        "window_recall_at_low_fpr": 0.9941930316379656,
+        "window_fpr_at_low_fpr": 0.12023278453523323,
+        "recording_balanced_accuracy": 0.9909716284568506,
+        "recording_roc_auc": 0.999727243112084,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.10538196507069031
+      },
+      "gazebase_small_hard": {
+        "window_balanced_accuracy": 0.8568273626844891,
+        "window_accuracy": 0.9011239270138947,
+        "window_roc_auc": 0.9487437237017936,
+        "window_recall_at_low_fpr": 0.9773061006541183,
+        "window_fpr_at_low_fpr": 0.2956128245450753,
+        "recording_balanced_accuracy": 0.7293892625241436,
+        "recording_roc_auc": 0.993472718510573,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.33313532137341095
+      }
+    },
+    "average": {
+      "mean_window_balanced_accuracy": 0.9388066427490517,
+      "gazebase_nominal": {
+        "window_balanced_accuracy": 0.9875333331628194,
+        "window_accuracy": 0.9911671691606967,
+        "window_roc_auc": 0.9989679232624998,
+        "window_recall_at_low_fpr": 0.9940595381124016,
+        "window_fpr_at_low_fpr": 0.049990906854092465,
+        "recording_balanced_accuracy": 0.9981585734535315,
+        "recording_roc_auc": 0.9999003306870299,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.049899013900439604
+      },
+      "gazebase_hard": {
+        "window_balanced_accuracy": 0.9681237434213396,
+        "window_accuracy": 0.9725887201615357,
+        "window_roc_auc": 0.9947851282702952,
+        "window_recall_at_low_fpr": 0.9933920704845814,
+        "window_fpr_at_low_fpr": 0.14449543738031811,
+        "recording_balanced_accuracy": 0.9945353779910002,
+        "recording_roc_auc": 0.99964103804785,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.13876678151360344
+      },
+      "gazebase_small": {
+        "window_balanced_accuracy": 0.9680665484354196,
+        "window_accuracy": 0.9716206123973115,
+        "window_roc_auc": 0.9947828554657986,
+        "window_recall_at_low_fpr": 0.9937258042984916,
+        "window_fpr_at_low_fpr": 0.1512778544454786,
+        "recording_balanced_accuracy": 0.9948917571784557,
+        "recording_roc_auc": 0.9996588210178785,
+        "recording_recall_at_low_fpr": 0.9992872416250891,
+        "recording_fpr_at_low_fpr": 0.14720209100629678
+      },
+      "gazebase_small_hard": {
+        "window_balanced_accuracy": 0.8315029459766281,
+        "window_accuracy": 0.8912861081145871,
+        "window_roc_auc": 0.9293390944293174,
+        "window_recall_at_low_fpr": 0.972834067547724,
+        "window_fpr_at_low_fpr": 0.3712784963146014,
+        "recording_balanced_accuracy": 0.8160485969617711,
+        "recording_roc_auc": 0.9903850021479287,
+        "recording_recall_at_low_fpr": 0.9985744832501782,
+        "recording_fpr_at_low_fpr": 0.38790542948794104
+      }
+    }
+  },
+  "test": {
+    "boosting": {
+      "gazebase_nominal": {
+        "window_balanced_accuracy": 0.9786950918324386,
+        "window_accuracy": 0.9803034143162316,
+        "window_roc_auc": 0.9981784314161509,
+        "window_recall_at_low_fpr": 0.9914640455250905,
+        "window_fpr_at_low_fpr": 0.05026733465246491,
+        "recording_balanced_accuracy": 0.9974383938937974,
+        "recording_roc_auc": 0.9999778723049769,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.04706430568499531
+      },
+      "gazebase_hard": {
+        "window_balanced_accuracy": 0.9220183454268494,
+        "window_accuracy": 0.9351533364712697,
+        "window_roc_auc": 0.9803873822217005,
+        "window_recall_at_low_fpr": 0.9723228142783239,
+        "window_fpr_at_low_fpr": 0.1510967035742854,
+        "recording_balanced_accuracy": 0.962986874371964,
+        "recording_roc_auc": 0.9988493598587993,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.14305684995340173
+      },
+      "gazebase_small": {
+        "window_balanced_accuracy": 0.9235046934687303,
+        "window_accuracy": 0.9317498823273833,
+        "window_roc_auc": 0.9803427013951502,
+        "window_recall_at_low_fpr": 0.9759441282979824,
+        "window_fpr_at_low_fpr": 0.16242158885193447,
+        "recording_balanced_accuracy": 0.9641505308043548,
+        "recording_roc_auc": 0.9989899358036518,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.1589002795899348
+      },
+      "gazebase_small_hard": {
+        "window_balanced_accuracy": 0.7347433272185686,
+        "window_accuracy": 0.8052427676599443,
+        "window_roc_auc": 0.8388891068057751,
+        "window_recall_at_low_fpr": 0.8877392653905846,
+        "window_fpr_at_low_fpr": 0.38782469582789547,
+        "recording_balanced_accuracy": 0.5526040392154821,
+        "recording_roc_auc": 0.9531960201388058,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.3918918918918919
+      },
+      "gazebase_slow": {
+        "window_balanced_accuracy": 0.9486388582721481,
+        "window_accuracy": 0.9722722699300372,
+        "window_roc_auc": 0.9926135861054366,
+        "window_recall_at_low_fpr": 0.9606760374832664,
+        "window_fpr_at_low_fpr": 0.05503114713963164,
+        "recording_balanced_accuracy": 0.9858006364603851,
+        "recording_roc_auc": 0.9999713774969881,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.030274802049371163
+      }
+    },
+    "network": {
+      "gazebase_nominal": {
+        "window_balanced_accuracy": 0.9883249261579374,
+        "window_accuracy": 0.9897896375683406,
+        "window_roc_auc": 0.9993593642834213,
+        "window_recall_at_low_fpr": 0.9968960165545784,
+        "window_fpr_at_low_fpr": 0.04921483602071319,
+        "recording_balanced_accuracy": 0.9990680335507922,
+        "recording_roc_auc": 0.999996095112643,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.047530288909599205
+      },
+      "gazebase_hard": {
+        "window_balanced_accuracy": 0.9750293637861933,
+        "window_accuracy": 0.9741844382490314,
+        "window_roc_auc": 0.9973992067307467,
+        "window_recall_at_low_fpr": 0.9963786859803414,
+        "window_fpr_at_low_fpr": 0.11573274954742563,
+        "recording_balanced_accuracy": 0.994645097804412,
+        "recording_roc_auc": 0.9999049810743126,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.09878844361602979
+      },
+      "gazebase_small": {
+        "window_balanced_accuracy": 0.9750293637861933,
+        "window_accuracy": 0.9741844382490314,
+        "window_roc_auc": 0.9973992067307466,
+        "window_recall_at_low_fpr": 0.9963786859803414,
+        "window_fpr_at_low_fpr": 0.11573274954742563,
+        "recording_balanced_accuracy": 0.994645097804412,
+        "recording_roc_auc": 0.9999049810743126,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.09878844361602979
+      },
+      "gazebase_small_hard": {
+        "window_balanced_accuracy": 0.8549869454233341,
+        "window_accuracy": 0.9018067272529781,
+        "window_roc_auc": 0.9487568744277549,
+        "window_recall_at_low_fpr": 0.9759441282979824,
+        "window_fpr_at_low_fpr": 0.28480612975203135,
+        "recording_balanced_accuracy": 0.7334719134468701,
+        "recording_roc_auc": 0.9947192906641953,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.32292637465051266
+      },
+      "gazebase_slow": {
+        "window_balanced_accuracy": 0.9648601524147422,
+        "window_accuracy": 0.9773966352341062,
+        "window_roc_auc": 0.9940490951956498,
+        "window_recall_at_low_fpr": 0.9877844712182061,
+        "window_fpr_at_low_fpr": 0.11125921492886481,
+        "recording_balanced_accuracy": 0.9902234636871509,
+        "recording_roc_auc": 0.9999765815884448,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.046576618537494174
+      }
+    },
+    "average": {
+      "gazebase_nominal": {
+        "window_balanced_accuracy": 0.989251124953879,
+        "window_accuracy": 0.9913827437633513,
+        "window_roc_auc": 0.9994619788163441,
+        "window_recall_at_low_fpr": 0.9984480082772892,
+        "window_fpr_at_low_fpr": 0.05001473498084452,
+        "recording_balanced_accuracy": 0.9983690587138863,
+        "recording_roc_auc": 0.999990888596167,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.048462255358807105
+      },
+      "gazebase_hard": {
+        "window_balanced_accuracy": 0.9683160178705011,
+        "window_accuracy": 0.9728809877258409,
+        "window_roc_auc": 0.9956648163962147,
+        "window_recall_at_low_fpr": 0.9974133471288154,
+        "window_fpr_at_low_fpr": 0.14095061676419818,
+        "recording_balanced_accuracy": 0.9958087542368028,
+        "recording_roc_auc": 0.9998516142804335,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.13280521901211562
+      },
+      "gazebase_small": {
+        "window_balanced_accuracy": 0.9691703276885067,
+        "window_accuracy": 0.9723016763822007,
+        "window_roc_auc": 0.9956815213408716,
+        "window_recall_at_low_fpr": 0.9974133471288154,
+        "window_fpr_at_low_fpr": 0.1482760072411906,
+        "recording_balanced_accuracy": 0.9958087542368028,
+        "recording_roc_auc": 0.9998698370880995,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.14119291705498604
+      },
+      "gazebase_small_hard": {
+        "window_balanced_accuracy": 0.8309135956012548,
+        "window_accuracy": 0.8909446395597234,
+        "window_roc_auc": 0.9287972860192963,
+        "window_recall_at_low_fpr": 0.97128815312985,
+        "window_fpr_at_low_fpr": 0.3619332294868016,
+        "recording_balanced_accuracy": 0.8147091900222319,
+        "recording_roc_auc": 0.9913259435509484,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.3657968313140727
+      },
+      "gazebase_slow": {
+        "window_balanced_accuracy": 0.9668162985902606,
+        "window_accuracy": 0.9832931651730351,
+        "window_roc_auc": 0.9961988856562417,
+        "window_recall_at_low_fpr": 0.9869477911646586,
+        "window_fpr_at_low_fpr": 0.07154321155572485,
+        "recording_balanced_accuracy": 0.9972067039106145,
+        "recording_roc_auc": 0.9999934948856791,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.04285048905449462
+      }
+    }
+  },
+  "outside": {
+    "boosting": {
+      "gazebasevr_nominal": {
+        "window_balanced_accuracy": 0.9527303440837804,
+        "window_accuracy": 0.954979733642154,
+        "window_roc_auc": 0.9845234596488132,
+        "window_recall_at_low_fpr": 0.9703034215622982,
+        "window_fpr_at_low_fpr": 0.15046331004288238,
+        "recording_balanced_accuracy": 0.9940239043824701,
+        "recording_roc_auc": 0.9994491654894366,
+        "recording_recall_at_low_fpr": 0.99800796812749,
+        "recording_fpr_at_low_fpr": 0.09088645418326691
+      },
+      "desktopactivity_raw": {
+        "window_balanced_accuracy": 0.8387931034482758,
+        "window_accuracy": 0.8979885057471264,
+        "window_roc_auc": 0.9259113035077289,
+        "window_recall_at_low_fpr": 0.8642241379310345,
+        "window_fpr_at_low_fpr": 0.16034482758620694,
+        "recording_balanced_accuracy": 0.8125,
+        "recording_roc_auc": 1.0,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.025000000000000022
+      }
+    },
+    "network": {
+      "gazebasevr_nominal": {
+        "window_balanced_accuracy": 0.9657104709083478,
+        "window_accuracy": 0.9743512133494763,
+        "window_roc_auc": 0.9863406261663836,
+        "window_recall_at_low_fpr": 0.9823542070152786,
+        "window_fpr_at_low_fpr": 0.3019162143521157,
+        "recording_balanced_accuracy": 0.9930278884462151,
+        "recording_roc_auc": 0.9994900874589292,
+        "recording_recall_at_low_fpr": 0.99800796812749,
+        "recording_fpr_at_low_fpr": 0.10333665338645415
+      },
+      "desktopactivity_raw": {
+        "window_balanced_accuracy": 0.740301724137931,
+        "window_accuracy": 0.8243534482758621,
+        "window_roc_auc": 0.8246980900713438,
+        "window_recall_at_low_fpr": 0.8103448275862069,
+        "window_fpr_at_low_fpr": 0.3461206896551724,
+        "recording_balanced_accuracy": 0.625,
+        "recording_roc_auc": 0.996875,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.375
+      }
+    },
+    "average": {
+      "gazebasevr_nominal": {
+        "window_balanced_accuracy": 0.967354937090383,
+        "window_accuracy": 0.9770753276833184,
+        "window_roc_auc": 0.9886336176086462,
+        "window_recall_at_low_fpr": 0.9819238218205294,
+        "window_fpr_at_low_fpr": 0.18475425075718954,
+        "recording_balanced_accuracy": 0.9970119521912351,
+        "recording_roc_auc": 0.9995848280186028,
+        "recording_recall_at_low_fpr": 0.99800796812749,
+        "recording_fpr_at_low_fpr": 0.10881474103585653
+      },
+      "desktopactivity_raw": {
+        "window_balanced_accuracy": 0.8105603448275862,
+        "window_accuracy": 0.8969109195402298,
+        "window_roc_auc": 0.9040428061831154,
+        "window_recall_at_low_fpr": 0.9051724137931034,
+        "window_fpr_at_low_fpr": 0.2982758620689655,
+        "recording_balanced_accuracy": 0.875,
+        "recording_roc_auc": 1.0,
+        "recording_recall_at_low_fpr": 1.0,
+        "recording_fpr_at_low_fpr": 0.19999999999999996
+      }
+    }
+  },
+  "flag_rate_by_task": {
+    "test": {
+      "gazebase_nominal": {
+        "BLG": 0.019597989949748745,
+        "FXS": 0.07994389901823282,
+        "HSS": 0.0,
+        "RAN": 0.00014727540500736376,
+        "TEX": 0.9862907397827212,
+        "VD1": 0.013855582200905941,
+        "VD2": 0.021436227224008574
+      },
+      "gazebase_hard": {
+        "BLG": 0.02864321608040201,
+        "FXS": 0.09817671809256662,
+        "HSS": 0.0,
+        "RAN": 0.0004418262150220913,
+        "TEX": 0.9762027935851009,
+        "VD1": 0.04503064215294431,
+        "VD2": 0.08628081457663452
+      },
+      "gazebase_small": {
+        "BLG": 0.02864321608040201,
+        "FXS": 0.09817671809256662,
+        "HSS": 0.0,
+        "RAN": 0.0004418262150220913,
+        "TEX": 0.9762027935851009,
+        "VD1": 0.04503064215294431,
+        "VD2": 0.08628081457663452
+      },
+      "gazebase_small_hard": {
+        "BLG": 0.07587939698492463,
+        "FXS": 0.10518934081346423,
+        "HSS": 0.0030996309963099633,
+        "RAN": 0.0288659793814433,
+        "TEX": 0.7899637868598034,
+        "VD1": 0.1620037303490541,
+        "VD2": 0.227491961414791
+      },
+      "gazebase_slow": {
+        "BLG": 0.030835646006783842,
+        "FXS": 0.07951356407857811,
+        "HSS": 0.003966334526458354,
+        "RAN": 0.003473897520023159,
+        "TEX": 0.9474564926372155,
+        "VD1": 0.0293568640760224,
+        "VD2": 0.03705601092896175
+      }
+    },
+    "outside": {
+      "gazebasevr_nominal": {
+        "PUR": 0.009380149575358094,
+        "RAN": 0.002961128459136427,
+        "TEX": 0.9542715730578868,
+        "VID": 0.02194878616561357,
+        "VRG": 0.09867298578199052
+      },
+      "desktopactivity_raw": {
+        "BROWSE": 0.1810344827586207,
+        "PLAY": 0.08620689655172414,
+        "READ": 0.6142241379310345,
+        "SEARCH": 0.17456896551724138,
+        "WATCH": 0.09913793103448276,
+        "WRITE": 0.1271551724137931
+      }
+    },
+    "outside_recordings": {
+      "gazebasevr_nominal": {
+        "PUR": 0.0,
+        "RAN": 0.0,
+        "TEX": 0.9860557768924303,
+        "VID": 0.0,
+        "VRG": 0.0
+      },
+      "desktopactivity_raw": {
+        "BROWSE": 0.0,
+        "PLAY": 0.0,
+        "READ": 0.25,
+        "SEARCH": 0.0,
+        "WATCH": 0.0,
+        "WRITE": 0.0
+      }
+    }
+  },
+  "thresholds": {
+    "window": {
+      "balanced": 0.5879599452018738,
+      "low_fpr": 0.13977749645709994
+    },
+    "recording": {
+      "balanced": 0.9661602079868317,
+      "low_fpr": 0.41294264793396
+    }
+  },
+  "details": {
+    "selection": {
+      "boosting": {
+        "cuts": {
+          "window": {
+            "balanced": 0.4602528382336884,
+            "low_fpr": 0.1666538016608358
+          },
+          "recording": {
+            "balanced": 0.8945027278396378,
+            "low_fpr": 0.41794887427029614
+          }
+        },
+        "mean_window_balanced_accuracy": 0.8923117534359373,
+        "per_condition": {
+          "gazebase_nominal": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.4602528382336884,
+                "balanced_accuracy": 0.9784774186205427,
+                "accuracy": 0.9810158677472594,
+                "recall": 0.9749699639567481,
+                "specificity": 0.9819848732843374,
+                "false_positive_rate": 0.018015126715662633,
+                "precision": 0.8966300411270026,
+                "f1": 0.9341604579029834,
+                "roc_auc": 0.9975587966133261
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.1666538016608358,
+                "balanced_accuracy": 0.9682631235319712,
+                "accuracy": 0.9550521395181589,
+                "recall": 0.986517153918035,
+                "specificity": 0.9500090931459075,
+                "false_positive_rate": 0.049990906854092465,
+                "precision": 0.7597799825219761,
+                "f1": 0.8584289240598229,
+                "roc_auc": 0.9975587966133261
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8945027278396378,
+                "balanced_accuracy": 0.996911225127235,
+                "accuracy": 0.9972505091649695,
+                "recall": 0.9964362081254454,
+                "specificity": 0.9973862421290246,
+                "false_positive_rate": 0.0026137578709753972,
+                "precision": 0.9845070422535211,
+                "f1": 0.9904357066950054,
+                "roc_auc": 0.9998318239120145
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41794887427029614,
+                "balanced_accuracy": 0.9746941138623247,
+                "accuracy": 0.9571283095723014,
+                "recall": 0.9992872416250891,
+                "specificity": 0.9501009860995604,
+                "false_positive_rate": 0.049899013900439604,
+                "precision": 0.7694840834248079,
+                "f1": 0.8694573643410853,
+                "roc_auc": 0.9998318239120145
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.4602528382336884,
+                "low_fpr": 0.1666538016608358
+              },
+              "recording": {
+                "balanced": 0.8945027278396378,
+                "low_fpr": 0.41794887427029614
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.015233297349166368,
+              "FXS": 0.11722659042172981,
+              "HSS": 7.525020693806908E-05,
+              "RAN": 0.0007913181098801719,
+              "TEX": 0.9749699639567481,
+              "VD1": 0.03433652530779754,
+              "VD2": 0.04819937012186772
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.0021413276231263384,
+              "FXS": 0.013571428571428571,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9964362081254454,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_hard": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.4602528382336884,
+                "balanced_accuracy": 0.9257212712938164,
+                "accuracy": 0.9352935210540388,
+                "recall": 0.9124949939927913,
+                "specificity": 0.9389475485948415,
+                "false_positive_rate": 0.06105245140515847,
+                "precision": 0.705490762720611,
+                "f1": 0.7957508731082654,
+                "roc_auc": 0.9804903854393235
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.1666538016608358,
+                "balanced_accuracy": 0.9097847185442669,
+                "accuracy": 0.8642989516775924,
+                "recall": 0.972633827259378,
+                "specificity": 0.8469356098291558,
+                "false_positive_rate": 0.15306439017084417,
+                "precision": 0.5045706371191135,
+                "f1": 0.6644475856094113,
+                "roc_auc": 0.9804903854393235
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8945027278396378,
+                "balanced_accuracy": 0.9700639788921227,
+                "accuracy": 0.9894093686354379,
+                "recall": 0.9429793300071276,
+                "specificity": 0.9971486277771178,
+                "false_positive_rate": 0.0028513722228822314,
+                "precision": 0.9821826280623608,
+                "f1": 0.9621818181818182,
+                "roc_auc": 0.9989860319851274
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41794887427029614,
+                "balanced_accuracy": 0.9241416604941413,
+                "accuracy": 0.8704684317718941,
+                "recall": 0.9992872416250891,
+                "specificity": 0.8489960793631935,
+                "false_positive_rate": 0.15100392063680645,
+                "precision": 0.5245043022820801,
+                "f1": 0.6879293424926398,
+                "roc_auc": 0.9989860319851274
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.4602528382336884,
+                "low_fpr": 0.1666538016608358
+              },
+              "recording": {
+                "balanced": 0.8945027278396378,
+                "low_fpr": 0.41794887427029614
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.03370516972532086,
+              "FXS": 0.13295210864903503,
+              "HSS": 0.0006772518624426217,
+              "RAN": 0.020009043635541488,
+              "TEX": 0.9124949939927913,
+              "VD1": 0.12558139534883722,
+              "VD2": 0.18273312337395592
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.005710206995003569,
+              "FXS": 0.011428571428571429,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9429793300071276,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_small": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.4602528382336884,
+                "balanced_accuracy": 0.9268295280395291,
+                "accuracy": 0.9313104491098019,
+                "recall": 0.920638099052196,
+                "specificity": 0.9330209570268622,
+                "false_positive_rate": 0.06697904297313784,
+                "precision": 0.6877929590106712,
+                "f1": 0.7873615709555886,
+                "roc_auc": 0.9804323500227117
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.1666538016608358,
+                "balanced_accuracy": 0.9055852709570044,
+                "accuracy": 0.8554661208382891,
+                "recall": 0.974836470431184,
+                "specificity": 0.8363340714828247,
+                "false_positive_rate": 0.16366592851717532,
+                "precision": 0.48839620117710003,
+                "f1": 0.6507597023570822,
+                "roc_auc": 0.9804323500227117
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8945027278396378,
+                "balanced_accuracy": 0.9742217219656346,
+                "accuracy": 0.9904276985743381,
+                "recall": 0.9515324305060584,
+                "specificity": 0.9969110134252109,
+                "false_positive_rate": 0.0030889865747890655,
+                "precision": 0.9808963997060984,
+                "f1": 0.9659913169319826,
+                "roc_auc": 0.9991097506480411
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41794887427029614,
+                "balanced_accuracy": 0.915290525885611,
+                "accuracy": 0.855295315682281,
+                "recall": 0.9992872416250891,
+                "specificity": 0.8312938101461328,
+                "false_positive_rate": 0.1687061898538672,
+                "precision": 0.4968107725017718,
+                "f1": 0.6636686390532544,
+                "roc_auc": 0.9991097506480411
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.4602528382336884,
+                "low_fpr": 0.1666538016608358
+              },
+              "recording": {
+                "balanced": 0.8945027278396378,
+                "low_fpr": 0.41794887427029614
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.03730358642197433,
+              "FXS": 0.1343817012151537,
+              "HSS": 0.0007148769659116562,
+              "RAN": 0.024267088702991935,
+              "TEX": 0.920638099052196,
+              "VD1": 0.13775649794801642,
+              "VD2": 0.1983431466520608
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.005710206995003569,
+              "FXS": 0.012142857142857143,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9515324305060584,
+              "VD1": 0.0,
+              "VD2": 0.0007122507122507123
+            }
+          },
+          "gazebase_small_hard": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.4602528382336884,
+                "balanced_accuracy": 0.7382187957898612,
+                "accuracy": 0.8033358227532985,
+                "recall": 0.6482445601388332,
+                "specificity": 0.8281930314408892,
+                "false_positive_rate": 0.17180696855911082,
+                "precision": 0.37684308551916806,
+                "f1": 0.4766157923148648,
+                "roc_auc": 0.8396217028234875
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.1666538016608358,
+                "balanced_accuracy": 0.7495569637832223,
+                "accuracy": 0.6491208659493449,
+                "recall": 0.8883326658657055,
+                "specificity": 0.6107812617007392,
+                "false_positive_rate": 0.3892187382992608,
+                "precision": 0.26782983176366415,
+                "f1": 0.41157188360082875,
+                "roc_auc": 0.8396217028234875
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8945027278396378,
+                "balanced_accuracy": 0.5662861478030707,
+                "accuracy": 0.8714867617107943,
+                "recall": 0.13898788310762653,
+                "specificity": 0.9935844124985149,
+                "false_positive_rate": 0.006415587501485076,
+                "precision": 0.7831325301204819,
+                "f1": 0.2360774818401937,
+                "roc_auc": 0.9539952024934094
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41794887427029614,
+                "balanced_accuracy": 0.7944043937146177,
+                "accuracy": 0.65010183299389,
+                "recall": 0.9964362081254454,
+                "specificity": 0.59237257930379,
+                "false_positive_rate": 0.40762742069621005,
+                "precision": 0.28950093186995235,
+                "f1": 0.44865211810012834,
+                "roc_auc": 0.9539952024934094
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.4602528382336884,
+                "low_fpr": 0.1666538016608358
+              },
+              "recording": {
+                "balanced": 0.8945027278396378,
+                "low_fpr": 0.41794887427029614
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.12402542881132302,
+              "FXS": 0.14295925661186562,
+              "HSS": 0.034502219881104676,
+              "RAN": 0.18173939256914612,
+              "TEX": 0.6482445601388332,
+              "VD1": 0.2782489740082079,
+              "VD2": 0.32986443927153225
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.017130620985010708,
+              "FXS": 0.016428571428571428,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.13898788310762653,
+              "VD1": 0.002849002849002849,
+              "VD2": 0.002136752136752137
+            }
+          }
+        }
+      },
+      "network": {
+        "cuts": {
+          "window": {
+            "balanced": 0.5879599452018738,
+            "low_fpr": 0.13977749645709994
+          },
+          "recording": {
+            "balanced": 0.9661602079868317,
+            "low_fpr": 0.41294264793396
+          }
+        },
+        "mean_window_balanced_accuracy": 0.9474563850637903,
+        "per_condition": {
+          "gazebase_nominal": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5879599452018738,
+                "balanced_accuracy": 0.9873154416878075,
+                "accuracy": 0.9897288376252777,
+                "recall": 0.9839807769323188,
+                "specificity": 0.9906501064432962,
+                "false_positive_rate": 0.009349893556703792,
+                "precision": 0.944031762295082,
+                "f1": 0.9635923916595857,
+                "roc_auc": 0.9989864641489469
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.13977749645709994,
+                "balanced_accuracy": 0.9722011825361095,
+                "accuracy": 0.9561401082436681,
+                "recall": 0.9943932719263116,
+                "specificity": 0.9500090931459075,
+                "false_positive_rate": 0.049990906854092465,
+                "precision": 0.761228348066016,
+                "f1": 0.8623274390067432,
+                "roc_auc": 0.9989864641489469
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.9661602079868317,
+                "balanced_accuracy": 0.9979210437824343,
+                "accuracy": 0.9984725050916496,
+                "recall": 0.9971489665003563,
+                "specificity": 0.9986931210645122,
+                "false_positive_rate": 0.0013068789354877541,
+                "precision": 0.9921985815602837,
+                "f1": 0.9946676146462851,
+                "roc_auc": 0.999911508553905
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41294264793396,
+                "balanced_accuracy": 0.9746941138623247,
+                "accuracy": 0.9571283095723014,
+                "recall": 0.9992872416250891,
+                "specificity": 0.9501009860995604,
+                "false_positive_rate": 0.049899013900439604,
+                "precision": 0.7694840834248079,
+                "f1": 0.8694573643410853,
+                "roc_auc": 0.999911508553905
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5879599452018738,
+                "low_fpr": 0.13977749645709994
+              },
+              "recording": {
+                "balanced": 0.9661602079868317,
+                "low_fpr": 0.41294264793396
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.023389708528247573,
+              "FXS": 0.07219442458899214,
+              "HSS": 0.00011287531040710362,
+              "RAN": 0.00018840907378099328,
+              "TEX": 0.9839807769323188,
+              "VD1": 0.013543091655266758,
+              "VD2": 0.01855401889634397
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.0014275517487508922,
+              "FXS": 0.0064285714285714285,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9971489665003563,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_hard": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5879599452018738,
+                "balanced_accuracy": 0.9728413679414323,
+                "accuracy": 0.9738610903659447,
+                "recall": 0.9714323855293018,
+                "specificity": 0.9742503503535629,
+                "false_positive_rate": 0.02574964964643711,
+                "precision": 0.8580861977477743,
+                "f1": 0.9112481607864007,
+                "roc_auc": 0.9966198652307049
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.13977749645709994,
+                "balanced_accuracy": 0.9369801235513662,
+                "accuracy": 0.8955734424990088,
+                "recall": 0.9941930316379656,
+                "specificity": 0.8797672154647668,
+                "false_positive_rate": 0.12023278453523323,
+                "precision": 0.5699471952246116,
+                "f1": 0.724535460647923,
+                "roc_auc": 0.9966198652307049
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.9661602079868317,
+                "balanced_accuracy": 0.9909716284568506,
+                "accuracy": 0.9962321792260692,
+                "recall": 0.9836065573770492,
+                "specificity": 0.998336699536652,
+                "false_positive_rate": 0.0016633004633479498,
+                "precision": 0.9899569583931134,
+                "f1": 0.9867715409367179,
+                "roc_auc": 0.999727243112084
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41294264793396,
+                "balanced_accuracy": 0.9469526382771993,
+                "accuracy": 0.9095723014256619,
+                "recall": 0.9992872416250891,
+                "specificity": 0.8946180349293097,
+                "false_positive_rate": 0.10538196507069031,
+                "precision": 0.6124945391000437,
+                "f1": 0.7594799566630553,
+                "roc_auc": 0.999727243112084
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5879599452018738,
+                "low_fpr": 0.13977749645709994
+              },
+              "recording": {
+                "balanced": 0.9661602079868317,
+                "low_fpr": 0.41294264793396
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.029626964135780257,
+              "FXS": 0.09935668334524661,
+              "HSS": 0.00015050041387613817,
+              "RAN": 0.0008289999246363705,
+              "TEX": 0.9714323855293018,
+              "VD1": 0.05020519835841313,
+              "VD2": 0.07681774613172669
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.0014275517487508922,
+              "FXS": 0.008571428571428572,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9836065573770492,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_small": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5879599452018738,
+                "balanced_accuracy": 0.9728413679414323,
+                "accuracy": 0.9738610903659447,
+                "recall": 0.9714323855293018,
+                "specificity": 0.9742503503535629,
+                "false_positive_rate": 0.02574964964643711,
+                "precision": 0.8580861977477743,
+                "f1": 0.9112481607864007,
+                "roc_auc": 0.9966198659447497
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.13977749645709994,
+                "balanced_accuracy": 0.9369801235513662,
+                "accuracy": 0.8955734424990088,
+                "recall": 0.9941930316379656,
+                "specificity": 0.8797672154647668,
+                "false_positive_rate": 0.12023278453523323,
+                "precision": 0.5699471952246116,
+                "f1": 0.724535460647923,
+                "roc_auc": 0.9966198659447497
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.9661602079868317,
+                "balanced_accuracy": 0.9909716284568506,
+                "accuracy": 0.9962321792260692,
+                "recall": 0.9836065573770492,
+                "specificity": 0.998336699536652,
+                "false_positive_rate": 0.0016633004633479498,
+                "precision": 0.9899569583931134,
+                "f1": 0.9867715409367179,
+                "roc_auc": 0.999727243112084
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41294264793396,
+                "balanced_accuracy": 0.9469526382771993,
+                "accuracy": 0.9095723014256619,
+                "recall": 0.9992872416250891,
+                "specificity": 0.8946180349293097,
+                "false_positive_rate": 0.10538196507069031,
+                "precision": 0.6124945391000437,
+                "f1": 0.7594799566630553,
+                "roc_auc": 0.999727243112084
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5879599452018738,
+                "low_fpr": 0.13977749645709994
+              },
+              "recording": {
+                "balanced": 0.9661602079868317,
+                "low_fpr": 0.41294264793396
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.029626964135780257,
+              "FXS": 0.09935668334524661,
+              "HSS": 0.00015050041387613817,
+              "RAN": 0.0008289999246363705,
+              "TEX": 0.9714323855293018,
+              "VD1": 0.05020519835841313,
+              "VD2": 0.07681774613172669
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.0014275517487508922,
+              "FXS": 0.008571428571428572,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9836065573770492,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_small_hard": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5879599452018738,
+                "balanced_accuracy": 0.8568273626844891,
+                "accuracy": 0.9011239270138947,
+                "recall": 0.7956214123615004,
+                "specificity": 0.9180333130074778,
+                "false_positive_rate": 0.08196668699252219,
+                "precision": 0.6087222959861097,
+                "f1": 0.6897349843768081,
+                "roc_auc": 0.9487437237017936
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.13977749645709994,
+                "balanced_accuracy": 0.8408466380545214,
+                "accuracy": 0.7420868715367097,
+                "recall": 0.9773061006541183,
+                "specificity": 0.7043871754549247,
+                "false_positive_rate": 0.2956128245450753,
+                "precision": 0.3463512714370195,
+                "f1": 0.5114483818572401,
+                "roc_auc": 0.9487437237017936
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.9661602079868317,
+                "balanced_accuracy": 0.7293892625241436,
+                "accuracy": 0.9209775967413442,
+                "recall": 0.46115466856735565,
+                "specificity": 0.9976238564809314,
+                "false_positive_rate": 0.002376143519068563,
+                "precision": 0.9700149925037481,
+                "f1": 0.6251207729468599,
+                "roc_auc": 0.993472718510573
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.41294264793396,
+                "balanced_accuracy": 0.8330759601258391,
+                "accuracy": 0.7143584521384929,
+                "recall": 0.9992872416250891,
+                "specificity": 0.666864678626589,
+                "false_positive_rate": 0.33313532137341095,
+                "precision": 0.3333333333333333,
+                "f1": 0.49991085755036546,
+                "roc_auc": 0.993472718510573
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5879599452018738,
+                "low_fpr": 0.13977749645709994
+              },
+              "recording": {
+                "balanced": 0.9661602079868317,
+                "low_fpr": 0.41294264793396
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.07532685618327936,
+              "FXS": 0.11686919228020014,
+              "HSS": 0.003612009933027316,
+              "RAN": 0.0364006330544879,
+              "TEX": 0.7956214123615004,
+              "VD1": 0.16709986320109438,
+              "VD2": 0.21922497603724497
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.005710206995003569,
+              "FXS": 0.008571428571428572,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.46115466856735565,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          }
+        }
+      },
+      "average": {
+        "cuts": {
+          "window": {
+            "balanced": 0.5236583081604737,
+            "low_fpr": 0.16855699918753622
+          },
+          "recording": {
+            "balanced": 0.8276539205771535,
+            "low_fpr": 0.3710857701504133
+          }
+        },
+        "mean_window_balanced_accuracy": 0.9388066427490517,
+        "per_condition": {
+          "gazebase_nominal": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5236583081604737,
+                "balanced_accuracy": 0.9875333331628194,
+                "accuracy": 0.9911671691606967,
+                "recall": 0.9825123481511147,
+                "specificity": 0.9925543181745242,
+                "false_positive_rate": 0.007445681825475781,
+                "precision": 0.9548521017125065,
+                "f1": 0.9684847687347851,
+                "roc_auc": 0.9989679232624998
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.16855699918753622,
+                "balanced_accuracy": 0.9720343156291545,
+                "accuracy": 0.9560940078739432,
+                "recall": 0.9940595381124016,
+                "specificity": 0.9500090931459075,
+                "false_positive_rate": 0.049990906854092465,
+                "precision": 0.7611673310845344,
+                "f1": 0.8621627880050944,
+                "roc_auc": 0.9989679232624998
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8276539205771535,
+                "balanced_accuracy": 0.9981585734535315,
+                "accuracy": 0.9978615071283096,
+                "recall": 0.9985744832501782,
+                "specificity": 0.9977426636568849,
+                "false_positive_rate": 0.0022573363431150906,
+                "precision": 0.9866197183098592,
+                "f1": 0.9925611052072264,
+                "roc_auc": 0.9999003306870299
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.3710857701504133,
+                "balanced_accuracy": 0.9746941138623247,
+                "accuracy": 0.9571283095723014,
+                "recall": 0.9992872416250891,
+                "specificity": 0.9501009860995604,
+                "false_positive_rate": 0.049899013900439604,
+                "precision": 0.7694840834248079,
+                "f1": 0.8694573643410853,
+                "roc_auc": 0.9999003306870299
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5236583081604737,
+                "low_fpr": 0.16855699918753622
+              },
+              "recording": {
+                "balanced": 0.8276539205771535,
+                "low_fpr": 0.3710857701504133
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.011994722322178242,
+              "FXS": 0.06397426733380987,
+              "HSS": 0.0,
+              "RAN": 7.536362951239732E-05,
+              "TEX": 0.9825123481511147,
+              "VD1": 0.01094391244870041,
+              "VD2": 0.01745857866630152
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.0014275517487508922,
+              "FXS": 0.012142857142857143,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9985744832501782,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_hard": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5236583081604737,
+                "balanced_accuracy": 0.9681237434213396,
+                "accuracy": 0.9725887201615357,
+                "recall": 0.9619543452142572,
+                "specificity": 0.974293141628422,
+                "false_positive_rate": 0.025706858371578045,
+                "precision": 0.8570918822479928,
+                "f1": 0.9065006132654023,
+                "roc_auc": 0.9947851282702952
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.16855699918753622,
+                "balanced_accuracy": 0.9244483165521317,
+                "accuracy": 0.8745516739044247,
+                "recall": 0.9933920704845814,
+                "specificity": 0.8555045626196819,
+                "false_positive_rate": 0.14449543738031811,
+                "precision": 0.5242338851708348,
+                "f1": 0.6862953057271972,
+                "roc_auc": 0.9947851282702952
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8276539205771535,
+                "balanced_accuracy": 0.9945353779910002,
+                "accuracy": 0.9967413441955193,
+                "recall": 0.9914468995010691,
+                "specificity": 0.9976238564809314,
+                "false_positive_rate": 0.002376143519068563,
+                "precision": 0.9858256555634302,
+                "f1": 0.9886282871357498,
+                "roc_auc": 0.99964103804785
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.3710857701504133,
+                "balanced_accuracy": 0.9302602300557428,
+                "accuracy": 0.8809572301425662,
+                "recall": 0.9992872416250891,
+                "specificity": 0.8612332184863966,
+                "false_positive_rate": 0.13876678151360344,
+                "precision": 0.5455252918287937,
+                "f1": 0.7057639063679839,
+                "roc_auc": 0.99964103804785
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5236583081604737,
+                "low_fpr": 0.16855699918753622
+              },
+              "recording": {
+                "balanced": 0.8276539205771535,
+                "low_fpr": 0.3710857701504133
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.019671344608372315,
+              "FXS": 0.07755539671193709,
+              "HSS": 0.00015050041387613817,
+              "RAN": 0.0008666817393925691,
+              "TEX": 0.9619543452142572,
+              "VD1": 0.05170998632010944,
+              "VD2": 0.0848281528139121
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.0028551034975017845,
+              "FXS": 0.011428571428571429,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.9914468995010691,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_small": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5236583081604737,
+                "balanced_accuracy": 0.9680665484354196,
+                "accuracy": 0.9716206123973115,
+                "recall": 0.9631557869443332,
+                "specificity": 0.972977309926506,
+                "false_positive_rate": 0.027022690073494005,
+                "precision": 0.8510261854210899,
+                "f1": 0.9036257749389441,
+                "roc_auc": 0.9947828554657986
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.16855699918753622,
+                "balanced_accuracy": 0.9212239749265065,
+                "accuracy": 0.8687522473930241,
+                "recall": 0.9937258042984916,
+                "specificity": 0.8487221455545214,
+                "false_positive_rate": 0.1512778544454786,
+                "precision": 0.5128664439009266,
+                "f1": 0.6765581331939742,
+                "roc_auc": 0.9947828554657986
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8276539205771535,
+                "balanced_accuracy": 0.9948917571784557,
+                "accuracy": 0.9968431771894094,
+                "recall": 0.99215965787598,
+                "specificity": 0.9976238564809314,
+                "false_positive_rate": 0.002376143519068563,
+                "precision": 0.9858356940509915,
+                "f1": 0.98898756660746,
+                "roc_auc": 0.9996588210178785
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.3710857701504133,
+                "balanced_accuracy": 0.9260425753093962,
+                "accuracy": 0.8737270875763747,
+                "recall": 0.9992872416250891,
+                "specificity": 0.8527979089937032,
+                "false_positive_rate": 0.14720209100629678,
+                "precision": 0.5308595229079894,
+                "f1": 0.6933728981206727,
+                "roc_auc": 0.9996588210178785
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5236583081604737,
+                "low_fpr": 0.16855699918753622
+              },
+              "recording": {
+                "balanced": 0.8276539205771535,
+                "low_fpr": 0.3710857701504133
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.021470552956699054,
+              "FXS": 0.07827019299499642,
+              "HSS": 0.00015050041387613817,
+              "RAN": 0.0009043635541487678,
+              "TEX": 0.9631557869443332,
+              "VD1": 0.05410396716826266,
+              "VD2": 0.0896207038203478
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.0028551034975017845,
+              "FXS": 0.011428571428571429,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.99215965787598,
+              "VD1": 0.0,
+              "VD2": 0.0
+            }
+          },
+          "gazebase_small_hard": {
+            "window": {
+              "balanced": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.5236583081604737,
+                "balanced_accuracy": 0.8315029459766281,
+                "accuracy": 0.8912861081145871,
+                "recall": 0.748898678414097,
+                "specificity": 0.9141072135391594,
+                "false_positive_rate": 0.08589278646084064,
+                "precision": 0.5828874227232583,
+                "f1": 0.655546142385557,
+                "roc_auc": 0.9293390944293174
+              },
+              "low_fpr": {
+                "n_reading": 14982,
+                "n_not_reading": 93477,
+                "threshold": 0.16855699918753622,
+                "balanced_accuracy": 0.8007777856165612,
+                "accuracy": 0.6762555435694594,
+                "recall": 0.972834067547724,
+                "specificity": 0.6287215036853986,
+                "false_positive_rate": 0.3712784963146014,
+                "precision": 0.29575292709157686,
+                "f1": 0.4536047181115105,
+                "roc_auc": 0.9293390944293174
+              }
+            },
+            "recording": {
+              "balanced": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.8276539205771535,
+                "balanced_accuracy": 0.8160485969617711,
+                "accuracy": 0.9432790224032587,
+                "recall": 0.6379187455452602,
+                "specificity": 0.9941784483782821,
+                "false_positive_rate": 0.005821551621717935,
+                "precision": 0.948093220338983,
+                "f1": 0.7626757562846186,
+                "roc_auc": 0.9903850021479287
+              },
+              "low_fpr": {
+                "n_reading": 1403,
+                "n_not_reading": 8417,
+                "threshold": 0.3710857701504133,
+                "balanced_accuracy": 0.8053345268811185,
+                "accuracy": 0.6673116089613035,
+                "recall": 0.9985744832501782,
+                "specificity": 0.612094570512059,
+                "false_positive_rate": 0.38790542948794104,
+                "precision": 0.3002571795970853,
+                "f1": 0.46169055857637165,
+                "roc_auc": 0.9903850021479287
+              }
+            },
+            "cuts": {
+              "window": {
+                "balanced": 0.5236583081604737,
+                "low_fpr": 0.16855699918753622
+              },
+              "recording": {
+                "balanced": 0.8276539205771535,
+                "low_fpr": 0.3710857701504133
+              }
+            },
+            "window_flag_rate_by_task": {
+              "BLG": 0.06669065611131102,
+              "FXS": 0.091493924231594,
+              "HSS": 0.005079388968319663,
+              "RAN": 0.0449167231893888,
+              "TEX": 0.748898678414097,
+              "VD1": 0.17845417236662106,
+              "VD2": 0.22463371217307956
+            },
+            "recording_flag_rate_by_task": {
+              "BLG": 0.013561741613133477,
+              "FXS": 0.018571428571428572,
+              "HSS": 0.0,
+              "RAN": 0.0,
+              "TEX": 0.6379187455452602,
+              "VD1": 0.0,
+              "VD2": 0.002849002849002849
+            }
+          }
+        }
+      }
+    },
+    "test": {
+      "gazebase_nominal": {
+        "boosting": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.4602528382336884,
+              "balanced_accuracy": 0.9786950918324386,
+              "accuracy": 0.9803034143162316,
+              "recall": 0.9764614588722194,
+              "specificity": 0.9809287247926578,
+              "false_positive_rate": 0.019071275207342198,
+              "precision": 0.8928571428571429,
+              "f1": 0.9327897207808253,
+              "roc_auc": 0.9981784314161509
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.1666538016608358,
+              "balanced_accuracy": 0.9705983554363128,
+              "accuracy": 0.9555740613345886,
+              "recall": 0.9914640455250905,
+              "specificity": 0.9497326653475351,
+              "false_positive_rate": 0.05026733465246491,
+              "precision": 0.7624825939924408,
+              "f1": 0.8620263128303159,
+              "roc_auc": 0.9981784314161509
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8945027278396378,
+              "balanced_accuracy": 0.9974383938937974,
+              "accuracy": 0.9976038338658147,
+              "recall": 0.9972067039106145,
+              "specificity": 0.9976700838769804,
+              "false_positive_rate": 0.002329916123019582,
+              "precision": 0.9861878453038674,
+              "f1": 0.9916666666666667,
+              "roc_auc": 0.9999778723049769
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41794887427029614,
+              "balanced_accuracy": 0.9764678471575023,
+              "accuracy": 0.9596645367412141,
+              "recall": 1.0,
+              "specificity": 0.9529356943150047,
+              "false_positive_rate": 0.04706430568499531,
+              "precision": 0.7799564270152506,
+              "f1": 0.8763769889840881,
+              "roc_auc": 0.9999778723049769
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.4602528382336884,
+              "low_fpr": 0.1666538016608358
+            },
+            "recording": {
+              "balanced": 0.8945027278396378,
+              "low_fpr": 0.41794887427029614
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.01507537688442211,
+            "FXS": 0.11921458625525946,
+            "HSS": 0.0,
+            "RAN": 0.0008836524300441826,
+            "TEX": 0.9764614588722194,
+            "VD1": 0.029043431921129764,
+            "VD2": 0.0597534833869239
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.0,
+            "FXS": 0.014005602240896359,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9972067039106145,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "network": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5879599452018738,
+              "balanced_accuracy": 0.9883249261579374,
+              "accuracy": 0.9897896375683406,
+              "recall": 0.9862907397827212,
+              "specificity": 0.9903591125331537,
+              "false_positive_rate": 0.009640887466846326,
+              "precision": 0.9433448787728848,
+              "f1": 0.964339908952959,
+              "roc_auc": 0.9993593642834213
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.13977749645709994,
+              "balanced_accuracy": 0.9738405902669326,
+              "accuracy": 0.9572395814475542,
+              "recall": 0.9968960165545784,
+              "specificity": 0.9507851639792868,
+              "false_positive_rate": 0.04921483602071319,
+              "precision": 0.7672705554449533,
+              "f1": 0.8671391607604906,
+              "roc_auc": 0.9993593642834213
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.9661602079868317,
+              "balanced_accuracy": 0.9990680335507922,
+              "accuracy": 0.9984025559105432,
+              "recall": 1.0,
+              "specificity": 0.9981360671015843,
+              "false_positive_rate": 0.0018639328984156878,
+              "precision": 0.988950276243094,
+              "f1": 0.9944444444444445,
+              "roc_auc": 0.999996095112643
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41294264793396,
+              "balanced_accuracy": 0.9762348555452004,
+              "accuracy": 0.9592651757188498,
+              "recall": 1.0,
+              "specificity": 0.9524697110904008,
+              "false_positive_rate": 0.047530288909599205,
+              "precision": 0.7782608695652173,
+              "f1": 0.8753056234718826,
+              "roc_auc": 0.999996095112643
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5879599452018738,
+              "low_fpr": 0.13977749645709994
+            },
+            "recording": {
+              "balanced": 0.9661602079868317,
+              "low_fpr": 0.41294264793396
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.019597989949748745,
+            "FXS": 0.07994389901823282,
+            "HSS": 0.0,
+            "RAN": 0.00014727540500736376,
+            "TEX": 0.9862907397827212,
+            "VD1": 0.013855582200905941,
+            "VD2": 0.021436227224008574
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.002793296089385475,
+            "FXS": 0.008403361344537815,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 1.0,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "average": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5236583081604737,
+              "balanced_accuracy": 0.989251124953879,
+              "accuracy": 0.9913827437633513,
+              "recall": 0.9862907397827212,
+              "specificity": 0.9922115101250368,
+              "false_positive_rate": 0.007788489874963167,
+              "precision": 0.9537268634317159,
+              "f1": 0.969735503560529,
+              "roc_auc": 0.9994619788163441
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.16855699918753622,
+              "balanced_accuracy": 0.9742166366482223,
+              "accuracy": 0.9567688909808465,
+              "recall": 0.9984480082772892,
+              "specificity": 0.9499852650191555,
+              "false_positive_rate": 0.05001473498084452,
+              "precision": 0.7646592709984152,
+              "f1": 0.8660533991474085,
+              "roc_auc": 0.9994619788163441
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8276539205771535,
+              "balanced_accuracy": 0.9983690587138863,
+              "accuracy": 0.9972044728434505,
+              "recall": 1.0,
+              "specificity": 0.9967381174277726,
+              "false_positive_rate": 0.0032618825722273703,
+              "precision": 0.9808219178082191,
+              "f1": 0.9903181189488244,
+              "roc_auc": 0.999990888596167
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.3710857701504133,
+              "balanced_accuracy": 0.9757688723205964,
+              "accuracy": 0.9584664536741214,
+              "recall": 1.0,
+              "specificity": 0.9515377446411929,
+              "false_positive_rate": 0.048462255358807105,
+              "precision": 0.7748917748917749,
+              "f1": 0.873170731707317,
+              "roc_auc": 0.999990888596167
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5236583081604737,
+              "low_fpr": 0.16855699918753622
+            },
+            "recording": {
+              "balanced": 0.8276539205771535,
+              "low_fpr": 0.3710857701504133
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.011055276381909548,
+            "FXS": 0.07152875175315568,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9862907397827212,
+            "VD1": 0.01145750066613376,
+            "VD2": 0.018488745980707395
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.0,
+            "FXS": 0.0196078431372549,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 1.0,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        }
+      },
+      "gazebase_hard": {
+        "boosting": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.4602528382336884,
+              "balanced_accuracy": 0.9220183454268494,
+              "accuracy": 0.9351533364712697,
+              "recall": 0.9037765131919296,
+              "specificity": 0.9402601776617691,
+              "false_positive_rate": 0.05973982233823094,
+              "precision": 0.7111744351719926,
+              "f1": 0.79599043171204,
+              "roc_auc": 0.9803873822217005
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.1666538016608358,
+              "balanced_accuracy": 0.9106130553520193,
+              "accuracy": 0.8661790796191028,
+              "recall": 0.9723228142783239,
+              "specificity": 0.8489032964257146,
+              "false_positive_rate": 0.1510967035742854,
+              "precision": 0.5115677735438214,
+              "f1": 0.6704119850187267,
+              "roc_auc": 0.9803873822217005
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8945027278396378,
+              "balanced_accuracy": 0.962986874371964,
+              "accuracy": 0.9864217252396166,
+              "recall": 0.9301675977653632,
+              "specificity": 0.9958061509785647,
+              "false_positive_rate": 0.00419384902143527,
+              "precision": 0.9736842105263158,
+              "f1": 0.9514285714285715,
+              "roc_auc": 0.9988493598587993
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41794887427029614,
+              "balanced_accuracy": 0.9284715750232991,
+              "accuracy": 0.8773961661341853,
+              "recall": 1.0,
+              "specificity": 0.8569431500465983,
+              "false_positive_rate": 0.14305684995340173,
+              "precision": 0.5383458646616541,
+              "f1": 0.6999022482893451,
+              "roc_auc": 0.9988493598587993
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.4602528382336884,
+              "low_fpr": 0.1666538016608358
+            },
+            "recording": {
+              "balanced": 0.8945027278396378,
+              "low_fpr": 0.41794887427029614
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.033165829145728645,
+            "FXS": 0.1332398316970547,
+            "HSS": 0.0008856088560885609,
+            "RAN": 0.017083946980854196,
+            "TEX": 0.9037765131919296,
+            "VD1": 0.10738076205702105,
+            "VD2": 0.19640943193997856
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.008379888268156424,
+            "FXS": 0.01680672268907563,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9301675977653632,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "network": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5879599452018738,
+              "balanced_accuracy": 0.9750293637861933,
+              "accuracy": 0.9741844382490314,
+              "recall": 0.9762027935851009,
+              "specificity": 0.9738559339872859,
+              "false_positive_rate": 0.02614406601271413,
+              "precision": 0.8587030716723549,
+              "f1": 0.9136908364604769,
+              "roc_auc": 0.9973992067307467
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.13977749645709994,
+              "balanced_accuracy": 0.9403229682164579,
+              "accuracy": 0.8999601723451247,
+              "recall": 0.9963786859803414,
+              "specificity": 0.8842672504525744,
+              "false_positive_rate": 0.11573274954742563,
+              "precision": 0.583547947280715,
+              "f1": 0.7360275150472915,
+              "roc_auc": 0.9973992067307467
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.9661602079868317,
+              "balanced_accuracy": 0.994645097804412,
+              "accuracy": 0.9968051118210862,
+              "recall": 0.9916201117318436,
+              "specificity": 0.9976700838769804,
+              "false_positive_rate": 0.002329916123019582,
+              "precision": 0.9861111111111112,
+              "f1": 0.9888579387186631,
+              "roc_auc": 0.9999049810743126
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41294264793396,
+              "balanced_accuracy": 0.9506057781919851,
+              "accuracy": 0.9153354632587859,
+              "recall": 1.0,
+              "specificity": 0.9012115563839702,
+              "false_positive_rate": 0.09878844361602979,
+              "precision": 0.6280701754385964,
+              "f1": 0.771551724137931,
+              "roc_auc": 0.9999049810743126
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5879599452018738,
+              "low_fpr": 0.13977749645709994
+            },
+            "recording": {
+              "balanced": 0.9661602079868317,
+              "low_fpr": 0.41294264793396
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.02864321608040201,
+            "FXS": 0.09817671809256662,
+            "HSS": 0.0,
+            "RAN": 0.0004418262150220913,
+            "TEX": 0.9762027935851009,
+            "VD1": 0.04503064215294431,
+            "VD2": 0.08628081457663452
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.002793296089385475,
+            "FXS": 0.011204481792717087,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9916201117318436,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "average": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5236583081604737,
+              "balanced_accuracy": 0.9683160178705011,
+              "accuracy": 0.9728809877258409,
+              "recall": 0.9619762027935851,
+              "specificity": 0.9746558329474172,
+              "false_positive_rate": 0.0253441670525828,
+              "precision": 0.8606803980560056,
+              "f1": 0.9085134970074509,
+              "roc_auc": 0.9956648163962147
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.16855699918753622,
+              "balanced_accuracy": 0.9282313651823086,
+              "accuracy": 0.878417031753503,
+              "recall": 0.9974133471288154,
+              "specificity": 0.8590493832358018,
+              "false_positive_rate": 0.14095061676419818,
+              "precision": 0.535258189894503,
+              "f1": 0.696657633242999,
+              "roc_auc": 0.9956648163962147
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8276539205771535,
+              "balanced_accuracy": 0.9958087542368028,
+              "accuracy": 0.9968051118210862,
+              "recall": 0.994413407821229,
+              "specificity": 0.9972041006523765,
+              "false_positive_rate": 0.002795899347623476,
+              "precision": 0.9834254143646409,
+              "f1": 0.9888888888888889,
+              "roc_auc": 0.9998516142804335
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.3710857701504133,
+              "balanced_accuracy": 0.9335973904939422,
+              "accuracy": 0.8861821086261981,
+              "recall": 1.0,
+              "specificity": 0.8671947809878844,
+              "false_positive_rate": 0.13280521901211562,
+              "precision": 0.5567651632970451,
+              "f1": 0.7152847152847152,
+              "roc_auc": 0.9998516142804335
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5236583081604737,
+              "low_fpr": 0.16855699918753622
+            },
+            "recording": {
+              "balanced": 0.8276539205771535,
+              "low_fpr": 0.3710857701504133
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.018090452261306532,
+            "FXS": 0.09396914446002805,
+            "HSS": 0.0,
+            "RAN": 0.00117820324005891,
+            "TEX": 0.9619762027935851,
+            "VD1": 0.042366107114308556,
+            "VD2": 0.08896034297963558
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.002793296089385475,
+            "FXS": 0.014005602240896359,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.994413407821229,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        }
+      },
+      "gazebase_small": {
+        "boosting": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.4602528382336884,
+              "balanced_accuracy": 0.9235046934687303,
+              "accuracy": 0.9317498823273833,
+              "recall": 0.9120538023797207,
+              "specificity": 0.9349555845577401,
+              "false_positive_rate": 0.06504441544225992,
+              "precision": 0.6953263656083613,
+              "f1": 0.7890791093208012,
+              "roc_auc": 0.9803427013951502
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.1666538016608358,
+              "balanced_accuracy": 0.906761269723024,
+              "accuracy": 0.8569463050798364,
+              "recall": 0.9759441282979824,
+              "specificity": 0.8375784111480655,
+              "false_positive_rate": 0.16242158885193447,
+              "precision": 0.49443061197746035,
+              "f1": 0.6563451335130903,
+              "roc_auc": 0.9803427013951502
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8945027278396378,
+              "balanced_accuracy": 0.9641505308043548,
+              "accuracy": 0.9864217252396166,
+              "recall": 0.9329608938547486,
+              "specificity": 0.9953401677539608,
+              "false_positive_rate": 0.004659832246039164,
+              "precision": 0.9709302325581395,
+              "f1": 0.9515669515669516,
+              "roc_auc": 0.9989899358036518
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41794887427029614,
+              "balanced_accuracy": 0.9205498602050326,
+              "accuracy": 0.8638178913738019,
+              "recall": 1.0,
+              "specificity": 0.8410997204100652,
+              "false_positive_rate": 0.1589002795899348,
+              "precision": 0.5121602288984263,
+              "f1": 0.6773888363292336,
+              "roc_auc": 0.9989899358036518
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.4602528382336884,
+              "low_fpr": 0.1666538016608358
+            },
+            "recording": {
+              "balanced": 0.8945027278396378,
+              "low_fpr": 0.41794887427029614
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.0371859296482412,
+            "FXS": 0.13464235624123422,
+            "HSS": 0.0008856088560885609,
+            "RAN": 0.021649484536082474,
+            "TEX": 0.9120538023797207,
+            "VD1": 0.11803890221156409,
+            "VD2": 0.2087352625937835
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.008379888268156424,
+            "FXS": 0.0196078431372549,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9329608938547486,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "network": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5879599452018738,
+              "balanced_accuracy": 0.9750293637861933,
+              "accuracy": 0.9741844382490314,
+              "recall": 0.9762027935851009,
+              "specificity": 0.9738559339872859,
+              "false_positive_rate": 0.02614406601271413,
+              "precision": 0.8587030716723549,
+              "f1": 0.9136908364604769,
+              "roc_auc": 0.9973992067307466
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.13977749645709994,
+              "balanced_accuracy": 0.9403229682164579,
+              "accuracy": 0.8999601723451247,
+              "recall": 0.9963786859803414,
+              "specificity": 0.8842672504525744,
+              "false_positive_rate": 0.11573274954742563,
+              "precision": 0.583547947280715,
+              "f1": 0.7360275150472915,
+              "roc_auc": 0.9973992067307466
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.9661602079868317,
+              "balanced_accuracy": 0.994645097804412,
+              "accuracy": 0.9968051118210862,
+              "recall": 0.9916201117318436,
+              "specificity": 0.9976700838769804,
+              "false_positive_rate": 0.002329916123019582,
+              "precision": 0.9861111111111112,
+              "f1": 0.9888579387186631,
+              "roc_auc": 0.9999049810743126
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41294264793396,
+              "balanced_accuracy": 0.9506057781919851,
+              "accuracy": 0.9153354632587859,
+              "recall": 1.0,
+              "specificity": 0.9012115563839702,
+              "false_positive_rate": 0.09878844361602979,
+              "precision": 0.6280701754385964,
+              "f1": 0.771551724137931,
+              "roc_auc": 0.9999049810743126
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5879599452018738,
+              "low_fpr": 0.13977749645709994
+            },
+            "recording": {
+              "balanced": 0.9661602079868317,
+              "low_fpr": 0.41294264793396
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.02864321608040201,
+            "FXS": 0.09817671809256662,
+            "HSS": 0.0,
+            "RAN": 0.0004418262150220913,
+            "TEX": 0.9762027935851009,
+            "VD1": 0.04503064215294431,
+            "VD2": 0.08628081457663452
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.002793296089385475,
+            "FXS": 0.011204481792717087,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9916201117318436,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "average": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5236583081604737,
+              "balanced_accuracy": 0.9691703276885067,
+              "accuracy": 0.9723016763822007,
+              "recall": 0.9648215209518882,
+              "specificity": 0.9735191344251253,
+              "false_positive_rate": 0.026480865574874723,
+              "precision": 0.8557008488185364,
+              "f1": 0.9069908814589667,
+              "roc_auc": 0.9956815213408716
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.16855699918753622,
+              "balanced_accuracy": 0.9245686699438124,
+              "accuracy": 0.8721170208914153,
+              "recall": 0.9974133471288154,
+              "specificity": 0.8517239927588094,
+              "false_positive_rate": 0.1482760072411906,
+              "precision": 0.5226348603957712,
+              "f1": 0.6858769121309144,
+              "roc_auc": 0.9956815213408716
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8276539205771535,
+              "balanced_accuracy": 0.9958087542368028,
+              "accuracy": 0.9968051118210862,
+              "recall": 0.994413407821229,
+              "specificity": 0.9972041006523765,
+              "false_positive_rate": 0.002795899347623476,
+              "precision": 0.9834254143646409,
+              "f1": 0.9888888888888889,
+              "roc_auc": 0.9998698370880995
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.3710857701504133,
+              "balanced_accuracy": 0.929403541472507,
+              "accuracy": 0.8789936102236422,
+              "recall": 1.0,
+              "specificity": 0.858807082945014,
+              "false_positive_rate": 0.14119291705498604,
+              "precision": 0.5416036308623298,
+              "f1": 0.7026496565260059,
+              "roc_auc": 0.9998698370880995
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5236583081604737,
+              "low_fpr": 0.16855699918753622
+            },
+            "recording": {
+              "balanced": 0.8276539205771535,
+              "low_fpr": 0.3710857701504133
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.019095477386934675,
+            "FXS": 0.09396914446002805,
+            "HSS": 0.0,
+            "RAN": 0.00117820324005891,
+            "TEX": 0.9648215209518882,
+            "VD1": 0.04449773514521716,
+            "VD2": 0.0935155412647374
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.002793296089385475,
+            "FXS": 0.014005602240896359,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.994413407821229,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        }
+      },
+      "gazebase_small_hard": {
+        "boosting": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.4602528382336884,
+              "balanced_accuracy": 0.7347433272185686,
+              "accuracy": 0.8052427676599443,
+              "recall": 0.6368339368856699,
+              "specificity": 0.8326527175514672,
+              "false_positive_rate": 0.1673472824485328,
+              "precision": 0.3824763088395215,
+              "f1": 0.4779190527030961,
+              "roc_auc": 0.8388891068057751
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.1666538016608358,
+              "balanced_accuracy": 0.7499572847813445,
+              "accuracy": 0.6507476737028857,
+              "recall": 0.8877392653905846,
+              "specificity": 0.6121753041721045,
+              "false_positive_rate": 0.38782469582789547,
+              "precision": 0.27143309079405253,
+              "f1": 0.415748031496063,
+              "roc_auc": 0.8388891068057751
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8945027278396378,
+              "balanced_accuracy": 0.5526040392154821,
+              "accuracy": 0.8674121405750799,
+              "recall": 0.11173184357541899,
+              "specificity": 0.9934762348555451,
+              "false_positive_rate": 0.006523765144454852,
+              "precision": 0.7407407407407407,
+              "f1": 0.19417475728155337,
+              "roc_auc": 0.9531960201388058
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41794887427029614,
+              "balanced_accuracy": 0.8040540540540541,
+              "accuracy": 0.6641373801916933,
+              "recall": 1.0,
+              "specificity": 0.6081081081081081,
+              "false_positive_rate": 0.3918918918918919,
+              "precision": 0.29858215179316094,
+              "f1": 0.4598587026332691,
+              "roc_auc": 0.9531960201388058
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.4602528382336884,
+              "low_fpr": 0.1666538016608358
+            },
+            "recording": {
+              "balanced": 0.8945027278396378,
+              "low_fpr": 0.41794887427029614
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.12010050251256281,
+            "FXS": 0.14446002805049088,
+            "HSS": 0.032915129151291515,
+            "RAN": 0.17614138438880708,
+            "TEX": 0.6368339368856699,
+            "VD1": 0.2643218758326672,
+            "VD2": 0.327438370846731
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.008379888268156424,
+            "FXS": 0.028011204481792718,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.11173184357541899,
+            "VD1": 0.0,
+            "VD2": 0.0028011204481792717
+          }
+        },
+        "network": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5879599452018738,
+              "balanced_accuracy": 0.8549869454233341,
+              "accuracy": 0.9018067272529781,
+              "recall": 0.7899637868598034,
+              "specificity": 0.9200101039868648,
+              "false_positive_rate": 0.07998989601313522,
+              "precision": 0.6164715381509891,
+              "f1": 0.692517006802721,
+              "roc_auc": 0.9487568744277549
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.13977749645709994,
+              "balanced_accuracy": 0.8455689992729756,
+              "accuracy": 0.7516926753321989,
+              "recall": 0.9759441282979824,
+              "specificity": 0.7151938702479687,
+              "false_positive_rate": 0.28480612975203135,
+              "precision": 0.35803757828810023,
+              "f1": 0.5238822549291864,
+              "roc_auc": 0.9487568744277549
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.9661602079868317,
+              "balanced_accuracy": 0.7334719134468701,
+              "accuracy": 0.9221246006389776,
+              "recall": 0.4692737430167598,
+              "specificity": 0.9976700838769804,
+              "false_positive_rate": 0.002329916123019582,
+              "precision": 0.9710982658959537,
+              "f1": 0.6327683615819208,
+              "roc_auc": 0.9947192906641953
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.41294264793396,
+              "balanced_accuracy": 0.8385368126747437,
+              "accuracy": 0.7232428115015974,
+              "recall": 1.0,
+              "specificity": 0.6770736253494873,
+              "false_positive_rate": 0.32292637465051266,
+              "precision": 0.340627973358706,
+              "f1": 0.5081618168914123,
+              "roc_auc": 0.9947192906641953
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5879599452018738,
+              "low_fpr": 0.13977749645709994
+            },
+            "recording": {
+              "balanced": 0.9661602079868317,
+              "low_fpr": 0.41294264793396
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.07587939698492463,
+            "FXS": 0.10518934081346423,
+            "HSS": 0.0030996309963099633,
+            "RAN": 0.0288659793814433,
+            "TEX": 0.7899637868598034,
+            "VD1": 0.1620037303490541,
+            "VD2": 0.227491961414791
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.00558659217877095,
+            "FXS": 0.008403361344537815,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.4692737430167598,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "average": {
+          "window": {
+            "balanced": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.5236583081604737,
+              "balanced_accuracy": 0.8309135956012548,
+              "accuracy": 0.8909446395597234,
+              "recall": 0.7475426797723745,
+              "specificity": 0.9142845114301351,
+              "false_positive_rate": 0.08571548856986488,
+              "precision": 0.5866829070239545,
+              "f1": 0.6574158325750683,
+              "roc_auc": 0.9287972860192963
+            },
+            "low_fpr": {
+              "n_reading": 3866,
+              "n_not_reading": 23753,
+              "threshold": 0.16855699918753622,
+              "balanced_accuracy": 0.8046774618215242,
+              "accuracy": 0.6847098012237952,
+              "recall": 0.97128815312985,
+              "specificity": 0.6380667705131984,
+              "false_positive_rate": 0.3619332294868016,
+              "precision": 0.30399935233160624,
+              "f1": 0.4630657294364286,
+              "roc_auc": 0.9287972860192963
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.8276539205771535,
+              "balanced_accuracy": 0.8147091900222319,
+              "accuracy": 0.9436900958466453,
+              "recall": 0.6340782122905028,
+              "specificity": 0.9953401677539608,
+              "false_positive_rate": 0.004659832246039164,
+              "precision": 0.9578059071729957,
+              "f1": 0.7630252100840336,
+              "roc_auc": 0.9913259435509484
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2146,
+              "threshold": 0.3710857701504133,
+              "balanced_accuracy": 0.8171015843429636,
+              "accuracy": 0.6865015974440895,
+              "recall": 1.0,
+              "specificity": 0.6342031686859273,
+              "false_positive_rate": 0.3657968313140727,
+              "precision": 0.3132108486439195,
+              "f1": 0.4770153231179214,
+              "roc_auc": 0.9913259435509484
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5236583081604737,
+              "low_fpr": 0.16855699918753622
+            },
+            "recording": {
+              "balanced": 0.8276539205771535,
+              "low_fpr": 0.3710857701504133
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.06582914572864322,
+            "FXS": 0.09957924263674614,
+            "HSS": 0.004428044280442804,
+            "RAN": 0.03991163475699558,
+            "TEX": 0.7475426797723745,
+            "VD1": 0.1630695443645084,
+            "VD2": 0.24678456591639872
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.00558659217877095,
+            "FXS": 0.0196078431372549,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.6340782122905028,
+            "VD1": 0.0,
+            "VD2": 0.0028011204481792717
+          }
+        }
+      },
+      "gazebase_slow": {
+        "boosting": {
+          "window": {
+            "balanced": {
+              "n_reading": 5976,
+              "n_not_reading": 36761,
+              "threshold": 0.4602528382336884,
+              "balanced_accuracy": 0.9486388582721481,
+              "accuracy": 0.9722722699300372,
+              "recall": 0.9158299866131191,
+              "specificity": 0.981447729931177,
+              "false_positive_rate": 0.018552270068822985,
+              "precision": 0.889195775792039,
+              "f1": 0.9023163795235346,
+              "roc_auc": 0.9926135861054366
+            },
+            "low_fpr": {
+              "n_reading": 5976,
+              "n_not_reading": 36761,
+              "threshold": 0.1666538016608358,
+              "balanced_accuracy": 0.9528224451718174,
+              "accuracy": 0.9471652198329317,
+              "recall": 0.9606760374832664,
+              "specificity": 0.9449688528603684,
+              "false_positive_rate": 0.05503114713963164,
+              "precision": 0.7394384337970118,
+              "f1": 0.8356622998544395,
+              "roc_auc": 0.9926135861054366
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2147,
+              "threshold": 0.8945027278396378,
+              "balanced_accuracy": 0.9858006364603851,
+              "accuracy": 0.9956087824351297,
+              "recall": 0.9720670391061452,
+              "specificity": 0.999534233814625,
+              "false_positive_rate": 0.0004657661853749717,
+              "precision": 0.997134670487106,
+              "f1": 0.9844413012729845,
+              "roc_auc": 0.9999713774969881
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2147,
+              "threshold": 0.41794887427029614,
+              "balanced_accuracy": 0.9848625989753144,
+              "accuracy": 0.9740518962075848,
+              "recall": 1.0,
+              "specificity": 0.9697251979506288,
+              "false_positive_rate": 0.030274802049371163,
+              "precision": 0.8463356973995272,
+              "f1": 0.9167733674775927,
+              "roc_auc": 0.9999713774969881
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.4602528382336884,
+              "low_fpr": 0.1666538016608358
+            },
+            "recording": {
+              "balanced": 0.8945027278396378,
+              "low_fpr": 0.41794887427029614
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.020968239284613013,
+            "FXS": 0.11412535079513564,
+            "HSS": 9.673986649898423E-05,
+            "RAN": 0.0010614686866737431,
+            "TEX": 0.9158299866131191,
+            "VD1": 0.035635499745460715,
+            "VD2": 0.04610655737704918
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.0,
+            "FXS": 0.0028011204481792717,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9720670391061452,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "network": {
+          "window": {
+            "balanced": {
+              "n_reading": 5976,
+              "n_not_reading": 36761,
+              "threshold": 0.5879599452018738,
+              "balanced_accuracy": 0.9648601524147422,
+              "accuracy": 0.9773966352341062,
+              "recall": 0.9474564926372155,
+              "specificity": 0.982263812192269,
+              "false_positive_rate": 0.017736187807731008,
+              "precision": 0.8967374089325308,
+              "f1": 0.92139951179821,
+              "roc_auc": 0.9940490951956498
+            },
+            "low_fpr": {
+              "n_reading": 5976,
+              "n_not_reading": 36761,
+              "threshold": 0.13977749645709994,
+              "balanced_accuracy": 0.9382626281446707,
+              "accuracy": 0.9025902613660295,
+              "recall": 0.9877844712182061,
+              "specificity": 0.8887407850711352,
+              "false_positive_rate": 0.11125921492886481,
+              "precision": 0.5907134994496147,
+              "f1": 0.7393074081032,
+              "roc_auc": 0.9940490951956498
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2147,
+              "threshold": 0.9661602079868317,
+              "balanced_accuracy": 0.9902234636871509,
+              "accuracy": 0.9972055888223553,
+              "recall": 0.9804469273743017,
+              "specificity": 1.0,
+              "false_positive_rate": 0.0,
+              "precision": 1.0,
+              "f1": 0.9901269393511989,
+              "roc_auc": 0.9999765815884448
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2147,
+              "threshold": 0.41294264793396,
+              "balanced_accuracy": 0.976711690731253,
+              "accuracy": 0.9600798403193613,
+              "recall": 1.0,
+              "specificity": 0.9534233814625058,
+              "false_positive_rate": 0.046576618537494174,
+              "precision": 0.7816593886462883,
+              "f1": 0.8774509803921569,
+              "roc_auc": 0.9999765815884448
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5879599452018738,
+              "low_fpr": 0.13977749645709994
+            },
+            "recording": {
+              "balanced": 0.9661602079868317,
+              "low_fpr": 0.41294264793396
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.030835646006783842,
+            "FXS": 0.07951356407857811,
+            "HSS": 0.003966334526458354,
+            "RAN": 0.003473897520023159,
+            "TEX": 0.9474564926372155,
+            "VD1": 0.0293568640760224,
+            "VD2": 0.03705601092896175
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.0,
+            "FXS": 0.0,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9804469273743017,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        },
+        "average": {
+          "window": {
+            "balanced": {
+              "n_reading": 5976,
+              "n_not_reading": 36761,
+              "threshold": 0.5236583081604737,
+              "balanced_accuracy": 0.9668162985902606,
+              "accuracy": 0.9832931651730351,
+              "recall": 0.9439424364123159,
+              "specificity": 0.9896901607682055,
+              "false_positive_rate": 0.010309839231794515,
+              "precision": 0.9370431893687707,
+              "f1": 0.9404801600533511,
+              "roc_auc": 0.9961988856562417
+            },
+            "low_fpr": {
+              "n_reading": 5976,
+              "n_not_reading": 36761,
+              "threshold": 0.16855699918753622,
+              "balanced_accuracy": 0.9577022898044669,
+              "accuracy": 0.9366357020848445,
+              "recall": 0.9869477911646586,
+              "specificity": 0.9284567884442751,
+              "false_positive_rate": 0.07154321155572485,
+              "precision": 0.6916041275797373,
+              "f1": 0.8132928847214562,
+              "roc_auc": 0.9961988856562417
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 358,
+              "n_not_reading": 2147,
+              "threshold": 0.8276539205771535,
+              "balanced_accuracy": 0.9972067039106145,
+              "accuracy": 0.9992015968063872,
+              "recall": 0.994413407821229,
+              "specificity": 1.0,
+              "false_positive_rate": 0.0,
+              "precision": 1.0,
+              "f1": 0.9971988795518207,
+              "roc_auc": 0.9999934948856791
+            },
+            "low_fpr": {
+              "n_reading": 358,
+              "n_not_reading": 2147,
+              "threshold": 0.3710857701504133,
+              "balanced_accuracy": 0.9785747554727526,
+              "accuracy": 0.9632734530938124,
+              "recall": 1.0,
+              "specificity": 0.9571495109455054,
+              "false_positive_rate": 0.04285048905449462,
+              "precision": 0.7955555555555556,
+              "f1": 0.8861386138613861,
+              "roc_auc": 0.9999934948856791
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5236583081604737,
+              "low_fpr": 0.16855699918753622
+            },
+            "recording": {
+              "balanced": 0.8276539205771535,
+              "low_fpr": 0.3710857701504133
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BLG": 0.016034535923527597,
+            "FXS": 0.057998129092609915,
+            "HSS": 9.673986649898423E-05,
+            "RAN": 0.0006754800733378366,
+            "TEX": 0.9439424364123159,
+            "VD1": 0.020023756999830306,
+            "VD2": 0.023736338797814206
+          },
+          "recording_flag_rate_by_task": {
+            "BLG": 0.0,
+            "FXS": 0.0,
+            "HSS": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.994413407821229,
+            "VD1": 0.0,
+            "VD2": 0.0
+          }
+        }
+      }
+    },
+    "outside": {
+      "gazebasevr_nominal": {
+        "boosting": {
+          "window": {
+            "balanced": {
+              "n_reading": 9294,
+              "n_not_reading": 66694,
+              "threshold": 0.4602528382336884,
+              "balanced_accuracy": 0.9527303440837804,
+              "accuracy": 0.954979733642154,
+              "recall": 0.9497525285130192,
+              "specificity": 0.9557081596545416,
+              "false_positive_rate": 0.04429184034545841,
+              "precision": 0.7492572786690433,
+              "f1": 0.8376749703440095,
+              "roc_auc": 0.9845234596488132
+            },
+            "low_fpr": {
+              "n_reading": 9294,
+              "n_not_reading": 66694,
+              "threshold": 0.1666538016608358,
+              "balanced_accuracy": 0.9099200557597079,
+              "accuracy": 0.8643075222403538,
+              "recall": 0.9703034215622982,
+              "specificity": 0.8495366899571176,
+              "false_positive_rate": 0.15046331004288238,
+              "precision": 0.4733112895606991,
+              "f1": 0.6362578050587364,
+              "roc_auc": 0.9845234596488132
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 1004,
+              "n_not_reading": 4016,
+              "threshold": 0.8945027278396378,
+              "balanced_accuracy": 0.9940239043824701,
+              "accuracy": 0.9976095617529881,
+              "recall": 0.9880478087649402,
+              "specificity": 1.0,
+              "false_positive_rate": 0.0,
+              "precision": 1.0,
+              "f1": 0.9939879759519038,
+              "roc_auc": 0.9994491654894366
+            },
+            "low_fpr": {
+              "n_reading": 1004,
+              "n_not_reading": 4016,
+              "threshold": 0.41794887427029614,
+              "balanced_accuracy": 0.9535607569721116,
+              "accuracy": 0.9268924302788845,
+              "recall": 0.99800796812749,
+              "specificity": 0.9091135458167331,
+              "false_positive_rate": 0.09088645418326691,
+              "precision": 0.7329919531821507,
+              "f1": 0.8452129902994517,
+              "roc_auc": 0.9994491654894366
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.4602528382336884,
+              "low_fpr": 0.1666538016608358
+            },
+            "recording": {
+              "balanced": 0.8945027278396378,
+              "low_fpr": 0.41794887427029614
+            }
+          },
+          "window_flag_rate_by_task": {
+            "PUR": 0.03362276587653695,
+            "RAN": 0.0018305157747388822,
+            "TEX": 0.9497525285130192,
+            "VID": 0.038077818423678085,
+            "VRG": 0.15450236966824646
+          },
+          "recording_flag_rate_by_task": {
+            "PUR": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9880478087649402,
+            "VID": 0.0,
+            "VRG": 0.0
+          }
+        },
+        "network": {
+          "window": {
+            "balanced": {
+              "n_reading": 9294,
+              "n_not_reading": 66694,
+              "threshold": 0.5879599452018738,
+              "balanced_accuracy": 0.9657104709083478,
+              "accuracy": 0.9743512133494763,
+              "recall": 0.9542715730578868,
+              "specificity": 0.9771493687588089,
+              "false_positive_rate": 0.022850631241191133,
+              "precision": 0.8533628403733282,
+              "f1": 0.9010006603342307,
+              "roc_auc": 0.9863406261663836
+            },
+            "low_fpr": {
+              "n_reading": 9294,
+              "n_not_reading": 66694,
+              "threshold": 0.13977749645709994,
+              "balanced_accuracy": 0.8402189963315815,
+              "accuracy": 0.7328525556666842,
+              "recall": 0.9823542070152786,
+              "specificity": 0.6980837856478843,
+              "false_positive_rate": 0.3019162143521157,
+              "precision": 0.3119661040114809,
+              "f1": 0.4735477178423236,
+              "roc_auc": 0.9863406261663836
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 1004,
+              "n_not_reading": 4016,
+              "threshold": 0.9661602079868317,
+              "balanced_accuracy": 0.9930278884462151,
+              "accuracy": 0.997211155378486,
+              "recall": 0.9860557768924303,
+              "specificity": 1.0,
+              "false_positive_rate": 0.0,
+              "precision": 1.0,
+              "f1": 0.9929789368104313,
+              "roc_auc": 0.9994900874589292
+            },
+            "low_fpr": {
+              "n_reading": 1004,
+              "n_not_reading": 4016,
+              "threshold": 0.41294264793396,
+              "balanced_accuracy": 0.947335657370518,
+              "accuracy": 0.9169322709163347,
+              "recall": 0.99800796812749,
+              "specificity": 0.8966633466135459,
+              "false_positive_rate": 0.10333665338645415,
+              "precision": 0.7071277346506705,
+              "f1": 0.8277571251548947,
+              "roc_auc": 0.9994900874589292
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5879599452018738,
+              "low_fpr": 0.13977749645709994
+            },
+            "recording": {
+              "balanced": 0.9661602079868317,
+              "low_fpr": 0.41294264793396
+            }
+          },
+          "window_flag_rate_by_task": {
+            "PUR": 0.009380149575358094,
+            "RAN": 0.002961128459136427,
+            "TEX": 0.9542715730578868,
+            "VID": 0.02194878616561357,
+            "VRG": 0.09867298578199052
+          },
+          "recording_flag_rate_by_task": {
+            "PUR": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9860557768924303,
+            "VID": 0.0,
+            "VRG": 0.0
+          }
+        },
+        "average": {
+          "window": {
+            "balanced": {
+              "n_reading": 9294,
+              "n_not_reading": 66694,
+              "threshold": 0.5236583081604737,
+              "balanced_accuracy": 0.967354937090383,
+              "accuracy": 0.9770753276833184,
+              "recall": 0.9544867656552615,
+              "specificity": 0.9802231085255045,
+              "false_positive_rate": 0.01977689147449546,
+              "precision": 0.8705593719332679,
+              "f1": 0.9105933073290905,
+              "roc_auc": 0.9886336176086462
+            },
+            "low_fpr": {
+              "n_reading": 9294,
+              "n_not_reading": 66694,
+              "threshold": 0.16855699918753622,
+              "balanced_accuracy": 0.89858478553167,
+              "accuracy": 0.8356319418855609,
+              "recall": 0.9819238218205294,
+              "specificity": 0.8152457492428105,
+              "false_positive_rate": 0.18475425075718954,
+              "precision": 0.4254942185751585,
+              "f1": 0.5937154381627741,
+              "roc_auc": 0.9886336176086462
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 1004,
+              "n_not_reading": 4016,
+              "threshold": 0.8276539205771535,
+              "balanced_accuracy": 0.9970119521912351,
+              "accuracy": 0.998804780876494,
+              "recall": 0.9940239043824701,
+              "specificity": 1.0,
+              "false_positive_rate": 0.0,
+              "precision": 1.0,
+              "f1": 0.997002997002997,
+              "roc_auc": 0.9995848280186028
+            },
+            "low_fpr": {
+              "n_reading": 1004,
+              "n_not_reading": 4016,
+              "threshold": 0.3710857701504133,
+              "balanced_accuracy": 0.9445966135458168,
+              "accuracy": 0.9125498007968128,
+              "recall": 0.99800796812749,
+              "specificity": 0.8911852589641435,
+              "false_positive_rate": 0.10881474103585653,
+              "precision": 0.6963168867268936,
+              "f1": 0.8203029062627917,
+              "roc_auc": 0.9995848280186028
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5236583081604737,
+              "low_fpr": 0.16855699918753622
+            },
+            "recording": {
+              "balanced": 0.8276539205771535,
+              "low_fpr": 0.3710857701504133
+            }
+          },
+          "window_flag_rate_by_task": {
+            "PUR": 0.009063252630244644,
+            "RAN": 0.0008614191881124152,
+            "TEX": 0.9544867656552615,
+            "VID": 0.015796474891918856,
+            "VRG": 0.08739336492890995
+          },
+          "recording_flag_rate_by_task": {
+            "PUR": 0.0,
+            "RAN": 0.0,
+            "TEX": 0.9940239043824701,
+            "VID": 0.0,
+            "VRG": 0.0
+          }
+        }
+      },
+      "desktopactivity_raw": {
+        "boosting": {
+          "window": {
+            "balanced": {
+              "n_reading": 464,
+              "n_not_reading": 2320,
+              "threshold": 0.4602528382336884,
+              "balanced_accuracy": 0.8387931034482758,
+              "accuracy": 0.8979885057471264,
+              "recall": 0.75,
+              "specificity": 0.9275862068965517,
+              "false_positive_rate": 0.07241379310344831,
+              "precision": 0.6744186046511628,
+              "f1": 0.7102040816326531,
+              "roc_auc": 0.9259113035077289
+            },
+            "low_fpr": {
+              "n_reading": 464,
+              "n_not_reading": 2320,
+              "threshold": 0.1666538016608358,
+              "balanced_accuracy": 0.8519396551724138,
+              "accuracy": 0.84375,
+              "recall": 0.8642241379310345,
+              "specificity": 0.8396551724137931,
+              "false_positive_rate": 0.16034482758620694,
+              "precision": 0.51875808538163,
+              "f1": 0.6483427647534358,
+              "roc_auc": 0.9259113035077289
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 8,
+              "n_not_reading": 40,
+              "threshold": 0.8945027278396378,
+              "balanced_accuracy": 0.8125,
+              "accuracy": 0.9375,
+              "recall": 0.625,
+              "specificity": 1.0,
+              "false_positive_rate": 0.0,
+              "precision": 1.0,
+              "f1": 0.7692307692307693,
+              "roc_auc": 1.0
+            },
+            "low_fpr": {
+              "n_reading": 8,
+              "n_not_reading": 40,
+              "threshold": 0.41794887427029614,
+              "balanced_accuracy": 0.9875,
+              "accuracy": 0.9791666666666666,
+              "recall": 1.0,
+              "specificity": 0.975,
+              "false_positive_rate": 0.025000000000000022,
+              "precision": 0.8888888888888888,
+              "f1": 0.9411764705882353,
+              "roc_auc": 1.0
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.4602528382336884,
+              "low_fpr": 0.1666538016608358
+            },
+            "recording": {
+              "balanced": 0.8945027278396378,
+              "low_fpr": 0.41794887427029614
+            }
+          },
+          "window_flag_rate_by_task": {
+            "BROWSE": 0.05603448275862069,
+            "PLAY": 0.04741379310344827,
+            "READ": 0.75,
+            "SEARCH": 0.08620689655172414,
+            "WATCH": 0.03879310344827586,
+            "WRITE": 0.1336206896551724
+          },
+          "recording_flag_rate_by_task": {
+            "BROWSE": 0.0,
+            "PLAY": 0.0,
+            "READ": 0.625,
+            "SEARCH": 0.0,
+            "WATCH": 0.0,
+            "WRITE": 0.0
+          }
+        },
+        "network": {
+          "window": {
+            "balanced": {
+              "n_reading": 464,
+              "n_not_reading": 2320,
+              "threshold": 0.5879599452018738,
+              "balanced_accuracy": 0.740301724137931,
+              "accuracy": 0.8243534482758621,
+              "recall": 0.6142241379310345,
+              "specificity": 0.8663793103448276,
+              "false_positive_rate": 0.13362068965517238,
+              "precision": 0.4789915966386555,
+              "f1": 0.538243626062323,
+              "roc_auc": 0.8246980900713438
+            },
+            "low_fpr": {
+              "n_reading": 464,
+              "n_not_reading": 2320,
+              "threshold": 0.13977749645709994,
+              "balanced_accuracy": 0.7321120689655172,
+              "accuracy": 0.6799568965517241,
+              "recall": 0.8103448275862069,
+              "specificity": 0.6538793103448276,
+              "false_positive_rate": 0.3461206896551724,
+              "precision": 0.3189143341815098,
+              "f1": 0.45769933049300066,
+              "roc_auc": 0.8246980900713438
+            }
+          },
+          "recording": {
+            "balanced": {
+              "n_reading": 8,
+              "n_not_reading": 40,
+              "threshold": 0.9661602079868317,
+              "balanced_accuracy": 0.625,
+              "accuracy": 0.875,
+              "recall": 0.25,
+              "specificity": 1.0,
+              "false_positive_rate": 0.0,
+              "precision": 1.0,
+              "f1": 0.4,
+              "roc_auc": 0.996875
+            },
+            "low_fpr": {
+              "n_reading": 8,
+              "n_not_reading": 40,
+              "threshold": 0.41294264793396,
+              "balanced_accuracy": 0.8125,
+              "accuracy": 0.6875,
+              "recall": 1.0,
+              "specificity": 0.625,
+              "false_positive_rate": 0.375,
+              "precision": 0.34782608695652173,
+              "f1": 0.5161290322580645,
+              "roc_auc": 0.996875
+            }
+          },
+          "cuts": {
+            "window": {
+              "balanced": 0.5879599452018738,
+              "low_fpr": 0.13977749645709994
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Integrity-detection training (virtual environments, downloaded datasets and
+# models, participant data: none of it is ever committed)
+training/*/.venv/
+training/*/data/
+training/*/models/
+
 # Environment / secrets
 .env
 .env.*

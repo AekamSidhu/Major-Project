@@ -8,9 +8,9 @@ digraph dfd2_suggest {
 
   node [shape=box, style=filled, fillcolor="#FFFFFF", color="#3E4756"];
   p2   [label="2.0 Transcribe", style="filled,dashed"];
-  user [label="User\n(hotkey, overlay,\nvoice command)"];
-  llm_c [label="Language model *\n(classification)"];
-  llm_g [label="Language model *\n(answers, follow-ups)"];
+  p7d  [label="7.0 Present UI *\n(hotkey, overlay)", style="filled,dashed"];
+  llm_c [label="Language model *\n(classification,\ntopic analysis)"];
+  llm_g [label="Language model *\n(follow-ups, Ask replies)"];
   llm_s [label="Language model *\n(compression)"];
   emb  [label="Embedding provider\n(built-in, local or cloud)"];
   p7a  [label="7.0 Present UI *", style="filled,dashed"];
@@ -18,6 +18,7 @@ digraph dfd2_suggest {
   p7c  [label="7.0 Present UI *", style="filled,dashed"];
   p9a  [label="9.0 Persist *", style="filled,dashed"];
   p9b  [label="9.0 Persist *", style="filled,dashed"];
+  ext11 [label="11.0 Assess\nanswer integrity", style="filled,dashed"];
 
   node [shape=circle, style=filled, fillcolor="#E6E9FB", color="#4F5BD5", penwidth=1.6, width=1.1];
   p31 [label="3.1\nDetect\nquestion"];
@@ -38,7 +39,7 @@ digraph dfd2_suggest {
 
   p2 -> p31   [label="final segment"];
   d3a -> p31   [label="recent turns\n(lead-ins, continuations)"];
-  p31 -> p32  [label="ambiguous candidate\n(if semantic detection on)", style=dashed];
+  p31 -> p32  [label="ambiguous question\n(if semantic detection on)", style=dashed];
   p32 -> llm_c [dir=both, label="classification\nprompt / JSON"];
   p32 -> p31  [label="confirmed / rejected"];
   p31 -> p33  [label="detected question"];
@@ -46,11 +47,13 @@ digraph dfd2_suggest {
   p33 -> d3a   [label="topics, claims,\nanswers"];
   p33 -> p9a  [label="questions, answers,\ntopics, claims"];
   p33 -> p7a  [label="topics updated"];
+  p33 -> llm_c [dir=both, label="topic-analysis\nprompt / topics"];
 
-  p31 -> p61  [label="auto answer\n(candidate mode,\nneeds your response,\nconfidence ≥ threshold)"];
-  p33 -> p61  [label="candidate turn ended\n(interviewer mode)"];
-  user -> p61 [label="answer / follow-ups /\nask / refine / style"];
-  p61 -> p7c  [label="answer started\n(previous in slot\ncancelled)"];
+  p33 -> p61  [label="candidate turn ended\n(enough words, silence)"];
+  p33 -> ext11 [label="question +\nanswer turn"];
+  p7d -> p61  [label="follow-ups / ask /\nrefine / style"];
+  p2 -> p61   [label="voice command\n(if enabled)", style=dashed];
+  p61 -> p7c  [label="request started\n(previous in slot\ncancelled)"];
   p61 -> p51  [label="query text"];
   p51 -> emb  [dir=both, label="query / vector"];
   d3b -> p51   [label="BM25 + vector index"];
@@ -58,9 +61,10 @@ digraph dfd2_suggest {
   d3b -> p52   [label="recent window, summary,\nobservations, asked questions"];
   d2 -> p52   [label="profile, style,\ntoken budget"];
   p52 -> p62  [label="prompt context"];
+  p61 -> p62  [label="request kind, question,\nstyle, refinement"];
   p62 -> llm_g [label="system + user\nmessages"];
   llm_g -> p63 [label="streamed tokens"];
-  p63 -> p7b  [label="answer deltas,\nfollow-ups, complete"];
+  p63 -> p7b  [label="follow-ups, Ask reply\ndeltas, complete"];
   p63 -> p9b  [label="suggestion"];
   p63 -> d3c   [label="answered / suggested\n(for de-duplication)"];
   d3c -> p53   [label="lines older than\nthe window"];
