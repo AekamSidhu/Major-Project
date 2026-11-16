@@ -1,0 +1,216 @@
+/*
+ * OpenMeet web pages (interview room, integrity check): the same design
+ * system as the desktop app (src/styles/base.css). Served by the sidecar at
+ * /ui/openmeet.css; Instrument Sans is served from /ui/instrument-sans.woff2,
+ * so nothing loads from the internet.
+ *
+ * The palette comes from a quiet interview room: linen walls, paper, green
+ * felt. Colour always means something: felt for your actions and your voice,
+ * marigold for "worth a question", signal red for live and leave.
+ */
+
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  font-stretch: 75% 100%;
+  src: url("/ui/instrument-sans.woff2") format("woff2-variations");
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f5f6f4;          /* linen */
+  --surface: #ffffff;     /* paper */
+  --surface-2: #eef0ed;
+  --raised: #ffffff;
+  --border: #e1e4e0;
+  --border-strong: #cdd2cd;
+  --fg: #1b2321;          /* ink */
+  --fg-soft: #3c4643;
+  --muted: #6b7471;       /* pebble */
+  --accent: #23574a;      /* felt */
+  --accent-strong: #1a463b;
+  --accent-soft: #e3eee9;
+  --accent-fg: #ffffff;
+  --ok: #2e7d5b;
+  --warn: #b07614;        /* marigold */
+  --danger: #c8403a;      /* signal */
+  --danger-solid: #c8403a;
+  --danger-soft: #f8e7e5;
+  --track: #e6e9e5;
+  --stage: #151918;       /* the video wall stays dark in both themes */
+  --shadow-pop: 0 18px 48px -18px rgb(27 35 33 / 0.28), 0 2px 6px rgb(27 35 33 / 0.06);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --low: var(--ok);
+  --possible: var(--warn);
+  --high: var(--danger);
+  /* kept so older markup keeps working; all flat now */
+  --gradient: var(--accent);
+  --highlight: transparent;
+  --shadow-card: none;
+  --shadow-glow: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #171c1b;
+    --surface: #1e2523;
+    --surface-2: #252d2b;
+    --raised: #2a3331;
+    --border: #2f3836;
+    --border-strong: #3e4946;
+    --fg: #e7ecea;
+    --fg-soft: #c4ccc9;
+    --muted: #919d99;
+    --accent: #7cc4ae;
+    --accent-strong: #95d3bf;
+    --accent-soft: rgb(124 196 174 / 0.13);
+    --accent-fg: #10211c;
+    --ok: #6fcf9f;
+    --warn: #f0b24a;
+    --danger: #f06a63;
+    --danger-solid: #d9483f;
+    --danger-soft: rgb(240 106 99 / 0.13);
+    --track: #2f3836;
+    --stage: #101413;
+    --shadow-pop: 0 24px 60px -20px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.05);
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14.5px/1.5 "Instrument Sans", "Segoe UI Variable Text", "Segoe UI", -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+::selection { background: var(--accent-soft); }
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+button, a, input, textarea { transition-timing-function: var(--ease); }
+
+/* ---- type ------------------------------------------------------------------ */
+h1, h2, h3 { margin: 0; letter-spacing: -0.01em; }
+/* Condensed display cut: page titles, the call clock, big numbers. */
+.display, h1 { font-stretch: 82%; font-weight: 620; letter-spacing: -0.015em; }
+.eyebrow { font-size: 12.5px; font-weight: 560; color: var(--muted); }
+.muted { color: var(--muted); }
+.soft { color: var(--fg-soft); }
+.note { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.mono, .nums { font-variant-numeric: tabular-nums; }
+.gradient-text { color: var(--accent); }
+
+/* ---- brand ------------------------------------------------------------------ */
+.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-stretch: 82%; font-weight: 620; }
+.brand-mark {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 7px; background: var(--accent); color: var(--accent-fg); flex: none;
+}
+
+/* ---- surfaces ---------------------------------------------------------------- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.card-head h2 { font-size: 14px; font-weight: 600; }
+.card-body { padding: 14px 16px; }
+
+/* ---- buttons ------------------------------------------------------------------ */
+.btn {
+  -webkit-tap-highlight-color: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 15px;
+  border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--fg);
+  font: inherit; font-size: 13.5px; font-weight: 550; cursor: pointer; white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.45; pointer-events: none; }
+.btn svg { width: 16px; height: 16px; flex: none; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.btn.primary:hover { background: var(--accent-strong); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--fg-soft); }
+.btn.ghost:hover { background: var(--surface-2); color: var(--fg); }
+.btn.danger { background: var(--danger-solid); border-color: transparent; color: #fff; }
+.btn.lg { height: 44px; padding: 0 22px; font-size: 14.5px; }
+.btn.sm { height: 30px; padding: 0 11px; font-size: 12.5px; }
+
+/* Round call buttons in the control dock. */
+.round {
+  width: 48px; height: 48px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--fg); cursor: pointer;
+  transition: background-color 0.15s, transform 0.15s;
+}
+.round:hover { background: var(--surface-2); }
+.round:active { transform: scale(0.96); }
+.round svg { width: 20px; height: 20px; }
+.round.off { background: var(--danger-solid); border-color: transparent; color: #fff; }
+.round.leave { width: 64px; background: var(--danger-solid); border-color: transparent; color: #fff; }
+.round:disabled { opacity: 0.4; pointer-events: none; }
+
+/* ---- pills & meters -------------------------------------------------------------- */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--fg-soft); font-size: 12.5px; font-weight: 550; white-space: nowrap;
+}
+.pill.on { color: var(--ok); }
+.pill.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: var(--danger-soft); }
+.dot { width: 8px; height: 8px; border-radius: 999px; background: currentColor; flex: none; }
+.dot.live { animation: ring 1.8s ease-out infinite; }
+@keyframes ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent); } 100% { box-shadow: 0 0 0 6px transparent; } }
+
+.meter { height: 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.meter > div { height: 100%; width: 0; border-radius: 999px; background: var(--low); transition: width 0.4s var(--ease), background 0.4s; }
+.big { font-size: 34px; font-stretch: 82%; font-weight: 620; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; line-height: 1; }
+.level { font-size: 12.5px; font-weight: 600; }
+.level.low { color: var(--low); } .level.possible { color: var(--possible); } .level.high { color: var(--high); } .level.muted { color: var(--muted); }
+
+/* ---- form controls ------------------------------------------------------------------- */
+input[type="text"], input[type="number"], textarea {
+  font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 9px 12px; transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="text"]:focus, input[type="number"]:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+textarea { width: 100%; resize: vertical; line-height: 1.55; }
+input[type="checkbox"] {
+  appearance: none; width: 18px; height: 18px; margin: 0; flex: none; border-radius: 5px; cursor: pointer;
+  border: 1.5px solid var(--border-strong); background: var(--surface) center / 12px no-repeat;
+  transition: background-color .18s var(--ease), border-color .18s var(--ease), transform .12s var(--ease);
+}
+input[type="checkbox"]:hover { border-color: var(--muted); }
+input[type="checkbox"]:active { transform: scale(0.92); }
+input[type="checkbox"]:checked {
+  background-color: var(--accent); border-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  input[type="checkbox"]:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%2310211c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5'/%3E%3C/svg%3E"); }
+}
+
+/* ---- motion ---------------------------------------------------------------------------- */
+/* Only things that arrive because something happened (a new answer, a new line) animate in. */
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.rise { animation: none; }
+
+/* The one page-load moment: the page settles in as a whole. */
+.enter { animation: rise .38s var(--ease) both; }
+.enter-2 { animation: rise .38s .06s var(--ease) both; }
+
+/* Video fades in when its first frame arrives instead of popping. */
+video { transition: opacity .45s var(--ease); }
+video.waiting-frame { opacity: 0; }
+
+/* Self view is mirrored like a mirror; the test picture (?fake=1) is not, so its label reads. */
+.mirror { transform: scaleX(-1); }
+
+/* Overlays that come and go fade instead of switching. */
+.fade { transition: opacity .3s var(--ease), visibility .3s; }
+.fade.out { opacity: 0; visibility: hidden; pointer-events: none; }
+
+/* Page swaps (lobby to call) cross-fade where the browser supports it. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .3s; animation-timing-function: var(--ease); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
