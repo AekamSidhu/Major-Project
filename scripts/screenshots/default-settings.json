@@ -109,5 +109,13 @@
     "roleContext": "",
     "plannedTopics": "",
     "customInstructions": ""
+  },
+  "integrity": {
+    "enabled": false,
+    "aiText": true,
+    "echoSimilarity": true,
+    "delivery": true,
+    "reading": true,
+    "candidateRegion": null
   }
 }

@@ -2,7 +2,8 @@
 // a browser with a mocked Tauri backend serving demo data. Used by
 // capture.mjs to produce docs/screenshots/*.png.
 //
-//   ?scene=overlay-candidate | overlay-interviewer | main-live | main-privacy
+//   ?scene=overlay-candidate | overlay-interviewer | overlay-integrity | main-live
+//          | main-privacy | main-integrity
 //          | main-home | main-history | main-ai | main-appearance (previews only)
 
 import { StrictMode } from "react";
@@ -15,21 +16,28 @@ import { App } from "@/main/App";
 import { useMain } from "@/main/store";
 import { useOverlay } from "@/overlay/store";
 import {
+  DATA_FLOW_INTEGRITY,
   DATA_FLOW_LOCAL,
+  DISPLAYS,
+  INTEGRITY_STATUS,
   MEETINGS,
   candidateSnapshot,
+  integritySnapshot,
   interviewerSnapshot,
   settings,
 } from "./fixtures";
 
 const scene = new URLSearchParams(location.search).get("scene") ?? "overlay-candidate";
 const overlay = scene.startsWith("overlay");
-const interviewer = scene === "overlay-interviewer" || scene === "main-live";
+const integrity = scene === "overlay-integrity" || scene === "main-integrity";
+const interviewer =
+  scene === "overlay-interviewer" || scene === "main-live" || scene === "overlay-integrity";
 // Scenes that show the main window between meetings get an idle engine.
 const SECTION_SCENES: Record<
   string,
-  "home" | "history" | "privacy" | "settings/ai" | "settings/appearance"
+  "home" | "history" | "privacy" | "settings/ai" | "settings/appearance" | "settings/integrity"
 > = {
+  "main-integrity": "settings/integrity",
   "main-privacy": "privacy",
   "main-home": "home",
   "main-history": "history",
@@ -37,7 +45,11 @@ const SECTION_SCENES: Record<
   "main-appearance": "settings/appearance",
 };
 const idle = scene in SECTION_SCENES && scene !== "main-privacy";
-const liveSnapshot: EngineSnapshot = interviewer ? interviewerSnapshot() : candidateSnapshot();
+const liveSnapshot: EngineSnapshot = integrity
+  ? integritySnapshot()
+  : interviewer
+    ? interviewerSnapshot()
+    : candidateSnapshot();
 const snapshot: EngineSnapshot = idle
   ? {
       ...liveSnapshot,
@@ -51,9 +63,14 @@ const snapshot: EngineSnapshot = idle
   : liveSnapshot;
 // Tall enough that the candidate answer's controls are in the picture.
 const appSettings = settings(
-  interviewer ? "interviewer" : "candidate",
-  scene === "overlay-candidate" ? 760 : 560,
+  interviewer || integrity ? "interviewer" : "candidate",
+  scene === "overlay-candidate" || scene === "overlay-integrity" ? 760 : 560,
 );
+if (integrity) {
+  appSettings.integrity.enabled = true;
+  appSettings.ai.embeddings.provider = "local_ai";
+  appSettings.integrity.candidateRegion = { x: 3200, y: 0, width: 1280, height: 720 };
+}
 
 mockWindows(overlay ? "overlay" : "main");
 mockIPC(
@@ -81,7 +98,11 @@ mockIPC(
           note: "Windows 10 version 2004 or later.",
         };
       case "get_data_flow":
-        return DATA_FLOW_LOCAL;
+        return integrity ? DATA_FLOW_INTEGRITY : DATA_FLOW_LOCAL;
+      case "get_integrity_status":
+        return INTEGRITY_STATUS;
+      case "list_displays":
+        return DISPLAYS;
       case "list_privacy_rules":
         return [
           {

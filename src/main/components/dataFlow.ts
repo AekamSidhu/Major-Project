@@ -167,6 +167,12 @@ export function integrityNodes(report: DataFlowReport): DataFlowNode[] {
   return report.nodes.filter((n) => n.component === "integrity");
 }
 
+/** "Integrity: answer embeddings" → "Answer embeddings". */
+export function integrityPartLabel(label: string): string {
+  const rest = label.replace(/^Integrity:\s*/, "");
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
 /** True when the screen pipeline is entirely off. */
 export function screenFlowDisabled(report: DataFlowReport): boolean {
   const screen = find(report, "screen");

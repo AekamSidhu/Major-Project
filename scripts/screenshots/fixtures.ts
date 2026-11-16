@@ -3,7 +3,10 @@
 // show what demo mode produces.
 
 import type {
+  DataFlowNode,
   DataFlowReport,
+  DisplayInfo,
+  IntegrityServiceView,
   DetectedQuestion,
   EngineSnapshot,
   FollowUpQuestion,
@@ -14,6 +17,7 @@ import type {
   TranscriptSegment,
 } from "@/bindings";
 import defaults from "./default-settings.json";
+import { quietFlag, raisedFlag } from "@/lib/integrity.fixtures";
 
 /** The demo meeting started a few minutes before the screenshot. */
 const T0 = Date.now() - 6 * 60_000 - 42_000;
@@ -312,3 +316,89 @@ export const DATA_FLOW_LOCAL: DataFlowReport = {
 };
 
 export const MEETINGS: MeetingListItem[] = [];
+
+// --- Answer integrity (the integrity demo scenario) -----------------------------
+
+/** Interviewer meeting after the integrity demo's fourth answer. */
+export function integritySnapshot(): EngineSnapshot {
+  const snap = interviewerSnapshot();
+  return {
+    ...snap,
+    integrityFlags: [
+      raisedFlag({ meetingId: "demo-meeting", answerStartMs: 310_000, answerEndMs: 352_000 }),
+      quietFlag({ meetingId: "demo-meeting", answerStartMs: 64_000, answerEndMs: 75_000 }),
+    ],
+  };
+}
+
+export const DISPLAYS: DisplayInfo[] = [
+  {
+    key: "DISPLAY1@1920x1080",
+    name: "DISPLAY1",
+    x: 0,
+    y: 0,
+    width: 1920,
+    height: 1080,
+    workArea: { x: 0, y: 0, width: 1920, height: 1040 },
+    scaleFactor: 1,
+    isPrimary: true,
+    orientation: "landscape",
+  },
+  {
+    key: "DISPLAY2@2560x1440",
+    name: "DISPLAY2",
+    x: 1920,
+    y: 0,
+    width: 2560,
+    height: 1440,
+    workArea: { x: 1920, y: 0, width: 2560, height: 1400 },
+    scaleFactor: 1,
+    isPrimary: false,
+    orientation: "landscape",
+  },
+];
+
+export const INTEGRITY_STATUS: IntegrityServiceView = {
+  reachable: true,
+  aiTextReady: true,
+  readingReady: true,
+  embeddingModel: "BAAI/bge-small-en-v1.5",
+  requiredEmbeddingModel: "BAAI/bge-small-en-v1.5",
+  message: "Ready.",
+};
+
+const INTEGRITY_NODES: DataFlowNode[] = [
+  {
+    component: "integrity",
+    label: "Integrity: AI-text and reading check",
+    location: "local",
+    provider: "Local AI (integrity check) · AI-text + reading models",
+    endpoint: "127.0.0.1:8765",
+  },
+  {
+    component: "integrity",
+    label: "Integrity: candidate video region (gaze)",
+    location: "local",
+    provider: "Captured by Local AI; frames are turned into gaze and dropped",
+    endpoint: "127.0.0.1:8765",
+  },
+  {
+    component: "integrity",
+    label: "Integrity: reference answers (AI provider)",
+    location: "local",
+    provider: "Ollama · llama3.2",
+    endpoint: "127.0.0.1:11434",
+  },
+  {
+    component: "integrity",
+    label: "Integrity: answer embeddings",
+    location: "local",
+    provider: "Local AI (fastembed) · default",
+    endpoint: "127.0.0.1:8765",
+  },
+];
+
+export const DATA_FLOW_INTEGRITY: DataFlowReport = {
+  ...DATA_FLOW_LOCAL,
+  nodes: [...DATA_FLOW_LOCAL.nodes, ...INTEGRITY_NODES],
+};

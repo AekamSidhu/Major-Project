@@ -5,6 +5,7 @@
 import { useCallback } from "react";
 import type { DataFlowNode } from "@/bindings";
 import { api } from "@/lib/ipc";
+import { integrityPartLabel } from "../../components/dataFlow";
 import { LocationBadge } from "../../components/LocationBadge";
 import { RegionPicker } from "../../components/RegionPicker";
 import { saveSettings } from "../../components/save";
@@ -23,7 +24,7 @@ function WhereItRuns({ nodes }: { nodes: DataFlowNode[] }) {
           key={n.label}
           className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[0.76rem]"
         >
-          <span className="text-fg-soft">{n.label.replace(/^Integrity: /, "")}</span>
+          <span className="text-fg-soft">{integrityPartLabel(n.label)}</span>
           <LocationBadge location={n.location} endpoint={n.endpoint} />
         </li>
       ))}

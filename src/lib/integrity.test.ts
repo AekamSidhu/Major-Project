@@ -8,7 +8,7 @@ import {
   toRelative,
   validateRegion,
 } from "@/main/components/region";
-import { integrityNodes, otherNodes } from "@/main/components/dataFlow";
+import { integrityNodes, integrityPartLabel, otherNodes } from "@/main/components/dataFlow";
 import {
   answerRangeLabel,
   flagSummary,
@@ -157,6 +157,7 @@ describe("privacy data flow", () => {
       statement: "Meeting data is sent off this device for: Integrity: reference answers.",
     };
     expect(integrityNodes(report)).toHaveLength(1);
+    expect(integrityPartLabel("Integrity: answer embeddings")).toBe("Answer embeddings");
     expect(otherNodes(report).map((n) => n.component)).toEqual(["embeddings"]);
   });
 });

@@ -25,8 +25,10 @@ const DEBUG_PORT = 9339;
 const SCENES = [
   { name: "overlay-candidate", width: 1100, height: 860 },
   { name: "overlay-interviewer", width: 1100, height: 640 },
+  { name: "overlay-integrity", width: 1100, height: 860 },
   { name: "main-live", width: 1200, height: 800 },
   { name: "main-privacy", width: 1200, height: 800 },
+  { name: "main-integrity", width: 1200, height: 1000 },
 ];
 
 function findBrowser() {

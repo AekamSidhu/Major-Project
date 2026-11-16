@@ -14,6 +14,7 @@ import { formatDateTime } from "@/lib/format";
 import {
   audioFlow,
   integrityNodes,
+  integrityPartLabel,
   otherNodes,
   privacyStatement,
   screenFlow,
@@ -128,7 +129,7 @@ function DataFlow({ report }: { report: DataFlowReport }) {
                   key={n.label}
                   className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[0.76rem]"
                 >
-                  <span className="text-fg-soft">{n.label.replace(/^Integrity: /, "")}</span>
+                  <span className="text-fg-soft">{integrityPartLabel(n.label)}</span>
                   <span className="max-w-64 truncate text-muted" title={n.provider}>
                     {n.endpoint ? `${n.provider} · ${n.endpoint}` : n.provider}
                   </span>
