@@ -1,0 +1,108 @@
+{
+  "spec_version": 1,
+  "thresholds": {
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "reference_model": "llama3.2",
+    "references": 2,
+    "possible": 0.85,
+    "high": 0.92,
+    "calibrated": false,
+    "source": "provisional, hand-set; replace with thresholds measured on HC3 (training/echo-detection) and set calibrated to true"
+  },
+  "cases": [
+    {
+      "answer": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "references": [],
+      "expected": {
+        "level": "unavailable",
+        "similarity": null,
+        "calibrated": false
+      }
+    },
+    {
+      "answer": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "references": [
+        [
+          0.0,
+          1.0,
+          0.0
+        ]
+      ],
+      "expected": {
+        "level": "low",
+        "similarity": 0.0,
+        "calibrated": false
+      }
+    },
+    {
+      "answer": [
+        1.0,
+        0.2,
+        0.0
+      ],
+      "references": [
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.25,
+          0.05
+        ]
+      ],
+      "expected": {
+        "level": "high",
+        "similarity": 0.9976950684556888,
+        "calibrated": false
+      }
+    },
+    {
+      "answer": [
+        0.6,
+        0.8,
+        0.0
+      ],
+      "references": [
+        [
+          0.8,
+          0.6,
+          0.0
+        ]
+      ],
+      "expected": {
+        "level": "high",
+        "similarity": 0.96,
+        "calibrated": false
+      }
+    },
+    {
+      "answer": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "references": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "expected": {
+        "level": "low",
+        "similarity": 0.0,
+        "calibrated": false
+      }
+    }
+  ]
+}
