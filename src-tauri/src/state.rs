@@ -337,10 +337,10 @@ impl AppState {
 
     pub async fn resume(self: &Arc<Self>) -> Result<(), CoreError> {
         self.engine.resume()?;
-        if let Some(sources) = self.capture.sources() {
-            if !self.capture.is_capturing_audio() {
-                self.start_capture(&sources).await;
-            }
+        if let Some(sources) = self.capture.sources()
+            && !self.capture.is_capturing_audio()
+        {
+            self.start_capture(&sources).await;
         }
         Ok(())
     }

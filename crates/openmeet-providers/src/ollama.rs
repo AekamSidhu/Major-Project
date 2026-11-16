@@ -536,18 +536,19 @@ impl LlmProvider for OllamaLlm {
             if cancel.is_cancelled() {
                 return Err(ProviderError::Cancelled);
             }
-            if failure.status == StatusCode::BAD_REQUEST && attempt < MAX_ATTEMPTS {
-                if let Some(next) = self.downgrade(&params, &failure.message_lower()) {
-                    tracing::debug!(
-                        provider = PROVIDER_ID,
-                        request_id = %request.request_id,
-                        attempt,
-                        "request rejected; retrying with adjusted parameters"
-                    );
-                    params = next;
-                    attempt += 1;
-                    continue;
-                }
+            if failure.status == StatusCode::BAD_REQUEST
+                && attempt < MAX_ATTEMPTS
+                && let Some(next) = self.downgrade(&params, &failure.message_lower())
+            {
+                tracing::debug!(
+                    provider = PROVIDER_ID,
+                    request_id = %request.request_id,
+                    attempt,
+                    "request rejected; retrying with adjusted parameters"
+                );
+                params = next;
+                attempt += 1;
+                continue;
             }
             let error = failure.into_error();
             log_failure(&request.request_id, &error);

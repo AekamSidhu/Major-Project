@@ -960,10 +960,10 @@ async fn run_followups(
                     });
                     {
                         let mut st = engine.inner.state.lock();
-                        if let Some(rt) = st.runtime.as_mut() {
-                            if rt.latest_followups_request.as_deref() == Some(ticket.id.as_str()) {
-                                rt.latest_followups = accepted.clone();
-                            }
+                        if let Some(rt) = st.runtime.as_mut()
+                            && rt.latest_followups_request.as_deref() == Some(ticket.id.as_str())
+                        {
+                            rt.latest_followups = accepted.clone();
                         }
                     }
                     rm.emit_if_current(
@@ -1302,11 +1302,11 @@ pub(crate) fn spawn_compression(
         let summary = llm_summary.unwrap_or_else(|| extractive_compress(&previous, &lines));
         {
             let mut st = engine.inner.state.lock();
-            if let Some(rt) = st.runtime.as_mut().filter(|r| r.meeting.id == meeting_id) {
-                if until_ms > rt.memory.summarized_until_ms {
-                    rt.memory.long_term_summary = summary;
-                    rt.memory.summarized_until_ms = until_ms;
-                }
+            if let Some(rt) = st.runtime.as_mut().filter(|r| r.meeting.id == meeting_id)
+                && until_ms > rt.memory.summarized_until_ms
+            {
+                rt.memory.long_term_summary = summary;
+                rt.memory.summarized_until_ms = until_ms;
             }
         }
         engine

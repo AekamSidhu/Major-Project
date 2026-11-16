@@ -120,10 +120,10 @@ impl MockLlmProvider {
         if let Some(scripted) = self.state.lock().script.pop_front() {
             return scripted;
         }
-        if let Some(r) = &self.responder {
-            if let Some(text) = r(request) {
-                return Ok(text);
-            }
+        if let Some(r) = &self.responder
+            && let Some(text) = r(request)
+        {
+            return Ok(text);
         }
         Ok(default_response(request))
     }

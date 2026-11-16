@@ -471,7 +471,7 @@ fn downscale(image: RgbaImage, max_width: u32) -> RgbaImage {
 /// makes the file smaller and faster to encode).
 fn encode_png(image: &RgbaImage) -> Result<Vec<u8>, PlatformError> {
     let mut rgb = Vec::with_capacity(image.width() as usize * image.height() as usize * 3);
-    for px in image.as_raw().chunks_exact(4) {
+    for px in image.as_raw().as_chunks::<4>().0 {
         rgb.extend_from_slice(&px[..3]);
     }
     let mut out = Vec::with_capacity(rgb.len() / 4);

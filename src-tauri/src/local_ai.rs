@@ -50,15 +50,15 @@ fn setup_hint() -> String {
 /// Base URL used for the sidecar: the configured transcription / embedding
 /// URL when that provider is the local sidecar, else the default.
 pub fn sidecar_url(settings: &Settings) -> String {
-    if settings.transcription.provider == TranscriptionProviderKind::LocalAi {
-        if let Some(u) = &settings.transcription.base_url {
-            return u.clone();
-        }
+    if settings.transcription.provider == TranscriptionProviderKind::LocalAi
+        && let Some(u) = &settings.transcription.base_url
+    {
+        return u.clone();
     }
-    if settings.ai.embeddings.provider == EmbeddingProviderKind::LocalAi {
-        if let Some(u) = &settings.ai.embeddings.base_url {
-            return u.clone();
-        }
+    if settings.ai.embeddings.provider == EmbeddingProviderKind::LocalAi
+        && let Some(u) = &settings.ai.embeddings.base_url
+    {
+        return u.clone();
     }
     DEFAULT_LOCAL_AI_URL.to_string()
 }

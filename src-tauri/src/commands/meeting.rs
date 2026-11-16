@@ -6,26 +6,25 @@ use super::{AppStateRef, CmdResult};
 use crate::state::blocking;
 
 fn validate_start(req: &StartMeetingRequest) -> CmdResult<()> {
-    if let Some(t) = &req.title {
-        if t.chars().count() > 200 {
-            return Err(CoreError::InvalidInput("The title is too long.".into()));
-        }
+    if let Some(t) = &req.title
+        && t.chars().count() > 200
+    {
+        return Err(CoreError::InvalidInput("The title is too long.".into()));
     }
-    if let Some(id) = &req.focus_app_id {
-        if id.len() > 64
+    if let Some(id) = &req.focus_app_id
+        && (id.len() > 64
             || !id
                 .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
-        {
-            return Err(CoreError::InvalidInput(
-                "Invalid meeting application.".into(),
-            ));
-        }
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':'))
+    {
+        return Err(CoreError::InvalidInput(
+            "Invalid meeting application.".into(),
+        ));
     }
-    if let Some(s) = &req.screen {
-        if s.id.len() > 256 || s.label.chars().count() > 300 {
-            return Err(CoreError::InvalidInput("Invalid screen source.".into()));
-        }
+    if let Some(s) = &req.screen
+        && (s.id.len() > 256 || s.label.chars().count() > 300)
+    {
+        return Err(CoreError::InvalidInput("Invalid screen source.".into()));
     }
     Ok(())
 }

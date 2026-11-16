@@ -542,18 +542,17 @@ pub fn extractive_summary(record: &MeetingRecord) -> MeetingSummary {
         }
         let mut clarification = Vec::new();
         for a in &record.answers {
-            if word_count(&a.text) < 12 {
-                if let Some(q) = a
+            if word_count(&a.text) < 12
+                && let Some(q) = a
                     .question_id
                     .as_ref()
                     .and_then(|id| record.questions.iter().find(|q| &q.id == id))
-                {
-                    dedup_push(
-                        &mut clarification,
-                        format!("Short answer to: {}", truncate_to_tokens(&q.question, 30)),
-                        10,
-                    );
-                }
+            {
+                dedup_push(
+                    &mut clarification,
+                    format!("Short answer to: {}", truncate_to_tokens(&q.question, 30)),
+                    10,
+                );
             }
         }
         for c in record

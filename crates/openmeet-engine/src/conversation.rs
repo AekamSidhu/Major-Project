@@ -465,10 +465,8 @@ impl Engine {
                             Mode::Candidate => role != SpeakerRole::User,
                             Mode::Interviewer => asker_is_user || role == SpeakerRole::Unknown,
                         };
-                        if answers_question {
-                            if let Some(prev) = rt.open_answer_for(&q) {
-                                remember_answer(rt, &prev, &mut persist_ops, &mut embed_jobs);
-                            }
+                        if answers_question && let Some(prev) = rt.open_answer_for(&q) {
+                            remember_answer(rt, &prev, &mut persist_ops, &mut embed_jobs);
                         }
                         if mode == Mode::Interviewer && asker_is_user {
                             // A new interviewer question starts a new candidate turn.
@@ -611,10 +609,10 @@ impl Engine {
             rt.turn.reset();
             text
         };
-        if settings.assistant.auto_followups {
-            if let Err(e) = crate::assist::start_followups(self, turn_text) {
-                tracing::debug!(error = %e, "automatic follow-ups not started");
-            }
+        if settings.assistant.auto_followups
+            && let Err(e) = crate::assist::start_followups(self, turn_text)
+        {
+            tracing::debug!(error = %e, "automatic follow-ups not started");
         }
     }
 

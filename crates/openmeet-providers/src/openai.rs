@@ -491,38 +491,36 @@ impl OpenAiLlm {
         let mut quirks = self.quirks();
         let mentions_tokens =
             message.contains("max_tokens") || message.contains("max_completion_tokens");
-        if mentions_tokens {
-            if let Some(limit) = parse_token_limit(message).filter(|l| *l < params.max_tokens) {
-                next.max_tokens = limit.max(1);
-                quirks.max_tokens_limit = Some(next.max_tokens);
-                return Some(next);
-            }
+        if mentions_tokens
+            && let Some(limit) = parse_token_limit(message).filter(|l| *l < params.max_tokens)
+        {
+            next.max_tokens = limit.max(1);
+            quirks.max_tokens_limit = Some(next.max_tokens);
+            return Some(next);
         }
         if params.temperature.is_some() && message.contains("temperature") {
             next.temperature = None;
             quirks.no_temperature = true;
             return Some(next);
         }
-        if let Some(effort) = params.reasoning_effort {
-            if message.contains("reasoning_effort")
+        if let Some(effort) = params.reasoning_effort
+            && (message.contains("reasoning_effort")
                 || message.contains("reasoning effort")
-                || message.contains("reasoning.effort")
-            {
-                if effort == "minimal" {
-                    let replacement = if message.contains("'none'") || message.contains("\"none\"")
-                    {
-                        "none"
-                    } else {
-                        "low"
-                    };
-                    next.reasoning_effort = Some(replacement);
-                    quirks.minimal_effort_replacement = Some(replacement);
+                || message.contains("reasoning.effort"))
+        {
+            if effort == "minimal" {
+                let replacement = if message.contains("'none'") || message.contains("\"none\"") {
+                    "none"
                 } else {
-                    next.reasoning_effort = None;
-                    quirks.omit_effort = true;
-                }
-                return Some(next);
+                    "low"
+                };
+                next.reasoning_effort = Some(replacement);
+                quirks.minimal_effort_replacement = Some(replacement);
+            } else {
+                next.reasoning_effort = None;
+                quirks.omit_effort = true;
             }
+            return Some(next);
         }
         if params.token_field == TokenField::MaxTokens
             && message.contains("max_tokens")
@@ -957,19 +955,20 @@ impl LlmProvider for OpenAiLlm {
             if cancel.is_cancelled() {
                 return Err(ProviderError::Cancelled);
             }
-            if matches!(failure.status.as_u16(), 400 | 422) && attempt < MAX_ATTEMPTS {
-                if let Some(next) = self.downgrade(&params, &failure.message_lower()) {
-                    tracing::debug!(
-                        provider,
-                        request_id = %request.request_id,
-                        status = failure.status.as_u16(),
-                        attempt,
-                        "request rejected; retrying with adjusted parameters"
-                    );
-                    params = next;
-                    attempt += 1;
-                    continue;
-                }
+            if matches!(failure.status.as_u16(), 400 | 422)
+                && attempt < MAX_ATTEMPTS
+                && let Some(next) = self.downgrade(&params, &failure.message_lower())
+            {
+                tracing::debug!(
+                    provider,
+                    request_id = %request.request_id,
+                    status = failure.status.as_u16(),
+                    attempt,
+                    "request rejected; retrying with adjusted parameters"
+                );
+                params = next;
+                attempt += 1;
+                continue;
             }
             let error = failure.into_error();
             log_failure(provider, &request.request_id, &error);
@@ -1320,7 +1319,9 @@ fn decode_embedding(value: &Value) -> Option<Vec<f32>> {
             return None;
         }
         bytes
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect()
     };
@@ -1329,12 +1330,12 @@ fn decode_embedding(value: &Value) -> Option<Vec<f32>> {
 
 /// Checks that every vector has the same dimension.
 pub(crate) fn check_dimensions(vectors: &[Vec<f32>]) -> Result<(), ProviderError> {
-    if let Some(first) = vectors.first() {
-        if vectors.iter().any(|v| v.len() != first.len()) {
-            return Err(ProviderError::InvalidResponse(
-                "embeddings have inconsistent dimensions".to_string(),
-            ));
-        }
+    if let Some(first) = vectors.first()
+        && vectors.iter().any(|v| v.len() != first.len())
+    {
+        return Err(ProviderError::InvalidResponse(
+            "embeddings have inconsistent dimensions".to_string(),
+        ));
     }
     Ok(())
 }

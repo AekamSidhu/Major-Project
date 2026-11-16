@@ -308,12 +308,12 @@ impl AnthropicLlm {
     fn downgrade(&self, params: &Params, message: &str) -> Option<Params> {
         let mut next = params.clone();
         let mut quirks = self.quirks();
-        if message.contains("max_tokens") {
-            if let Some(limit) = parse_token_limit(message).filter(|l| *l < params.max_tokens) {
-                next.max_tokens = limit.max(1);
-                quirks.max_tokens_limit = Some(next.max_tokens);
-                return Some(next);
-            }
+        if message.contains("max_tokens")
+            && let Some(limit) = parse_token_limit(message).filter(|l| *l < params.max_tokens)
+        {
+            next.max_tokens = limit.max(1);
+            quirks.max_tokens_limit = Some(next.max_tokens);
+            return Some(next);
         }
         if params.temperature.is_some()
             && ["temperature", "top_p", "top_k", "sampling"]
@@ -590,10 +590,10 @@ impl AnthropicDecoder {
                 let block = value.get("content_block");
                 let block_type = block.and_then(|b| b.get("type")).and_then(Value::as_str);
                 if block_type == Some("text") {
-                    if let Some(text) = block.and_then(|b| b.get("text")).and_then(Value::as_str) {
-                        if !text.is_empty() {
-                            out.push_back(Ok(LlmChunk::Delta(text.to_string())));
-                        }
+                    if let Some(text) = block.and_then(|b| b.get("text")).and_then(Value::as_str)
+                        && !text.is_empty()
+                    {
+                        out.push_back(Ok(LlmChunk::Delta(text.to_string())));
                     }
                 } else if block_type == Some("fallback") {
                     tracing::debug!(provider = PROVIDER_ID, "refusal fallback switched models");
@@ -602,12 +602,11 @@ impl AnthropicDecoder {
             }
             "content_block_delta" => {
                 let delta = value.get("delta");
-                if delta.and_then(|d| d.get("type")).and_then(Value::as_str) == Some("text_delta") {
-                    if let Some(text) = delta.and_then(|d| d.get("text")).and_then(Value::as_str) {
-                        if !text.is_empty() {
-                            out.push_back(Ok(LlmChunk::Delta(text.to_string())));
-                        }
-                    }
+                if delta.and_then(|d| d.get("type")).and_then(Value::as_str) == Some("text_delta")
+                    && let Some(text) = delta.and_then(|d| d.get("text")).and_then(Value::as_str)
+                    && !text.is_empty()
+                {
+                    out.push_back(Ok(LlmChunk::Delta(text.to_string())));
                 }
                 // `thinking_delta`, `signature_delta`, `input_json_delta`,
                 // `citations_delta`: never surfaced.
@@ -786,18 +785,19 @@ impl LlmProvider for AnthropicLlm {
             if cancel.is_cancelled() {
                 return Err(ProviderError::Cancelled);
             }
-            if failure.status.as_u16() == 400 && attempt < MAX_ATTEMPTS {
-                if let Some(next) = self.downgrade(&params, &failure.message_lower()) {
-                    tracing::debug!(
-                        provider = PROVIDER_ID,
-                        request_id = %request.request_id,
-                        attempt,
-                        "request rejected; retrying with adjusted parameters"
-                    );
-                    params = next;
-                    attempt += 1;
-                    continue;
-                }
+            if failure.status.as_u16() == 400
+                && attempt < MAX_ATTEMPTS
+                && let Some(next) = self.downgrade(&params, &failure.message_lower())
+            {
+                tracing::debug!(
+                    provider = PROVIDER_ID,
+                    request_id = %request.request_id,
+                    attempt,
+                    "request rejected; retrying with adjusted parameters"
+                );
+                params = next;
+                attempt += 1;
+                continue;
             }
             let error = failure.into_error();
             log_failure(&request.request_id, &error);

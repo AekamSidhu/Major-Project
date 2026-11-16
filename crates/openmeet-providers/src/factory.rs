@@ -259,12 +259,13 @@ fn endpoint_for(
         .and_then(|s| ctx.secrets.api_key(s))
         .map(|k| k.trim().to_string())
         .filter(|k| !k.is_empty());
-    if api_key.is_none() && location == ProviderLocation::Remote {
-        if let Some(name) = service.key_required_when_remote() {
-            return Err(ProviderError::NotConfigured(format!(
-                "{name} API key is not set"
-            )));
-        }
+    if api_key.is_none()
+        && location == ProviderLocation::Remote
+        && let Some(name) = service.key_required_when_remote()
+    {
+        return Err(ProviderError::NotConfigured(format!(
+            "{name} API key is not set"
+        )));
     }
     tracing::debug!(
         component = label,

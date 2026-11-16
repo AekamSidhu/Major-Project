@@ -871,10 +871,10 @@ impl Settings {
             ("Transcription base URL", &self.transcription.base_url),
         ];
         for (label, url) in urls {
-            if let Some(u) = url {
-                if let Err(e) = validate_base_url(u) {
-                    errors.push(format!("{label}: {e}"));
-                }
+            if let Some(u) = url
+                && let Err(e) = validate_base_url(u)
+            {
+                errors.push(format!("{label}: {e}"));
             }
         }
         if self.ai.llm.model.trim().is_empty() {

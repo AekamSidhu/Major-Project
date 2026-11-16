@@ -144,7 +144,9 @@ pub(crate) fn blob_to_vector(bytes: &[u8], dims: i64) -> Result<Vec<f32>, CodecE
         });
     }
     Ok(bytes
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect())
 }

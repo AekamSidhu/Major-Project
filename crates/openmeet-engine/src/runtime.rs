@@ -322,16 +322,15 @@ impl MeetingRuntime {
 
     /// Appends a segment to the open answer when spoken by the answerer.
     pub fn extend_answer(&mut self, segment: &TranscriptSegment) {
-        if let Some(open) = self.open_answer.as_mut() {
-            if open.speaker_role == segment.speaker_role
-                || open.speaker_role == SpeakerRole::Unknown
-            {
-                if !open.text.is_empty() {
-                    open.text.push(' ');
-                }
-                open.text.push_str(&segment.text);
-                open.segment_ids.push(segment.id.clone());
+        if let Some(open) = self.open_answer.as_mut()
+            && (open.speaker_role == segment.speaker_role
+                || open.speaker_role == SpeakerRole::Unknown)
+        {
+            if !open.text.is_empty() {
+                open.text.push(' ');
             }
+            open.text.push_str(&segment.text);
+            open.segment_ids.push(segment.id.clone());
         }
     }
 
@@ -347,10 +346,10 @@ impl MeetingRuntime {
 
     pub fn to_record(&self) -> MeetingRecord {
         let mut answers = self.answers.clone();
-        if let Some(open) = &self.open_answer {
-            if !open.text.trim().is_empty() {
-                answers.push(open.clone());
-            }
+        if let Some(open) = &self.open_answer
+            && !open.text.trim().is_empty()
+        {
+            answers.push(open.clone());
         }
         MeetingRecord {
             meeting: self.meeting.clone(),

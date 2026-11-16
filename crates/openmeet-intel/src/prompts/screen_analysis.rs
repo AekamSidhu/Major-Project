@@ -65,15 +65,15 @@ pub fn build(ctx: &VisionContext, ocr_text: Option<&str>) -> PromptParts {
         "Source: {}",
         if source.is_empty() { "screen" } else { &source }
     ));
-    if let Some(app) = ctx.application.as_deref().map(sanitize_line) {
-        if !app.is_empty() {
-            capture.push(format!("Application: {app}"));
-        }
+    if let Some(app) = ctx.application.as_deref().map(sanitize_line)
+        && !app.is_empty()
+    {
+        capture.push(format!("Application: {app}"));
     }
-    if let Some(title) = ctx.window_title.as_deref().map(sanitize_line) {
-        if !title.is_empty() {
-            capture.push(format!("Window title: {title}"));
-        }
+    if let Some(title) = ctx.window_title.as_deref().map(sanitize_line)
+        && !title.is_empty()
+    {
+        capture.push(format!("Window title: {title}"));
     }
     let capture_block = format!("Capture details:\n{}", block("screen", &capture.join("\n")));
 
@@ -82,10 +82,10 @@ pub fn build(ctx: &VisionContext, ocr_text: Option<&str>) -> PromptParts {
     if !recent.trim().is_empty() {
         talk.push(tail_to_tokens(recent.trim(), MAX_TRANSCRIPT_TOKENS));
     }
-    if let Some(q) = ctx.question.as_deref().map(sanitize_line) {
-        if !q.is_empty() {
-            talk.push(format!("Current question: {}", truncate_to_tokens(&q, 150)));
-        }
+    if let Some(q) = ctx.question.as_deref().map(sanitize_line)
+        && !q.is_empty()
+    {
+        talk.push(format!("Current question: {}", truncate_to_tokens(&q, 150)));
     }
     let talk_block = if talk.is_empty() {
         String::new()

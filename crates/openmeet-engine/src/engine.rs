@@ -261,11 +261,11 @@ impl Engine {
     pub(crate) fn persist(&self, store: &Arc<dyn MeetingStore>, op: PersistOp) {
         // A write that arrives after the user deleted its meeting must not
         // bring the meeting back.
-        if let Some(id) = op.meeting_id() {
-            if self.is_deleted(id) {
-                tracing::debug!(op = op.name(), "dropped a write for a deleted meeting");
-                return;
-            }
+        if let Some(id) = op.meeting_id()
+            && self.is_deleted(id)
+        {
+            tracing::debug!(op = op.name(), "dropped a write for a deleted meeting");
+            return;
         }
         self.inner.persist.send(store, op);
     }
@@ -462,18 +462,18 @@ impl Engine {
         let settings = self.settings();
         {
             let st = self.inner.state.lock();
-            if let Some(rt) = &st.runtime {
-                if matches!(
+            if let Some(rt) = &st.runtime
+                && matches!(
                     rt.state(),
                     MeetingState::Starting
                         | MeetingState::Active
                         | MeetingState::Paused
                         | MeetingState::Stopping
-                ) {
-                    return Err(CoreError::InvalidState(
-                        "A meeting is already running. End it before starting another.".into(),
-                    ));
-                }
+                )
+            {
+                return Err(CoreError::InvalidState(
+                    "A meeting is already running. End it before starting another.".into(),
+                ));
             }
         }
         self.inner.requests.cancel_all(false);

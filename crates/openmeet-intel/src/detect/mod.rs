@@ -1354,25 +1354,26 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
 
     // Continuation of the previous question by the same speaker.
     let mut supersedes = None;
-    if let Some(last) = input.last_question {
-        if last.speaker_role == seg.speaker_role && confidence >= QUESTION_THRESHOLD {
-            let last_end = last
-                .segment_ids
-                .last()
-                .and_then(|id| input.recent.iter().find(|s| &s.id == id))
-                .map(|s| s.end_time);
-            if let Some(end) = last_end {
-                if seg.start_time - end <= CONTINUATION_GAP_MS {
-                    supersedes = Some(last.id.clone());
-                    question = format!("{} {}", last.question.trim(), question);
-                    for id in last.segment_ids.iter().rev() {
-                        if !segment_ids.contains(id) {
-                            segment_ids.insert(0, id.clone());
-                        }
-                    }
-                    signals.push("continuation".into());
+    if let Some(last) = input.last_question
+        && last.speaker_role == seg.speaker_role
+        && confidence >= QUESTION_THRESHOLD
+    {
+        let last_end = last
+            .segment_ids
+            .last()
+            .and_then(|id| input.recent.iter().find(|s| &s.id == id))
+            .map(|s| s.end_time);
+        if let Some(end) = last_end
+            && seg.start_time - end <= CONTINUATION_GAP_MS
+        {
+            supersedes = Some(last.id.clone());
+            question = format!("{} {}", last.question.trim(), question);
+            for id in last.segment_ids.iter().rev() {
+                if !segment_ids.contains(id) {
+                    segment_ids.insert(0, id.clone());
                 }
             }
+            signals.push("continuation".into());
         }
     }
 
