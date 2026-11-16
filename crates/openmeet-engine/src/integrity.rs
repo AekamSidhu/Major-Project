@@ -543,23 +543,33 @@ impl Engine {
                 answer.running = Some(ticket.id.clone());
             }
         }
+        // Providers are captured now: a demo that ends restores the user's
+        // providers, which must not change a check already decided.
+        let providers = self.provider_set();
+        let embedder = self.embedder();
         let engine = self.clone();
         self.inner.handle.spawn(async move {
-            engine.run_integrity_check(job, ticket).await;
+            engine
+                .run_integrity_check(job, ticket, providers, embedder)
+                .await;
         });
     }
 
-    async fn run_integrity_check(&self, job: CheckJob, ticket: RequestTicket) {
+    async fn run_integrity_check(
+        &self,
+        job: CheckJob,
+        ticket: RequestTicket,
+        providers: openmeet_core::providers::ProviderSet,
+        embedder: Arc<dyn EmbeddingProvider>,
+    ) {
         self.inner
             .requests
             .set_state(&ticket, AnswerState::Requesting, None);
-        let providers = self.provider_set();
         let service = providers.integrity.clone();
         let llm_local = providers
             .llm
             .as_ref()
             .is_none_or(|l| l.info().location != ProviderLocation::Remote);
-        let embedder = self.embedder();
         let th = spec_thresholds();
         let cancel = ticket.cancel.clone();
 
