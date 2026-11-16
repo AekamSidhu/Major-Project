@@ -1,276 +1,230 @@
-# Echo detection — `feature/echo-detection`
+# Echo detection
 
-Work branch for building, training and evaluating the **AI-echo** signal of
-OpenMeet's answer-integrity check (cheating detection). The other signal, reading
-gaze ("eye detection"), is developed separately on `feature/gaze-detection`.
-The two are combined only after both are merged.
+Building, training and measuring the **AI-echo** signals of OpenMeet's
+answer-integrity check: does an answer read like, or sound like, it came from
+an AI assistant? The other signal, reading gaze, lives in
+`training/gaze-detection`. All signals are defined once in `spec/integrity/`
+and combined into one flag per answer.
 
-> Status: research and training. Nothing from this branch is wired into the
-> app yet. The `IntegrityAnalyzer` exists only in the design diagrams
-> (process 11.0 "Assess answer integrity" in the DFDs, steps 11.1–11.4).
+> Status (2026-11-17): three signals are built and run in the interview
+> room (`local-ai/room`): the AI-written-text model (TF-IDF + logistic
+> regression), echo similarity (thresholds measured on HC3) and delivery
+> (hand-set, measured on SpiCE, where it barely works). None is calibrated
+> on real interviews yet; the kit for collecting our own labelled
+> interviews is in `training/data-collection`.
 
 ## What we're detecting
 
 In a remote interview, a candidate can paste the question into an AI
 assistant, or let a tool transcribe it automatically, and then read the
-generated answer aloud. The echo signal looks at each answer in two ways:
+generated answer aloud. Each answer is looked at in three ways:
 
-1. **Content.** Is this answer close to what an LLM would say to the same
+1. **AI-written text.** Does the transcript read like LLM writing?
+2. **Echo similarity.** Is it close to what an LLM answers to the same
    question?
-2. **Delivery.** Does the candidate sound like they're reading, compared with
-   how *this person* normally talks?
+3. **Delivery.** Does it sound read, compared with how *this person*
+   answered earlier?
 
-Neither signal is enough on its own. A well-prepared candidate can give a
-textbook answer, and a fluent speaker can sound scripted. That's why we
-combine them and compare each person against their own baseline.
+None of them is enough on its own: a well-prepared candidate can give a
+textbook answer, and a fluent speaker can sound scripted. A flag is a
+**signal for the interviewer, never a verdict**.
 
-## How the signal works (planned)
+## What is built and measured
 
-**Content: echo score (steps 11.3, 11.4)**
+| Signal | How | Code | Result on held-out data |
+|---|---|---|---|
+| AI-written text (`ai_text`) | TF-IDF (1-2 word grams, 60k terms) + logistic regression on the transcript (lower case, words only) | `train_content.py` (compares TF-IDF, a fine-tuned DistilRoBERTa and their average; Kaggle), `export_content_model.py` writes `local-ai/integrity/models/echo_tfidf.json` | HC3 test questions: 97.9% balanced accuracy, AUC 0.998 |
+| Echo similarity (`echo_similarity`) | Llama 3.2 answers the question twice; highest cosine (bge-small-en-v1.5) between the answer and those | `calibrate_similarity.py` → `results/echo_similarity.json`, thresholds in `spec/integrity/thresholds.json` | HC3 test questions: AUC 0.876; human answers flagged 18.6% at `possible`, 6.6% at `high` (36% at `high` on wiki_csai) |
+| Delivery (`delivery`) | Spec index: delay after the question, words a minute, pauses, fillers, against the speaker's first 3 answers | `evaluate_delivery.py` → `results/delivery_spice.json`; weights and thresholds hand-set in the spec | SpiCE, 34 speakers: AUC 0.55 read vs spontaneous; 28% of spontaneous answers reach `possible` |
 
-- When the interviewer's question ends, ask the LLM for 3–4 reference answers
-  to it, sampled with temperature > 0 so they vary.
-- When the candidate's answer turn ends, embed the answer and the references.
-- Echo score = highest cosine similarity between the answer and any
-  reference.
+The shipped content model is the TF-IDF one (fitted on train questions,
+thresholds from validation questions, test questions scored once; the
+numbers are stored in `echo_tfidf.json`): it is 1.9 MB of JSON and scores
+an answer in plain Python on any laptop. `train_content.py` also fine-tunes
+a DistilRoBERTa for comparison; that run's results live in the Kaggle
+notebook's output, not in this repository. The word timestamps
+delivery needs are in the sidecar (`POST /v1/audio/transcriptions` with
+`timestamp_granularities[]=word`, OpenAI's API).
 
-**Delivery: anomaly against the speaker's baseline (steps 11.1, 11.2)**
+## Echo similarity on HC3 (Phase 1)
 
-- Baseline: the candidate's first few minutes of small talk. Measure speech
-  rate, pause pattern and filler rate.
-- For each answer, compare against the baseline:
-  - **Start delay** after the question ends. Reading an AI answer means
-    waiting for the answer to be generated first.
-  - **Speech-rate evenness.** Reading aloud is unusually steady.
-  - **Fillers and self-corrections** ("um", "uh", "I mean", restarts). People
-    who are reading use fewer of these.
-  - **Where pauses fall.** Thinking pauses come at clause boundaries. Reading
-    pauses come mid-sentence, when the reader loses their place or scrolls.
-- This needs word-level timestamps from Whisper. The local AI sidecar doesn't
-  return them yet. faster-whisper supports `word_timestamps=True`, so exposing
-  them is the first code change on this branch.
+`calibrate_similarity.py`, protocol fixed before any test question was
+scored:
 
-**Combine**
+- HC3 `all.jsonl` (CC BY-SA 4.0) loaded as in `train_content.py` (every
+  answer as a transcript, at least 15 words, duplicates dropped) with its
+  question split (seed 2026, 20% of questions are test).
+- 100 questions from each of HC3's 5 sources per split (only questions with
+  both a human and a ChatGPT answer): 500 development and 500 test
+  questions.
+- Reference answers exactly as the room writes them
+  (`local-ai/integrity/signals.py`: system prompt, temperature 0.7, at most
+  400 tokens, seed i for reference i), 2 per question from `llama3.2`
+  through Ollama, cached outside the repository. Answer and references go
+  through `to_transcript` before embedding.
+- `possible` = the lower, `high` = the higher of the balanced cut and the
+  cut with a 5% false-positive rate on development questions, rounded up to
+  4 decimals. The signal counts as calibrated only if, on test questions,
+  ROC-AUC >= 0.70 and the false-positive rate at `high` <= 10%.
 
-Echo score plus delivery features go into a small classifier, which outputs
-the probability that the answer was read from an AI. Start with logistic
-regression: it is explainable, gives calibrated probabilities and works with
-little data. Only move to anything bigger if the data justifies it.
+Results (`results/echo_similarity.json`; about 2 s per reference on an
+RTX 4060):
 
-## What "training" means here
+| | Development (500 questions, 1,396 answers) | Test (500 questions, 1,411 answers) |
+|---|---|---|
+| ROC-AUC | 0.882 | **0.876** |
+| Mean similarity, ChatGPT / human | 0.907 / 0.801 | 0.905 / 0.800 |
+| At `possible` = 0.8712: ChatGPT caught / human flagged | 84% / 18% | 81% / **18.6%** |
+| At `high` = 0.9201: ChatGPT caught / human flagged | 51% / 5.0% | 47% / **6.6%** |
 
-We are **not** training or fine-tuning a language model. The LLM, the
-embedding model and Whisper are used as they are. What we build and tune:
+By source, test questions (human answers flagged at `possible` / `high`):
 
-- which features to extract, and how (window sizes, normalisation)
-- a small classifier on top of those features
-- the decision threshold, chosen for a low false-positive rate
+| Source | ROC-AUC | Humans flagged | ChatGPT caught |
+|---|---|---|---|
+| finance | 0.931 | 5% / 0% | 84% / 43% |
+| medicine | 0.937 | 12% / 2% | 83% / 39% |
+| open_qa | 0.861 | 33% / 7% | 86% / 51% |
+| reddit_eli5 | 0.900 | 3% / 0% | 52% / 15% |
+| wiki_csai | 0.792 | **70% / 36%** | 92% / 78% |
+
+Within one question, a ChatGPT answer is more similar to the references
+than a human answer to the same question 93% of the time (pairwise AUC
+0.932), so most of the overlap comes from questions whose every answer is
+alike. One reference instead of two gives AUC 0.859.
+
+By the rule fixed beforehand the signal counts as calibrated (AUC 0.876 >=
+0.70, 6.6% <= 10% at `high`), so `thresholds.json` now has
+`calibrated: true` and these thresholds. The caveat matters for interviews:
+`wiki_csai` (computer-science definitions, the most interview-like source)
+flags 36% of human answers at `high`, because a correct textbook answer is
+close to any LLM's. HC3's "human" answers there are Wikipedia text, which a
+spoken answer is less like, but expect many false alarms on factual
+technical questions; open and behavioural questions are where the signal
+can help. The same caveat is in the spec's `source` string.
+
+## Delivery on public speech (Phase 2)
+
+The plan named ALLSSTAR; it needs a SpeechBox account, and its Hugging Face
+copy has no task labels and no licence, so it was not used. Datasets with
+the same speakers reading and speaking freely:
+
+| Dataset | Read / spontaneous | Access | Used |
+|---|---|---|---|
+| [SpiCE](https://doi.org/10.5683/SP2/MJOXP3) (Johnson et al., UBC) | Sentence reading, picture-story narration, 25-min interview; 34 bilingual speakers; hand transcripts with forced-aligned words | Open download, CC BY 4.0 (checked: audio served without login) | **Yes** |
+| [ALLSSTAR](https://speechbox.linguistics.northwestern.edu/) | Scripted and spontaneous, L1 and L2 English | SpeechBox registration | No (registration) |
+| [L2-ARCTIC](https://psi.engr.tamu.edu/l2-arctic-corpus/) | Read prompts plus a spontaneous "suitcase" narrative, 24 speakers | Request form; CC BY-NC 4.0 | No (form) |
+| [IViE](https://www.phon.ox.ac.uk/files/apps/IViE/) | Read sentences and story, retold story, conversation | Academic research and teaching only | No (terms) |
+| [Chains](https://chains.ucd.ie/corpus.php) | Read texts and unscripted retelling (Hiberno-English) | Research use; no open licence stated | No |
+
+`evaluate_delivery.py` (also runs on any folder
+`DIR/<speaker>/<read|spontaneous>/*.wav|json`). Protocol: answers are 30
+consecutive words within one task (dropped at a gap over 2 s, so both
+classes have the same length); each speaker's baseline is their first 3
+interview answers; then up to 15 more interview answers per speaker and
+every read answer are scored with the spec's weights and thresholds.
+Latency cannot be measured (no question before a read sentence), so the
+index uses rate, pauses and fillers only. Timings from the corpus's hand
+transcripts (forced alignment), which keep the fillers.
+
+| | Read (125) | Spontaneous (510) |
+|---|---|---|
+| Delivery index, mean | 0.59 | 0.42 |
+| Reaches `possible` | 23% | 28% |
+| Reaches `high` | 9% | 12% |
+| Words a minute, mean | 194 | 205 |
+| Pauses a minute, mean | 19.6 | 16.0 |
+| Fillers per 100 words, mean | 0.16 | 3.18 |
+
+ROC-AUC of the index, read against spontaneous: **0.547** (95% interval
+from resampling speakers 0.50-0.59). Per feature, in the direction the spec
+weights it: fillers 0.70, rate 0.44, pauses 0.38. Logistic regression on
+the same z-scores, trained on 24 speakers and tested on 10 (for
+information; the spec is unchanged): AUC 0.76 against 0.56 for the spec
+index on the same test speakers, with the pause weight's sign reversed.
+
+What it means: on this data the spec's delivery index is close to chance,
+and with the hand-set thresholds it flags honest spontaneous answers more
+often than read ones. Reading isolated sentences is slower and has more
+pauses than conversation, the opposite of what the index assumes for a
+read-out answer; only fewer fillers points the right way, and Whisper
+drops many fillers. SpiCE's reading is not the case we care about (a
+continuous answer read off a screen after a delay), so this does not settle
+the weights, but it is a clear warning: keep delivery uncalibrated and
+treat it as weak until our own recordings say otherwise.
+
+A second run with Whisper's word timings on the participants' audio (fetched
+by HTTP range requests, as the room would time it) was stopped at 400 of 839
+answers when the machine ran low on memory; it has no result yet.
 
 ## Known hard parts
 
-- **Whisper drops fillers.** Whisper tends to write clean text and leave out
-  "um" and "uh", which would hide one of our best delivery features. Two
-  fixes to try: a transcription prompt that itself contains fillers (this
-  nudges Whisper to keep them), or a small separate filler detector
-  (PodcastFillers below).
-- **Spoken answers aren't formatted.** An AI answer on screen has headings
-  and bullet points. Once read aloud and transcribed, it doesn't. Strip
-  formatting from reference answers before comparing them.
-- **A different model wrote the cheater's answer.** We generate references
-  with a local model, but the candidate probably used GPT, Claude or Gemini.
-  The echo score only works if answers from different LLMs land close
-  together. Test this explicitly.
+- **Whisper drops fillers**, one of the few delivery features that worked
+  on SpiCE. A filler-rich transcription prompt or a separate filler
+  detector (PodcastFillers) are the options.
+- **Spoken answers aren't formatted.** Every answer and reference goes
+  through `to_transcript` (lower case, words only) before any model sees it.
+- **A different model wrote the cheater's answer.** References come from
+  Llama 3.2; HC3's AI answers are from 2022 ChatGPT, so the HC3 numbers
+  already measure a cross-model case. Newer assistants and paraphrasing are
+  still untested (RAID, own data).
 - **Textbook questions.** For "what is a hash map?", every good answer looks
-  alike, human or AI. Expect the content signal to be weak on factual
-  questions and stronger on open or behavioural ones. Report results per
-  question type.
-
-## Datasets
-
-Public data lets us build and test each half of the signal before our own
-recordings exist. None of it contains the exact case we care about (a person
-*reading an AI answer aloud in an interview*), so our own collection is still
-required.
-
-| Dataset | What it is | Access | How we use it |
-|---|---|---|---|
-| [HC3 (Human ChatGPT Comparison Corpus)](https://huggingface.co/datasets/Hello-SimpleAI/HC3) | ~24k questions, each with human answers and ChatGPT answers (subsets include computer science, open QA, finance, medicine) | Hugging Face, CC BY-SA 4.0 | Develop the content signal: do ChatGPT answers score higher than human answers against our local references? ([paper and code](https://github.com/Hello-SimpleAI/chatgpt-comparison-detection)) |
-| [RAID](https://github.com/liamdugan/raid) | Large benchmark of AI-generated text from 11 models, including paraphrasing and other adversarial attacks | GitHub / `pip install raid-bench` | Robustness of the content signal to other models and to paraphrasing |
-| [ALLSSTAR](https://huggingface.co/datasets/NathanRoll/ALLSSTAR) (via [SpeechBox](https://speechbox.linguistics.northwestern.edu/)) | Scripted (read) and spontaneous speech from the same talkers, native and non-native English | SpeechBox (Northwestern); the Hugging Face copy is a community upload, so check which tasks it includes | Develop the delivery signal on read vs. spontaneous speech, and check the native vs. non-native gap |
-| [PodcastFillers](https://podcastfillers.github.io/) | 145 h of podcast audio, ~35k hand-labelled "uh" and "um" ([Zenodo](https://zenodo.org/records/7121457)) | Annotations non-commercial (fine for research) | Measure whether our transcription keeps fillers; train a filler detector if it doesn't |
-| [MIT Interview Dataset](https://roc-hci.com/past-projects/automated-prediction-of-job-interview-performances/) | 138 recorded mock job interviews (69 students), with audio, video and transcripts | Request form; needs an academic email | Genuine interview answers: what normal delivery looks like in an interview (negatives) |
-
-Tools: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (word
-timestamps), Ollama (reference answers), fastembed `BAAI/bge-small-en-v1.5`
-(the same embedding model the sidecar uses, so offline results match the
-app).
+  alike. Results are reported per HC3 source.
+- **Short answers.** The AI-text model needs 15 words; delivery needs 10
+  words and three earlier answers.
 
 ## Our own data
 
-Mock interviews with volunteers, held over a real call (Zoom, Meet or Teams)
-so the audio goes through real compression. Each session starts with 2–3
-minutes of small talk for the baseline.
+The collection kit (protocol, consent form with the cloud choice, question
+bank, the four conditions, randomisation, label sheet, data card and
+`calibrate.py`) is in `training/data-collection`, shared with the gaze
+branch. Sessions run in the interview room's study mode
+(`room_server.py --study DIR`).
 
-| Condition | Label | Why it's in the set |
-|---|---|---|
-| Answers naturally | genuine | the normal case |
-| Reads an AI answer off the screen | echo | the case we want to catch |
-| Gives a rehearsed or memorised answer | genuine (hard negative) | fluent, but not reading |
-| Gives a textbook answer to a factual question | genuine (hard negative) | content close to an LLM's |
-| Paraphrases an AI answer on the fly | echo (hard positive) | the adaptive cheater |
+## How we measure
 
-Include native and non-native English speakers, different accents, and both
-nervous and relaxed speakers. Target size: to be agreed with the team.
+- Split by question (HC3) or by speaker/person (SpiCE, own data), never by
+  answer.
+- Choose on development data; score test data once.
+- Report ROC-AUC and the **false-positive rate at the chosen threshold**:
+  how often an honest candidate gets flagged.
+- Break results down by subgroup (source, native vs non-native, question
+  type) to check for bias.
 
-**One collection for both branches.** Each session records audio *and* the
-candidate's video, so the same recordings and labels feed the gaze branch
-too. Plan and run data collection together, once.
-
-**Data rules**
-
-- Get written consent from every participant. Anyone can withdraw and have
-  their data deleted.
-- **Never commit recordings, transcripts or any participant data to git.**
-  Keep them in the team's private storage. Commit only code, feature
-  definitions and aggregate results. Add `training/*/data/` to `.gitignore`
-  before the first recording lands in this folder.
-- Use anonymous session ids, never names.
-
-## How we'll measure it
-
-- Split train and test **by person**, never by answer, so no speaker appears
-  in both.
-- Report ROC-AUC, precision and recall, and the **false-positive rate at the
-  chosen threshold**: how often an honest candidate gets flagged. That's the
-  number that matters most.
-- Break results down by subgroup (non-native speakers, hard negatives,
-  question type) to check for bias.
-- Ablation: content only, delivery only, both.
-- Cross-model check: generate references with the local model (e.g.
-  `llama3.2`) while the "cheater" used a different assistant (GPT, Claude,
-  Gemini). Does the echo score still separate the classes?
-
-## Implementation plan
-
-Each phase ends with something we can show. Dates go in once we know the
-project deadlines.
-
-### Phase 0: Set up
-
-- Python environment for this folder (numpy, pandas, scikit-learn,
-  faster-whisper, fastembed, matplotlib; Ollama for reference answers).
-- Add `training/*/data/` to `.gitignore`.
-- Write down the evaluation protocol (person-level split, metrics, target
-  false-positive rate) **before** looking at any results.
-
-*Done when:* the skeleton scripts run end to end on a toy example.
-
-### Phase 1: Content signal on public text (HC3, RAID)
-
-- For HC3 questions (start with the computer-science and open-QA subsets),
-  generate 3–4 reference answers with `llama3.2` through Ollama and cache
-  them.
-- Strip formatting from all answers, embed them, and compute the echo score
-  for every human and every ChatGPT answer.
-- Tune the number of references (1–6), the embedding model (fastembed vs. the
-  app's built-in hashing embedder), the reference model (`llama3.2` vs. a 7B
-  model), and whole-answer vs. per-sentence scoring.
-- Check robustness on RAID's paraphrase and cross-model subsets.
-
-*Done when:* we have a content-only ROC-AUC on HC3 and a chosen
-configuration.
-
-### Phase 2: Delivery signal on public speech (ALLSSTAR, PodcastFillers, MIT Interview)
-
-- Add word timestamps to the sidecar, matching OpenAI's API
-  (`response_format=verbose_json`, `timestamp_granularities[]=word`) so the
-  sidecar stays OpenAI-compatible.
-- Write the feature extractor: response latency, speech rate and its
-  variation, pause lengths and where they fall, filler rate,
-  repetitions and restarts.
-- Measure filler recall on PodcastFillers, with and without a filler-rich
-  prompt. If it's still poor, add a small filler detector.
-- Train a read vs. spontaneous classifier on ALLSSTAR, split by speaker, and
-  compare native and non-native speakers.
-
-*Done when:* we have a delivery-only ROC-AUC on ALLSSTAR and a measured
-filler recall.
-
-### Phase 3: Collect our own data (shared with the gaze branch)
-
-- Write the protocol, consent form and question bank (a mix of technical,
-  open and behavioural questions).
-- Pilot with 2–3 teammates, then fix whatever was awkward.
-- Run sessions over a real call. Randomise the condition order per
-  participant and keep a label sheet per answer.
-
-*Done when:* the dataset is collected and documented in a data card (in git,
-no raw data).
-
-### Phase 4: Combined model and evaluation
-
-- Build per-answer features from both content and delivery, normalised
-  against each speaker's small-talk baseline (z-scores).
-- Train logistic regression with leave-one-speaker-out cross-validation and
-  check calibration.
-- Choose the threshold for a target false-positive rate (e.g. ≤ 5%).
-- Produce ROC curves, the false-positive rate at the threshold, per-subgroup
-  results, the ablation table, the cross-model check, and a look at every
-  false positive.
-
-*Done when:* results and plots in `results/` are ready for the report.
-
-### Phase 5: Integrate into OpenMeet
-
-- `local-ai`: word timestamps, with tests in `test_server.py`.
-- `openmeet-core`: integrity-flag type, an `INTEGRITY_FLAG` event, and
-  settings (on/off, threshold).
-- `openmeet-intel`: a versioned reference-answer prompt; feature extraction
-  and logistic scoring in pure Rust, reading the trained weights from a small
-  JSON file; a parity test that reproduces the Python scores on fixtures.
-- `openmeet-engine`: an `IntegrityAnalyzer` that builds the baseline from the
-  first minutes and scores each finished answer in a background request,
-  never blocking follow-ups.
-- `openmeet-store`: a migration to persist flags.
-- UI: a flag badge with the evidence (scores, timestamps), a settings toggle,
-  and an entry on the privacy page.
-
-*Done when:* an engine test with mocks covers the flow end to end, and a live
-test runs it with local models.
-
-### Phase 6: Fuse with the gaze signal (joint, after both branches merge)
-
-Combine the echo and reading scores into one flag, re-tune the threshold on
-the shared recordings, and report how much each signal adds.
-
-## Planned layout
+## Layout
 
 ```
 training/echo-detection/
-  README.md      this file
-  data/          local only, never committed
-  features/      text and timing feature extraction
-  notebooks/     exploration
-  train.py       classifier training
-  evaluate.py    metrics and plots for the report
-  results/       aggregate metrics only
+  README.md, PROGRESS.md
+  content/text.py               transcript normalisation (identical to local-ai/integrity/text.py)
+  train_content.py              AI-written-text candidates on HC3 (Kaggle: kaggle_content.sh)
+  export_content_model.py       the shipped TF-IDF model as JSON for the sidecar
+  calibrate_similarity.py       echo-similarity thresholds on HC3
+  evaluate_delivery.py          the spec's delivery index on read vs spontaneous speech
+  test_*.py, content/test_*.py  synthetic smoke tests (python -m pytest -q)
+  results/                      aggregate metrics only
+  data/                         local only, never committed
 ```
+
+Run the tests from this folder with Python 3.11 (`numpy`, `pandas`,
+`scikit-learn`; `fastembed` and `faster-whisper` only for the real runs).
 
 ## Ground rules
 
 - A flag is a **signal for the interviewer, never a verdict**. It always
-  comes with evidence (scores, timestamps), and the human decides.
+  comes with evidence, and the human decides.
 - Missing a cheater is better than flagging an honest candidate. Choose
   thresholds accordingly.
-- Runs locally by default, like the rest of OpenMeet, and only when the
-  interviewer turns it on.
+- Runs locally by default, like the rest of OpenMeet.
 
 ## Checklist
 
-- [ ] Phase 0: environment, `.gitignore`, evaluation protocol written
-- [ ] Phase 1: content signal measured on HC3 and RAID
-- [ ] Phase 2: sidecar word timestamps; delivery signal measured on ALLSSTAR; filler recall measured
+- [x] Phase 0: environment, `.gitignore`, evaluation protocol written
+- [x] Phase 1: AI-written-text model trained and shipped (HC3); echo similarity measured on HC3 and its thresholds set
+- [ ] Phase 1: robustness to other models and paraphrasing (RAID)
+- [x] Phase 2: sidecar word timestamps; delivery measured on SpiCE (hand timings)
+- [ ] Phase 2: delivery with Whisper timings on SpiCE (run stopped, see above); filler recall
+- [x] Phase 3: collection kit and room study mode ready
 - [ ] Phase 3: own dataset collected (with the gaze branch)
-- [ ] Phase 4: combined model, threshold and false-positive rate, bias check
-- [ ] Phase 5: integrated into the app behind a setting
-- [ ] Phase 6: fused with the gaze signal
+- [ ] Phase 4: thresholds from own data (`training/data-collection/calibrate.py`), bias check
+- [x] Phase 5: integrated into the interview room (desktop app: Rust side, separate work)
+- [x] Phase 6: fused with the gaze signal (spec fusion, one flag per answer)

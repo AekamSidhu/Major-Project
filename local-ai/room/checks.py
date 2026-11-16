@@ -83,6 +83,9 @@ def similarity_evidence(result: dict[str, Any] | None) -> str:
         return result.get("detail") or "unavailable"
     text = (f"cosine {result['similarity']:.2f} to the closest of {result['references']} answers "
             f"{result['reference_model']} gave to the same question")
+    if result["level"] in ("possible", "high"):
+        # On HC3, honest answers to definition questions were often this close too.
+        text += "; a correct textbook answer to a factual question can be this close too"
     return text + (f" ({result['detail']})" if result.get("detail") else "")
 
 

@@ -133,7 +133,9 @@ def fastembed_embedder(model: str, cache_dir: Path) -> Callable[[Sequence[str]],
     from fastembed import TextEmbedding
 
     engine = TextEmbedding(model_name=model, cache_dir=str(cache_dir))
-    return lambda texts: np.asarray(list(engine.embed(list(texts))), dtype=np.float64)
+    # fastembed's default batch (256 texts of up to 512 tokens) needs several GB of RAM;
+    # the vectors are the same with smaller batches.
+    return lambda texts: np.asarray(list(engine.embed(list(texts), batch_size=16)), dtype=np.float64)
 
 
 def embed_all(texts: list[str], embed: Callable[[Sequence[str]], np.ndarray], batch: int = 256) -> dict[str, np.ndarray]:
@@ -265,12 +267,18 @@ def update_spec(path: Path, result: dict, out_name: str) -> None:
     block["possible"] = result["thresholds"]["possible"]
     block["high"] = result["thresholds"]["high"]
     block["calibrated"] = result["calibrated"]
+    worst = ""
+    by_source = t.get("by_source") or {}
+    if by_source:  # textbook-style sources flag honest answers far more often: say so where the threshold lives
+        src, s = max(by_source.items(), key=lambda kv: kv[1]["at_high"]["false_positive_rate"])
+        worst = (f"; worst source {src}: false-positive rate {s['at_possible']['false_positive_rate']:.0%} at possible, "
+                 f"{s['at_high']['false_positive_rate']:.0%} at high (textbook answers look alike)")
     block["source"] = (f"HC3 (training/echo-detection/calibrate_similarity.py, {out_name}): thresholds from "
                        f"{result['development']['questions']} development questions; on {t['questions']} test questions "
                        f"ROC-AUC {t['roc_auc']:.3f}, false-positive rate {t['at_possible']['false_positive_rate']:.1%} at possible "
-                       f"and {t['at_high']['false_positive_rate']:.1%} at high"
+                       f"and {t['at_high']['false_positive_rate']:.1%} at high" + worst
                        + ("" if result["calibrated"] else "; too weak to count as calibrated"))
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def main() -> None:

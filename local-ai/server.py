@@ -265,7 +265,8 @@ class FastEmbedder:
 
     def embed(self, texts: Sequence[str], model: str) -> list[list[float]]:
         engine = self._get(model)
-        return [vec.astype(float).tolist() for vec in engine.embed(list(texts))]
+        # fastembed's default batch of 256 long texts needs several GB of RAM; same vectors in smaller batches.
+        return [vec.astype(float).tolist() for vec in engine.embed(list(texts), batch_size=32)]
 
     def loaded_model(self) -> str | None:
         return self._last
