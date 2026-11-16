@@ -359,6 +359,8 @@ def test_study_mode_saves_labelled_answers_only_with_the_candidates_consent(tmp_
         assert local.post(f"/api/rooms/{rid}/answers", json={"start": 0, "end": 1, "condition": "cheating"}).status_code == 400
         local.post(f"/api/rooms/{rid}/answers/{a['index']}/similarity")
         assert local.post(f"/api/rooms/{rid}/answers/{a['index']}/label", json={"condition": "read_script"}).json()["saved"] is True
+        # Answer 1 was given before the consent: relabelling it now must not save it.
+        assert local.post(f"/api/rooms/{rid}/answers/1/label", json={"condition": "honest"}).json()["saved"] is False
     sessions = list(tmp_path.glob("session-*"))
     assert len(sessions) == 1
     files = sorted(p.name for p in sessions[0].iterdir())

@@ -277,7 +277,9 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         return segment
 
     def save_study(room: Room, answer: dict[str, Any]) -> None:
-        if study is not None and room.study_consent:
+        # Both: the candidate consented when the answer was given, and still does now.
+        # An answer from before the consent is never saved, even if relabelled later.
+        if study is not None and room.study_consent and answer.get("study_consent"):
             try:
                 study.save_answer(room, answer, monitor)
             except Exception as error:  # a full disk must not break the interview
@@ -315,7 +317,8 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         delivery = speaker.add(q_end, utterances)
         answer = {"index": len(room.answers) + 1, "start": req.start, "end": req.end, "question": req.question,
                   "text": req.text, "echo": echo, "reading": reading, "delivery": delivery, "question_end": q_end,
-                  "similarity": None, "flag": None, "followups": None, "condition": condition}
+                  "similarity": None, "flag": None, "followups": None, "condition": condition,
+                  "study_consent": room.study_consent}
         if similarity is not None:
             answer["similarity"] = {"level": "pending"}
             if similarity.writer.available and req.question.strip():
@@ -357,7 +360,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         answer = answer_or_404(room, index)
         answer["condition"] = condition_label(req.condition)
         save_study(room, answer)
-        return {"index": index, "condition": answer["condition"], "saved": room.study_consent}
+        return {"index": index, "condition": answer["condition"], "saved": room.study_consent and bool(answer["study_consent"])}
 
     @app.get("/api/rooms/{room_id}/study", dependencies=[Depends(host_only)])
     def study_state(room_id: str) -> dict[str, Any]:

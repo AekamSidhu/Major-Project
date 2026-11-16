@@ -49,7 +49,7 @@ signal counts at most as `possible`; one signal alone never makes it
 | Reading | `models/reading_network.onnx` + `.json`: 1-D CNN, 3 seeds averaged, 2.1 MB | GazeBase (CC BY 4.0), 258 people, degraded to webcam quality | 98.8% window balanced accuracy on 64 unseen people; 83.0% on Reading in the Wild test people (real-world reading) |
 | AI-written text | `models/echo_tfidf.json`: TF-IDF (1–2 word grams, 60k terms) + logistic regression, 1.9 MB | HC3 (CC BY-SA 4.0), human vs ChatGPT answers | 97.9% balanced accuracy on unseen questions (AUC 0.998) |
 | Echo similarity | thresholds in `spec/integrity/thresholds.json` (no trained model: Llama 3.2 + bge-small) | HC3: ChatGPT vs human answers against Llama 3.2's answers; thresholds (0.8712, 0.9201) from 500 development questions | 500 test questions: ROC-AUC 0.876; honest answers flagged 18.6% at `possible`, 6.6% at `high`; but 36% at `high` on computer-science definitions (textbook answers look alike) |
-| Delivery | hand-set weights and thresholds in the spec | not calibrated | on SpiCE read vs spontaneous speech (34 speakers): ROC-AUC 0.55, and 28% of spontaneous answers reach `possible` |
+| Delivery | hand-set weights and thresholds in the spec | not calibrated | on SpiCE read sentences vs interview speech (34 speakers, 30-word stretches, no question delay measurable): ROC-AUC 0.55, and 28% of the interview stretches reach `possible` (not an interview false-positive rate, but a warning) |
 
 Training code and full results: `training/gaze-detection`
 (`export_onnx.py`) and `training/echo-detection` (`export_content_model.py`,

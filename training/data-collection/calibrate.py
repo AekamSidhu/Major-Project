@@ -63,19 +63,33 @@ def load_sessions(folder: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def apply_labels(rows: list[dict[str, Any]], sheet: Path) -> list[dict[str, Any]]:
-    """The label sheet corrects conditions and excludes answers (matched on session and answer number)."""
+def apply_labels(rows: list[dict[str, Any]], sheet: Path, problems: list[str] | None = None) -> list[dict[str, Any]]:
+    """The label sheet corrects conditions and excludes answers.
+
+    A sheet row matches a saved answer on the room's session id and answer
+    number (the host page's Study card shows the session id), or, when the
+    sheet's session is blank, on participant id and answer number. Sheet rows
+    that match nothing are reported in `problems`.
+    """
     with sheet.open(encoding="utf-8", newline="") as f:
-        labels = {(r["session"].strip(), int(r["answer_no"])): r for r in csv.DictReader(f) if r.get("session", "").strip()}
+        sheet_rows = [r for r in csv.DictReader(f) if (r.get("answer_no") or "").strip()]
+    by_session = {(r["session"].strip(), int(r["answer_no"])): r for r in sheet_rows if (r.get("session") or "").strip()}
+    by_person = {(r["participant"].strip(), int(r["answer_no"])): r for r in sheet_rows
+                 if not (r.get("session") or "").strip() and (r.get("participant") or "").strip()}
+    used: set[int] = set()
     out = []
     for row in rows:
-        label = labels.get((row["session"], row["answer"]))
+        label = by_session.get((row["session"], row["answer"])) or by_person.get((row["participant"], row["answer"]))
         if label is not None:
+            used.add(id(label))
             if label.get("exclude", "").strip().lower() in ("yes", "y", "true", "1"):
                 continue
             if label.get("condition", "").strip():
                 row = {**row, "condition": label["condition"].strip()}
         out.append(row)
+    if problems is not None:
+        problems += [f"label sheet row {r.get('participant')}/{r.get('session') or '-'} answer {r['answer_no']} matches no saved answer"
+                     for r in sheet_rows if id(r) not in used]
     return out
 
 
@@ -181,7 +195,10 @@ def main() -> None:
     a = ap.parse_args()
     rows = load_sessions(a.study)
     if a.labels:
-        rows = apply_labels(rows, a.labels)
+        problems: list[str] = []
+        rows = apply_labels(rows, a.labels, problems)
+        for p in problems:
+            print("warning:", p)
     result = {"what": "proposed integrity thresholds from own study sessions (split by person); a proposal, not applied",
               "protocol": {"seed": a.seed, "test_fraction": a.test_fraction, "fpr_target": FPR_TARGET, "min_per_class": MIN_PER_CLASS},
               **calibrate(rows, a.test_fraction, a.seed)}

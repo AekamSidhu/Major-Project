@@ -35,7 +35,7 @@ textbook answer, and a fluent speaker can sound scripted. A flag is a
 |---|---|---|---|
 | AI-written text (`ai_text`) | TF-IDF (1-2 word grams, 60k terms) + logistic regression on the transcript (lower case, words only) | `train_content.py` (compares TF-IDF, a fine-tuned DistilRoBERTa and their average; Kaggle), `export_content_model.py` writes `local-ai/integrity/models/echo_tfidf.json` | HC3 test questions: 97.9% balanced accuracy, AUC 0.998 |
 | Echo similarity (`echo_similarity`) | Llama 3.2 answers the question twice; highest cosine (bge-small-en-v1.5) between the answer and those | `calibrate_similarity.py` → `results/echo_similarity.json`, thresholds in `spec/integrity/thresholds.json` | HC3 test questions: AUC 0.876; human answers flagged 18.6% at `possible`, 6.6% at `high` (36% at `high` on wiki_csai) |
-| Delivery (`delivery`) | Spec index: delay after the question, words a minute, pauses, fillers, against the speaker's first 3 answers | `evaluate_delivery.py` → `results/delivery_spice.json`; weights and thresholds hand-set in the spec | SpiCE, 34 speakers: AUC 0.55 read vs spontaneous; 28% of spontaneous answers reach `possible` |
+| Delivery (`delivery`) | Spec index: delay after the question, words a minute, pauses, fillers, against the speaker's first 3 answers | `evaluate_delivery.py` → `results/delivery_spice.json`; weights and thresholds hand-set in the spec | SpiCE, 34 speakers (30-word stretches, no question delay measurable): AUC 0.55 read vs spontaneous; 28% of spontaneous stretches reach `possible` |
 
 The shipped content model is the TF-IDF one (fitted on train questions,
 thresholds from validation questions, test questions scored once; the
@@ -104,17 +104,19 @@ can help. The same caveat is in the spec's `source` string.
 
 ## Delivery on public speech (Phase 2)
 
-The plan named ALLSSTAR; it needs a SpeechBox account, and its Hugging Face
-copy has no task labels and no licence, so it was not used. Datasets with
-the same speakers reading and speaking freely:
+The plan named ALLSSTAR. Its Hugging Face copy (`NathanRoll/ALLSSTAR`,
+563 clips) has no task labels and no licence, and how SpeechBox itself
+grants access could not be checked here, so it was not used. Datasets with
+the same speakers reading and speaking freely (access checked 2026-11-17
+unless marked):
 
 | Dataset | Read / spontaneous | Access | Used |
 |---|---|---|---|
-| [SpiCE](https://doi.org/10.5683/SP2/MJOXP3) (Johnson et al., UBC) | Sentence reading, picture-story narration, 25-min interview; 34 bilingual speakers; hand transcripts with forced-aligned words | Open download, CC BY 4.0 (checked: audio served without login) | **Yes** |
-| [ALLSSTAR](https://speechbox.linguistics.northwestern.edu/) | Scripted and spontaneous, L1 and L2 English | SpeechBox registration | No (registration) |
-| [L2-ARCTIC](https://psi.engr.tamu.edu/l2-arctic-corpus/) | Read prompts plus a spontaneous "suitcase" narrative, 24 speakers | Request form; CC BY-NC 4.0 | No (form) |
-| [IViE](https://www.phon.ox.ac.uk/files/apps/IViE/) | Read sentences and story, retold story, conversation | Academic research and teaching only | No (terms) |
-| [Chains](https://chains.ucd.ie/corpus.php) | Read texts and unscripted retelling (Hiberno-English) | Research use; no open licence stated | No |
+| [SpiCE](https://doi.org/10.5683/SP2/MJOXP3) (Johnson et al., UBC) | Sentence reading, picture-story narration, 25-min interview; 34 bilingual speakers; hand transcripts with forced-aligned words (participant only) | Open download, CC BY 4.0; audio served without login | **Yes** |
+| [ALLSSTAR](https://speechbox.linguistics.northwestern.edu/) | Scripted sentences and passage; picture-story narration and open questions; L1 and L2 English | SpeechBox web app; access terms not verified | No |
+| [L2-ARCTIC](https://psi.engr.tamu.edu/l2-arctic-corpus/) | Read prompts plus a spontaneous "suitcase" narrative, 22 of 24 speakers | Download form (name, email, affiliation) and licence acceptance; CC BY-NC 4.0 | No (form) |
+| [IViE](https://www.phon.ox.ac.uk/files/apps/IViE/) | Read sentences and story, retold story, Map Task, conversation | Free after registration (name, affiliation, email) and accepting conditions; academic, non-commercial only | No (registration) |
+| [Chains](https://chains.ucd.ie/corpus.php) | Read texts and unscripted retelling (Hiberno-English) | Research use; page unreachable when checked, terms not verified | No |
 
 `evaluate_delivery.py` (also runs on any folder
 `DIR/<speaker>/<read|spontaneous>/*.wav|json`). Protocol: answers are 30

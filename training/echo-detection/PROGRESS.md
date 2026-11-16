@@ -21,8 +21,9 @@ model.
   `timestamp_granularities[]=word` (local-ai).
 - **Delivery on SpiCE (Phase 2).** `evaluate_delivery.py` on the 34 English
   sessions' hand-aligned words (TextGrids only, 119 MB, in
-  `M:\openmeet-data\spice\english`): AUC 0.55, see README. ALLSSTAR needs
-  SpeechBox registration and was not used.
+  `M:\openmeet-data\spice\english`): AUC 0.55, see README. ALLSSTAR was not
+  used (its Hugging Face copy has no task labels or licence; SpeechBox access
+  not verified).
 - **Room integration (Phase 5/6).** Delivery, echo similarity and the fused
   flag per answer in `local-ai/room`, plus study mode.
 - **Collection kit (Phase 3 prep).** `training/data-collection`.

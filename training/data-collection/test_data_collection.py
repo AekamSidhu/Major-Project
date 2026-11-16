@@ -126,9 +126,15 @@ def test_label_sheet_corrects_and_excludes(tmp_path):
         w.writeheader()
         w.writerow({**{c: "" for c in randomise.COLUMNS}, "session": "00000000", "answer_no": "4", "condition": "read_ai", "exclude": "no"})
         w.writerow({**{c: "" for c in randomise.COLUMNS}, "session": "00000000", "answer_no": "5", "exclude": "yes"})
-    fixed = calibrate.apply_labels(rows, sheet)
+        # randomise.py leaves the session blank: participant id and answer number match instead
+        w.writerow({**{c: "" for c in randomise.COLUMNS}, "participant": "P01", "answer_no": "6", "condition": "read_script"})
+        w.writerow({**{c: "" for c in randomise.COLUMNS}, "participant": "P09", "answer_no": "6", "condition": "honest"})
+    problems: list[str] = []
+    fixed = calibrate.apply_labels(rows, sheet, problems)
     assert len(fixed) == len(rows) - 1
     assert next(r for r in fixed if r["session"] == "00000000" and r["answer"] == 4)["condition"] == "read_ai"
+    assert next(r for r in fixed if r["participant"] == "P01" and r["answer"] == 6)["condition"] == "read_script"
+    assert problems == ["label sheet row P09/- answer 6 matches no saved answer"]
 
 
 def test_too_little_data_is_reported_not_guessed(tmp_path):

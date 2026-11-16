@@ -395,7 +395,8 @@ function conditionOptions(selected) {
 }
 async function refreshStudy() {
   const s = await (await fetch(`/api/rooms/${room.room}/study`)).json();
-  $("studyConsent").textContent = s.consent ? "candidate consented: saving" : "candidate has not consented: nothing is saved";
+  // The session id goes into the label sheet's "session" column.
+  $("studyConsent").textContent = s.consent ? `candidate consented: saving as session ${s.session}` : "candidate has not consented: nothing is saved";
   $("studyConsent").className = s.consent ? "note level low" : "note";
 }
 if (study) {

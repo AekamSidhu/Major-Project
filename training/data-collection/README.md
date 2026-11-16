@@ -82,6 +82,12 @@ data card (aggregate numbers) go into git.
    - ask the question; let them answer fully; don't interrupt;
    - press *End answer now* if the turn doesn't end by itself.
    Correct a wrong label on the answer card at once (the label select).
+   Copy the session id the *Study* card shows into the sheet's `session`
+   column. If the room split one answer into two cards (or merged two), fix
+   the sheet's `answer_no` to the card numbers: `calibrate.py` matches the
+   sheet to the saved answers on session (or participant) and answer number,
+   and warns about sheet rows it cannot match. Answers given before the
+   participant ticked the study consent are never saved, even if relabelled.
 4. **Debrief (5 min).** Explain what each signal showed (the host page and
    report), ask how natural each condition felt, note anything unusual
    (glasses glare, a noisy room, the participant reading in an `honest`
