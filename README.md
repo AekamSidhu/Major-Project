@@ -28,6 +28,33 @@ controllable at all times.
 
 ---
 
+## Trained models at a glance
+
+Besides ready-made models (Whisper for speech-to-text, MediaPipe for face and
+iris points, and Llama 3.2 or Gemini for follow-up questions), this project
+trains three models of its own. They power the **answer-integrity check**,
+which helps an interviewer notice when a candidate may be reading an answer or
+giving one written by an AI tool. A score is a reason to ask a follow-up
+question, never a verdict.
+
+| Model | The question it answers | Trained on | Method | Result on unseen data |
+|---|---|---|---|---|
+| **Reading detector** | From 10 s of eye movements, is the person reading? | GazeBase (322 people), degraded to webcam quality; Reading in the Wild (81 people, real life) | Small 1-D CNN on the gaze trace (10 samples per second) | **98.8%** balanced accuracy on 64 unseen GazeBase people; **83.0%** on real-world reading |
+| **Gaze model** | Where are the eyes looking, from a webcam face image? | MPIIFaceGaze (37,667 webcam images, 15 people) | ResNet-18 transfer learning from a gaze-trained network | **4.54°** average error, against 7.18° for the MediaPipe method used today |
+| **AI-written answer detector** | Does this answer's transcript read like AI-written text? | HC3 (human vs ChatGPT answers) | TF-IDF word features with logistic regression | **97.9%** balanced accuracy on unseen questions (AUC 0.998) |
+
+**New to machine learning?** Read the beginner's guide,
+[docs/MODELS.md](docs/MODELS.md). It explains what each model does, the data
+and features behind it, how it was trained and tested, the results and their
+limits, with a glossary of the terms used.
+
+The training code lives on the `feature/gaze-detection` and
+`feature/echo-detection` branches. The models run inside the local AI sidecar
+(`local-ai/integrity`, branch `feature/integrity-check`) and the browser
+interview room (`local-ai/room`, branch `feature/interview-room`).
+
+---
+
 ## Features
 
 **Live overlay (the primary UI)**
