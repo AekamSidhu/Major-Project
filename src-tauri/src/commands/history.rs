@@ -109,7 +109,7 @@ pub async fn export_meeting(
 ) -> CmdResult<ExportResult> {
     check_id(&request.meeting_id, "meeting")?;
     let parts = request.parts;
-    if !(parts.summary || parts.transcript || parts.questions || parts.followups) {
+    if !any_part(&parts) {
         return Err(CoreError::InvalidInput(
             "Choose at least one part to export.".into(),
         ));
@@ -191,9 +191,30 @@ pub async fn regenerate_summary(
     state.engine.summarize_record(record).await
 }
 
+/// At least one part of the meeting is selected for export.
+fn any_part(parts: &openmeet_core::ipc::ExportParts) -> bool {
+    parts.summary || parts.transcript || parts.questions || parts.followups || parts.integrity
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_integrity_only_export_is_allowed() {
+        let none = openmeet_core::ipc::ExportParts {
+            summary: false,
+            transcript: false,
+            questions: false,
+            followups: false,
+            integrity: false,
+        };
+        assert!(!any_part(&none));
+        assert!(any_part(&openmeet_core::ipc::ExportParts {
+            integrity: true,
+            ..none
+        }));
+    }
 
     #[test]
     fn file_stems() {

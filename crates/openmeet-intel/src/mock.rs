@@ -1021,6 +1021,7 @@ struct MockIntegrityState {
     capturing: bool,
     embedding_model: Option<String>,
     reading_windows: Vec<(f64, f64)>,
+    gaze_error: Option<String>,
 }
 
 impl MockIntegrityService {
@@ -1033,6 +1034,12 @@ impl MockIntegrityService {
     pub fn with_embedding_model(self, model: impl Into<String>) -> Self {
         self.state.lock().embedding_model = Some(model.into());
         self
+    }
+
+    /// Screen capture for gaze fails after starting (as the sidecar's capture
+    /// thread does without its packages): status reports not capturing.
+    pub fn fail_gaze_capture(&self, error: impl Into<String>) {
+        self.state.lock().gaze_error = Some(error.into());
     }
 
     /// Next AI-text result.
@@ -1083,13 +1090,14 @@ impl MockIntegrityService {
 
     fn gaze(&self) -> GazeStatus {
         let st = self.state.lock();
+        let capturing = st.capturing && st.gaze_error.is_none();
         GazeStatus {
             source: if st.capturing { "screen" } else { "none" }.to_string(),
-            capturing_screen: st.capturing,
-            frames_per_second: if st.capturing { 10.0 } else { 0.0 },
-            face_found_fraction: if st.capturing { 1.0 } else { 0.0 },
-            tracked_fraction: if st.capturing { 1.0 } else { 0.0 },
-            error: None,
+            capturing_screen: capturing,
+            frames_per_second: if capturing { 10.0 } else { 0.0 },
+            face_found_fraction: if capturing { 1.0 } else { 0.0 },
+            tracked_fraction: if capturing { 1.0 } else { 0.0 },
+            error: st.gaze_error.clone(),
         }
     }
 }

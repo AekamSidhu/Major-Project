@@ -42,6 +42,17 @@ pub struct AppState {
 }
 
 /// Runs blocking work (database, device enumeration) off the async workers.
+/// Whether a settings change affects the provider set: AI providers,
+/// transcription, local-only mode, or turning the answer-integrity check on
+/// or off (its sidecar client exists only while it is on). The integrity
+/// signal toggles and region are read live and need no rebuild.
+pub fn providers_need_rebuild(prev: &Settings, next: &Settings) -> bool {
+    prev.ai != next.ai
+        || prev.transcription != next.transcription
+        || prev.privacy.local_only != next.privacy.local_only
+        || prev.integrity.enabled != next.integrity.enabled
+}
+
 pub async fn blocking<T, F>(f: F) -> Result<T, CoreError>
 where
     F: FnOnce() -> Result<T, CoreError> + Send + 'static,
@@ -126,10 +137,7 @@ impl AppState {
         self.engine.update_settings(next.clone());
         self.sink.set_notifications(next.general.notifications);
 
-        let providers_changed = prev.ai != next.ai
-            || prev.transcription != next.transcription
-            || prev.privacy.local_only != next.privacy.local_only;
-        if providers_changed {
+        if providers_need_rebuild(prev, next) {
             self.rebuild_providers().await;
         }
         if prev.overlay != next.overlay {
@@ -462,5 +470,30 @@ impl AppState {
                 state.apply_retention().await;
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn turning_the_integrity_check_on_or_off_rebuilds_providers() {
+        let prev = Settings::default();
+        let mut next = prev.clone();
+        assert!(!providers_need_rebuild(&prev, &next));
+        next.integrity.reading = false;
+        next.integrity.candidate_region = Some(openmeet_core::ipc::Rect {
+            x: 0,
+            y: 0,
+            width: 640,
+            height: 360,
+        });
+        assert!(!providers_need_rebuild(&prev, &next), "read live");
+        next.integrity.enabled = true;
+        assert!(providers_need_rebuild(&prev, &next));
+        let mut local_only = prev.clone();
+        local_only.privacy.local_only = true;
+        assert!(providers_need_rebuild(&prev, &local_only));
     }
 }

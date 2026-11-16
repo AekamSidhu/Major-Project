@@ -68,6 +68,9 @@ const MAX_REFERENCE_QUESTIONS: usize = 8;
 const MAX_SNAPSHOT_FLAGS: usize = 20;
 /// How long the end-of-meeting gaze reset waits for running checks.
 const GAZE_RESET_WAIT: Duration = Duration::from_secs(60);
+/// After starting gaze capture, when to confirm the sidecar is really
+/// capturing (its capture thread fails asynchronously, e.g. without `mss`).
+const GAZE_VERIFY_DELAY: Duration = Duration::from_secs(2);
 /// Region handed to the scripted demo sidecar (which captures nothing).
 pub(crate) const DEMO_REGION: Rect = Rect {
     x: 0,
@@ -1025,19 +1028,17 @@ pub(crate) fn spawn_gaze_worker(
                         let _ = service.reset_gaze(cancel.clone()).await;
                     }
                     let result = service.start_gaze(region, cancel).await;
+                    let weak = inner.clone();
                     let Some(inner) = inner.upgrade() else { break };
                     let engine = Engine { inner };
                     match result {
-                        Ok(status) => {
-                            let message = match status.error {
-                                Some(_) => "Gaze capture reported an error; reading may be unavailable",
-                                None => "Watching the candidate's video region for reading",
-                            };
+                        Ok(_) => {
                             engine.inner.health.set(
                                 Component::Integrity,
                                 ComponentStatus::Active,
-                                Some(message.to_string()),
+                                Some("Starting capture of the candidate's video region".into()),
                             );
+                            tokio::spawn(verify_gaze(weak, service, meeting_id));
                         }
                         Err(e) => {
                             tracing::warn!(error_kind = ?std::mem::discriminant(&e), "gaze capture could not start");
@@ -1077,6 +1078,60 @@ pub(crate) fn spawn_gaze_worker(
             }
         }
     });
+}
+
+/// Confirms, shortly after a start, that the sidecar is really capturing the
+/// candidate region. If not (missing capture packages, region off-screen,
+/// capture error), gaze is marked as not running — the reading signal then
+/// says so — and the integrity health shows the reason.
+async fn verify_gaze(inner: Weak<Inner>, service: Arc<dyn IntegrityService>, meeting_id: Id) {
+    tokio::time::sleep(GAZE_VERIFY_DELAY).await;
+    let status =
+        match tokio::time::timeout(SCORING_TIMEOUT, service.status(CancellationToken::new())).await
+        {
+            Ok(Ok(s)) => s.gaze,
+            _ => return,
+        };
+    let Some(inner) = inner.upgrade() else { return };
+    let engine = Engine { inner };
+    let failed = !status.capturing_screen || status.error.is_some();
+    let still_wanted = {
+        let mut st = engine.inner.state.lock();
+        match st
+            .runtime
+            .as_mut()
+            .filter(|r| r.meeting.id == meeting_id && r.integrity.gaze_running)
+        {
+            Some(rt) => {
+                if failed {
+                    rt.integrity.gaze_running = false;
+                }
+                true
+            }
+            None => false,
+        }
+    };
+    if !still_wanted {
+        return;
+    }
+    if failed {
+        tracing::warn!("gaze capture is not running after start");
+        let reason = status
+            .error
+            .map(|e| format!("Gaze capture failed in Local AI ({e}); reading is unavailable"))
+            .unwrap_or_else(|| "Gaze capture is not running; reading is unavailable".into());
+        engine.inner.health.set(
+            Component::Integrity,
+            ComponentStatus::Degraded,
+            Some(reason),
+        );
+    } else {
+        engine.inner.health.set(
+            Component::Integrity,
+            ComponentStatus::Active,
+            Some("Watching the candidate's video region for reading".into()),
+        );
+    }
 }
 
 #[cfg(test)]

@@ -463,6 +463,52 @@ fn now() -> i64 {
     openmeet_core::ids::now_ms()
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_gaze_capture_that_fails_after_start_is_reported() {
+    let h = harness(
+        settings(Some(Rect {
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 240,
+        })),
+        true,
+    );
+    h.integrity
+        .fail_gaze_capture("ModuleNotFoundError: No module named 'mss'");
+    let meeting = h.engine.start_meeting(interviewer()).await.unwrap();
+    let deadline = tokio::time::Instant::now() + WAIT;
+    loop {
+        let degraded = h.engine.components().iter().any(|c| {
+            c.component == Component::Integrity
+                && c.status == ComponentStatus::Degraded
+                && c.message.as_deref().is_some_and(|m| m.contains("mss"))
+        });
+        if degraded {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "{:?}",
+            h.engine.components()
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    // The next answer's reading signal says gaze was not captured.
+    let t = meeting.started_at + 1_000;
+    speak(&h.engine, AudioSourceKind::Microphone, t, 2_000);
+    assert!(h.sink.wait_count("QUESTION_DETECTED", 1).await);
+    speak(&h.engine, AudioSourceKind::System, t + 3_000, 10_000);
+    assert!(h.sink.wait_count("INTEGRITY_CHECKED", 1).await);
+    let reading = h.sink.flags()[0]
+        .signal(IntegritySignalName::Reading)
+        .unwrap()
+        .clone();
+    assert_eq!(reading.level, IntegrityLevel::Unavailable);
+    assert!(reading.note.unwrap().contains("not running"));
+    h.engine.stop_meeting().await.unwrap();
+}
+
 /// The integrity demo end to end in real time (about 90 s, so not run by
 /// default): `cargo test -p openmeet-engine --test integrity -- --ignored`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
