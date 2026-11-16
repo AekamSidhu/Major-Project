@@ -247,3 +247,77 @@ fn factory_builds_only_when_on_and_respects_local_only() {
         ProviderLocation::Remote
     );
 }
+
+/// Against a running local AI sidecar (not run by default: needs Python and
+/// the sidecar's packages). Start one, then:
+///
+/// ```text
+/// python local-ai/server.py --port 8785
+/// OPENMEET_LIVE_SIDECAR=http://127.0.0.1:8785 cargo test -p openmeet-providers --test integrity -- --ignored
+/// ```
+#[tokio::test]
+#[ignore = "needs a running local AI sidecar (OPENMEET_LIVE_SIDECAR)"]
+async fn live_sidecar_round_trip() {
+    let Ok(url) = std::env::var("OPENMEET_LIVE_SIDECAR") else {
+        panic!("set OPENMEET_LIVE_SIDECAR to the sidecar URL");
+    };
+    let c = client(&url);
+    let status = c.status(CancellationToken::new()).await.unwrap();
+    assert!(status.ai_text_ready, "{status:?}");
+    let human = c
+        .ai_text(
+            "um so honestly we just kind of tried a couple of things and the second one \
+             mostly worked, I mean it was not pretty but it shipped on time"
+                .into(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    let ai = c
+        .ai_text(
+            "Consistent hashing distributes keys across a logical ring, ensuring that adding \
+             or removing infrastructure only remaps a proportional fraction of keys, which \
+             significantly minimizes rebalancing overhead and maintains predictable \
+             performance characteristics."
+                .into(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert!(ai.probability > human.probability, "{human:?} {ai:?}");
+    assert!(
+        c.ai_text("too short".into(), CancellationToken::new())
+            .await
+            .map(|r| r.level == IntegrityLevel::TooShort)
+            .unwrap_or(false)
+    );
+    // No gaze was captured: the reading window has not enough gaze.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64();
+    match c.reading(now - 30.0, now, CancellationToken::new()).await {
+        Ok(r) => assert_eq!(r.level, IntegrityLevel::NoGaze),
+        // Without onnxruntime the sidecar answers 503.
+        Err(e) => assert!(
+            matches!(e, ProviderError::Http(ref m) if m.starts_with("503")),
+            "{e:?}"
+        ),
+    }
+    // Gaze capture can be started and stopped (it reports its own error when
+    // MediaPipe / mss are missing).
+    let region = Rect {
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 240,
+    };
+    let started = c
+        .start_gaze(region, CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(started.source, "screen");
+    let stopped = c.stop_gaze(CancellationToken::new()).await.unwrap();
+    assert!(!stopped.capturing_screen);
+    c.reset_gaze(CancellationToken::new()).await.unwrap();
+}
