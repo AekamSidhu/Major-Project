@@ -4,7 +4,7 @@
 
 | | Windows | macOS | Linux |
 |---|---|---|---|
-| Rust | stable ≥ 1.85 (`rustup`) | same | same |
+| Rust | stable ≥ 1.89 (`rustup`) | same | same |
 | Node.js | 22 LTS + npm | same | same |
 | Native toolchain | Visual Studio 2022 Build Tools with "Desktop development with C++" (MSVC + Windows 11 SDK) | Xcode Command Line Tools | `build-essential`, `clang` |
 | WebView | WebView2 (preinstalled on Windows 10/11) | WKWebView (built in) | `libwebkit2gtk-4.1-dev` |
