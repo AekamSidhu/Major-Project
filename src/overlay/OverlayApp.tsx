@@ -84,8 +84,9 @@ function useAppearance(): CSSProperties {
       width: `${overlay?.width ?? 380}px`,
       maxHeight: `${overlay?.maxHeight ?? 560}px`,
       background: `rgb(var(--om-glass) / ${alpha})`,
-      backdropFilter: translucent ? "blur(14px) saturate(140%)" : undefined,
-      WebkitBackdropFilter: translucent ? "blur(14px) saturate(140%)" : undefined,
+      backdropFilter: translucent ? "blur(22px) saturate(160%)" : undefined,
+      WebkitBackdropFilter: translucent ? "blur(22px) saturate(160%)" : undefined,
+      boxShadow: "var(--om-shadow-pop), inset 0 1px 0 rgb(255 255 255 / 0.06)",
     };
   }, [overlay]);
 }
@@ -134,7 +135,7 @@ function Header() {
         type="button"
         onClick={() => void setMode(core.mode === "candidate" ? "interviewer" : "candidate")}
         title={withHotkey("Switch mode", modeKey)}
-        className="ml-1 rounded border border-border px-1.5 py-px text-[0.68rem] font-medium tracking-wide text-muted uppercase hover:text-fg"
+        className="ml-1 rounded-[5px] border border-border px-1.5 py-px text-[0.72rem] font-medium text-muted hover:text-fg"
       >
         {core.mode === "candidate" ? "Candidate" : "Interviewer"}
       </button>
@@ -358,7 +359,7 @@ function AskBox() {
   };
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-1">
-      <div className="flex items-center gap-1 rounded-md border border-border-strong bg-[rgb(var(--om-glass)/0.6)] px-1.5 focus-within:border-accent">
+      <div className="flex items-center gap-1 rounded-lg border border-border-strong bg-[rgb(var(--om-glass)/0.6)] px-2 transition-shadow focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft">
         <SparkIcon className="text-accent" />
         <input
           ref={inputRef}
@@ -472,7 +473,12 @@ function Body() {
             title={withHotkey("Ask OpenMeet", askKey)}
             className="flex items-center gap-1 text-[0.76rem] text-muted hover:text-fg"
           >
-            <SparkIcon /> Ask OpenMeet{askKey ? ` · ${askKey}` : ""}
+            <SparkIcon /> Ask OpenMeet
+            {askKey && (
+              <span className="ml-1 rounded-[4px] border border-border px-1 text-[0.7rem]">
+                {askKey}
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -494,7 +500,7 @@ export function OverlayApp() {
     <div
       ref={ref}
       style={style}
-      className="flex flex-col overflow-hidden rounded-xl border border-border-strong text-fg"
+      className="relative flex flex-col overflow-hidden rounded-[14px] border border-border-strong text-fg"
     >
       <Header />
       {expanded && hydrated && <Body />}

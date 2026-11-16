@@ -3,6 +3,7 @@
 // capture.mjs to produce docs/screenshots/*.png.
 //
 //   ?scene=overlay-candidate | overlay-interviewer | main-live | main-privacy
+//          | main-home | main-history | main-ai | main-appearance (previews only)
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -13,21 +14,59 @@ import { OverlayApp } from "@/overlay/OverlayApp";
 import { App } from "@/main/App";
 import { useMain } from "@/main/store";
 import { useOverlay } from "@/overlay/store";
-import { DATA_FLOW_LOCAL, MEETINGS, candidateSnapshot, interviewerSnapshot, settings } from "./fixtures";
+import {
+  DATA_FLOW_LOCAL,
+  MEETINGS,
+  candidateSnapshot,
+  interviewerSnapshot,
+  settings,
+} from "./fixtures";
 
 const scene = new URLSearchParams(location.search).get("scene") ?? "overlay-candidate";
 const overlay = scene.startsWith("overlay");
 const interviewer = scene === "overlay-interviewer" || scene === "main-live";
-const snapshot: EngineSnapshot = interviewer ? interviewerSnapshot() : candidateSnapshot();
+// Scenes that show the main window between meetings get an idle engine.
+const SECTION_SCENES: Record<
+  string,
+  "home" | "history" | "privacy" | "settings/ai" | "settings/appearance"
+> = {
+  "main-privacy": "privacy",
+  "main-home": "home",
+  "main-history": "history",
+  "main-ai": "settings/ai",
+  "main-appearance": "settings/appearance",
+};
+const idle = scene in SECTION_SCENES && scene !== "main-privacy";
+const liveSnapshot: EngineSnapshot = interviewer ? interviewerSnapshot() : candidateSnapshot();
+const snapshot: EngineSnapshot = idle
+  ? {
+      ...liveSnapshot,
+      meeting: null,
+      state: "idle",
+      transcript: [],
+      questions: [],
+      topics: [],
+      active: null,
+    }
+  : liveSnapshot;
 // Tall enough that the candidate answer's controls are in the picture.
-const appSettings = settings(interviewer ? "interviewer" : "candidate", scene === "overlay-candidate" ? 760 : 560);
+const appSettings = settings(
+  interviewer ? "interviewer" : "candidate",
+  scene === "overlay-candidate" ? 760 : 560,
+);
 
 mockWindows(overlay ? "overlay" : "main");
 mockIPC(
   (cmd) => {
     switch (cmd) {
       case "get_app_info":
-        return { version: "0.1.0", platform: "windows", arch: "x86_64", developerMode: false, debugBuild: false };
+        return {
+          version: "0.1.0",
+          platform: "windows",
+          arch: "x86_64",
+          developerMode: false,
+          debugBuild: false,
+        };
       case "get_settings":
         return appSettings;
       case "get_snapshot":
@@ -45,8 +84,20 @@ mockIPC(
         return DATA_FLOW_LOCAL;
       case "list_privacy_rules":
         return [
-          { id: "r1", type: "application", value: "1Password", action: "exclude", createdAt: Date.UTC(2026, 9, 1) },
-          { id: "r2", type: "domain", value: "bank.example.com", action: "exclude", createdAt: Date.UTC(2026, 9, 1) },
+          {
+            id: "r1",
+            type: "application",
+            value: "1Password",
+            action: "exclude",
+            createdAt: Date.UTC(2026, 9, 1),
+          },
+          {
+            id: "r2",
+            type: "domain",
+            value: "bank.example.com",
+            action: "exclude",
+            createdAt: Date.UTC(2026, 9, 1),
+          },
         ];
       case "suggested_privacy_apps":
         return ["Bitwarden", "KeePassXC"];
@@ -68,12 +119,13 @@ if (overlay) {
   document.documentElement.classList.add("overlay", "shot-overlay");
 } else {
   document.documentElement.classList.add("shot-main");
-  if (scene === "main-privacy") {
+  const target = SECTION_SCENES[scene];
+  if (target) {
     // Open the section once the shell has loaded.
     const unsub = useMain.subscribe((s) => {
       if (s.ready) {
         unsub();
-        s.setSection("privacy");
+        s.setSection(target);
       }
     });
   }
@@ -92,7 +144,8 @@ function markReadyWhen(ready: () => boolean, settleMs: number) {
   };
   check();
 }
-if (overlay) markReadyWhen(() => useOverlay.getState().hydrated && !!useOverlay.getState().settings, 400);
+if (overlay)
+  markReadyWhen(() => useOverlay.getState().hydrated && !!useOverlay.getState().settings, 400);
 else markReadyWhen(() => useMain.getState().ready, 1200);
 
 const root = document.getElementById("root");

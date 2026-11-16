@@ -54,10 +54,7 @@ export function AskCard({ settings }: { settings: Settings }) {
   };
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="rounded-lg border border-border bg-surface px-4 py-3.5"
-    >
+    <section aria-labelledby={headingId} className="om-card px-4 py-3.5">
       <h2 id={headingId} className="text-[0.92rem] font-semibold text-fg">
         Ask OpenMeet
       </h2>

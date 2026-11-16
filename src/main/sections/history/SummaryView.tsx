@@ -8,11 +8,7 @@ import { generatedByLabel, summarySections } from "./helpers";
 const CHIP_SECTIONS = new Set(["keyTopics", "technicalTopics"]);
 
 function Heading({ children }: { children: string }) {
-  return (
-    <h3 className="mb-1.5 text-[0.72rem] font-semibold tracking-wider text-muted uppercase">
-      {children}
-    </h3>
-  );
+  return <h3 className="mb-1.5 text-[0.8rem] font-semibold text-fg-soft">{children}</h3>;
 }
 
 export function SummaryView({ summary }: { summary: MeetingSummary }) {

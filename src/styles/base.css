@@ -1,9 +1,17 @@
 @import "tailwindcss";
+@import "@fontsource-variable/instrument-sans/standard.css";
 
 /*
  * OpenMeet design tokens. Both windows (main + overlay) share these.
  * Themes are selected with [data-theme="dark" | "light"] on <html>.
  * Density / font size are driven by CSS variables set from settings.
+ *
+ * The palette comes from a quiet interview room: linen walls, paper,
+ * green felt panels. Colour always means something:
+ *   felt      your actions, your voice, the current section
+ *   marigold  needs attention (a question to answer, a "possible" signal)
+ *   signal    live / recording, and stop
+ * Everything else is ink on linen. Hierarchy comes from type, not boxes.
  */
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -19,15 +27,20 @@
   --color-fg-soft: var(--om-fg-soft);
   --color-muted: var(--om-muted);
   --color-accent: var(--om-accent);
+  --color-accent-2: var(--om-accent);
+  --color-accent-strong: var(--om-accent-strong);
   --color-accent-soft: var(--om-accent-soft);
   --color-accent-fg: var(--om-accent-fg);
   --color-ok: var(--om-ok);
   --color-warn: var(--om-warn);
   --color-danger: var(--om-danger);
   --color-danger-soft: var(--om-danger-soft);
+  --shadow-card: var(--om-shadow-card);
+  --shadow-pop: var(--om-shadow-pop);
+  --shadow-glow: var(--om-shadow-press);
   --font-sans:
-    "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
-    "Helvetica Neue", Arial, system-ui, sans-serif;
+    "Instrument Sans Variable", "Instrument Sans", "Segoe UI Variable Text", "Segoe UI",
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, system-ui, sans-serif;
   --font-mono:
     "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -35,50 +48,59 @@
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --om-bg: #f6f7f9;
-  --om-surface: #ffffff;
-  --om-surface-2: #f1f3f6;
+  --om-bg: #f5f6f4; /* linen */
+  --om-surface: #ffffff; /* paper */
+  --om-surface-2: #eef0ed;
   --om-raised: #ffffff;
-  --om-border: rgb(15 23 42 / 0.09);
-  --om-border-strong: rgb(15 23 42 / 0.16);
-  --om-fg: #11151c;
-  --om-fg-soft: #2b313c;
-  --om-muted: #667085;
-  --om-accent: #4f5bd5;
-  --om-accent-soft: rgb(79 91 213 / 0.1);
+  --om-border: #e1e4e0;
+  --om-border-strong: #cdd2cd;
+  --om-fg: #1b2321; /* ink */
+  --om-fg-soft: #3c4643;
+  --om-muted: #6b7471; /* pebble */
+  --om-accent: #23574a; /* felt */
+  --om-accent-strong: #1a463b;
+  --om-accent-soft: #e3eee9;
   --om-accent-fg: #ffffff;
-  --om-ok: #138a5b;
-  --om-warn: #b25e09;
-  --om-danger: #c2303b;
-  --om-danger-soft: rgb(194 48 59 / 0.1);
+  --om-ok: #2e7d5b;
+  --om-warn: #b07614; /* marigold */
+  --om-danger: #c8403a; /* signal */
+  --om-danger-soft: #f8e7e5;
+  --om-shadow-card: 0 1px 0 rgb(27 35 33 / 0.03);
+  --om-shadow-pop: 0 18px 48px -18px rgb(27 35 33 / 0.28), 0 2px 6px rgb(27 35 33 / 0.06);
+  --om-shadow-press: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 1px 2px rgb(27 35 33 / 0.18);
   /* overlay glass (rgb triplet, alpha applied from the opacity setting) */
-  --om-glass: 255 255 255;
+  --om-glass: 250 251 249;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --om-bg: #0b0d12;
-  --om-surface: #12151c;
-  --om-surface-2: #181c25;
-  --om-raised: #1d2230;
-  --om-border: rgb(255 255 255 / 0.07);
-  --om-border-strong: rgb(255 255 255 / 0.14);
-  --om-fg: #e9ecf2;
-  --om-fg-soft: #c9cfdb;
-  --om-muted: #8a93a6;
-  --om-accent: #8f9bff;
-  --om-accent-soft: rgb(143 155 255 / 0.14);
-  --om-accent-fg: #0b0d12;
-  --om-ok: #3ccf91;
-  --om-warn: #f0a44b;
-  --om-danger: #ff6b76;
-  --om-danger-soft: rgb(255 107 118 / 0.14);
-  --om-glass: 14 17 24;
+  --om-bg: #171c1b; /* the same room in the evening */
+  --om-surface: #1e2523;
+  --om-surface-2: #252d2b;
+  --om-raised: #2a3331;
+  --om-border: #2f3836;
+  --om-border-strong: #3e4946;
+  --om-fg: #e7ecea;
+  --om-fg-soft: #c4ccc9;
+  --om-muted: #919d99;
+  --om-accent: #7cc4ae;
+  --om-accent-strong: #95d3bf;
+  --om-accent-soft: rgb(124 196 174 / 0.13);
+  --om-accent-fg: #10211c;
+  --om-ok: #6fcf9f;
+  --om-warn: #f0b24a;
+  --om-danger: #f06a63;
+  --om-danger-soft: rgb(240 106 99 / 0.13);
+  --om-shadow-card: none;
+  --om-shadow-pop: 0 24px 60px -20px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --om-shadow-press: 0 1px 0 rgb(255 255 255 / 0.12) inset, 0 1px 2px rgb(0 0 0 / 0.4);
+  --om-glass: 24 30 28;
 }
 
 :root {
   --om-font-size: 14px;
   --om-space: 1;
+  --om-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   font-size: var(--om-font-size);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -125,6 +147,16 @@ html.overlay #root {
   scrollbar-color: var(--om-border-strong) transparent;
 }
 
+/* Interactive things settle on one curve, so the app feels of a piece. */
+button,
+a,
+input,
+select,
+textarea,
+[role="switch"] {
+  transition-timing-function: var(--om-ease);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -169,7 +201,7 @@ html.overlay #root {
 }
 
 .om-fade-in {
-  animation: om-fade-in 160ms ease-out;
+  animation: om-fade-in 160ms var(--om-ease);
 }
 
 .om-caret::after {
@@ -177,4 +209,71 @@ html.overlay #root {
   margin-left: 1px;
   color: var(--om-accent);
   animation: om-pulse 1s steps(2) infinite;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared surfaces and type
+ * ------------------------------------------------------------------------ */
+
+/* A panel: paper on linen with a hairline. No glow, no gradient. */
+.om-card {
+  background: var(--om-surface);
+  border: 1px solid var(--om-border);
+  border-radius: 10px;
+  box-shadow: var(--om-shadow-card);
+}
+
+/* Solid felt: the one fill reserved for "yours" and primary actions. */
+.om-fill {
+  background-color: var(--om-accent);
+  color: var(--om-accent-fg);
+}
+
+/* Condensed display type for page titles and the live timer. */
+.om-display {
+  font-stretch: 82%;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+
+/* A quiet group label: sentence case, never shouted. */
+.om-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 560;
+  color: var(--om-muted);
+}
+
+/* Kept for markup compatibility: sections no longer animate in on their own. */
+.om-rise {
+  animation: none;
+}
+
+/* The one entrance: the page content when you open a section. */
+@keyframes om-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.om-enter {
+  animation: om-enter 180ms var(--om-ease) both;
+}
+
+@keyframes om-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+/* The live dot: the only thing that moves on its own. */
+.om-live {
+  animation: om-ring 1.8s ease-out infinite;
 }

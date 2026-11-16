@@ -27,12 +27,12 @@ import { SuggestionContent } from "./SuggestionContent";
 import { SummaryView } from "./SummaryView";
 
 function Panel({ children }: { children: ReactNode }) {
-  return <div className="rounded-lg border border-border bg-surface px-5 py-4">{children}</div>;
+  return <div className="om-card px-5 py-4">{children}</div>;
 }
 
 function SubHeading({ children, count }: { children: ReactNode; count?: number }) {
   return (
-    <h3 className="mb-2 flex items-center gap-2 text-[0.72rem] font-semibold tracking-wider text-muted uppercase">
+    <h3 className="mb-2 flex items-center gap-2 text-[0.8rem] font-semibold text-fg-soft">
       {children}
       {count !== undefined && <span className="font-normal tabular-nums">{count}</span>}
     </h3>
@@ -128,7 +128,7 @@ export function TranscriptTab({ record }: { record: MeetingRecord }) {
           </span>
         )}
       </div>
-      <div className="space-y-3 rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="space-y-3 om-card px-4 py-3">
         {segments.length === 0 ? (
           <p className="py-4 text-center text-[0.84rem] text-muted">
             No lines match “{query.trim()}”.
@@ -179,9 +179,7 @@ function SuggestionCard({ s }: { s: Suggestion }) {
 function SpokenAnswer({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <div className="mb-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
-        {label}
-      </div>
+      <div className="mb-1 text-[0.76rem] font-semibold text-muted">{label}</div>
       <blockquote className="border-l-2 border-border-strong pl-3 text-[0.86rem] leading-relaxed whitespace-pre-line text-fg">
         {text}
       </blockquote>
@@ -200,7 +198,7 @@ export function QaTab({ record }: { record: MeetingRecord }) {
   return (
     <div className="space-y-4">
       {qa.items.map(({ question: q, answers, suggestions }) => (
-        <article key={q.id} className="rounded-lg border border-border bg-surface px-5 py-4">
+        <article key={q.id} className="om-card px-5 py-4">
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[0.74rem] text-muted">
             <Badge tone="accent">{categoryLabel(q.category)}</Badge>
             <span className="tabular-nums">
@@ -444,7 +442,7 @@ export function ScreenTab({ record }: { record: MeetingRecord }) {
         Text descriptions only — raw screenshots are not part of the record.
       </p>
       {observations.map((o) => (
-        <article key={o.id} className="rounded-lg border border-border bg-surface px-5 py-3.5">
+        <article key={o.id} className="om-card px-5 py-3.5">
           <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[0.74rem] text-muted">
             <span className="tabular-nums" title={formatDateTime(o.timestamp)}>
               {formatOffset(segmentOffset(o.timestamp, record.meeting.startedAt))}

@@ -2,7 +2,7 @@
    meeting window (no real product branding). */
 html.overlay.shot-overlay,
 html.overlay.shot-overlay body {
-  background: linear-gradient(135deg, #1d2433 0%, #2a3346 55%, #1a2030 100%);
+  background: linear-gradient(135deg, #222524 0%, #2b2f2d 55%, #1f2221 100%);
 }
 
 .shot-stage {
@@ -17,9 +17,9 @@ html.overlay.shot-overlay body {
   inset: 48px 440px 48px 48px;
   border-radius: 12px;
   background:
-    radial-gradient(circle at 30% 42%, #3b4660 0 70px, transparent 71px),
-    radial-gradient(circle at 70% 42%, #3b4660 0 70px, transparent 71px),
-    linear-gradient(#262e3f, #262e3f);
+    radial-gradient(circle at 30% 42%, #3d4341 0 70px, transparent 71px),
+    radial-gradient(circle at 70% 42%, #3d4341 0 70px, transparent 71px),
+    linear-gradient(#2a2e2c, #2a2e2c);
   box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
   border: 1px solid rgb(255 255 255 / 0.06);
 }

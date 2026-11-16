@@ -60,21 +60,23 @@ function Step({
   return (
     <section
       aria-labelledby={headingId}
-      className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-3 px-5 py-4"
+      className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-4 px-6 py-5"
     >
       <span
         aria-hidden
-        className="mt-px flex size-5 items-center justify-center rounded-full border border-border-strong text-[0.68rem] font-semibold text-muted tabular-nums"
+        className="om-display mt-[-2px] flex size-7 items-center justify-center text-[1.3rem] text-muted tabular-nums"
       >
         {n}
       </span>
       <div className="min-w-0">
         <div className="mb-2.5 flex items-start justify-between gap-4">
           <div>
-            <h2 id={headingId} className="text-[0.92rem] font-semibold text-fg">
+            <h2 id={headingId} className="text-[0.98rem] font-semibold tracking-[-0.01em] text-fg">
               {title}
             </h2>
-            {description && <p className="mt-0.5 text-[0.8rem] text-muted">{description}</p>}
+            {description && (
+              <p className="mt-0.5 text-[0.82rem] leading-relaxed text-muted">{description}</p>
+            )}
           </div>
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </div>
@@ -122,9 +124,11 @@ function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => v
           <label
             key={m.value}
             className={cx(
-              "flex cursor-pointer gap-2.5 rounded-lg border px-3 py-2.5 transition-colors",
+              "relative flex cursor-pointer gap-3 rounded-[10px] border px-4 py-3.5 transition-all duration-150",
               "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
-              checked ? "border-accent bg-accent-soft" : "border-border hover:border-border-strong",
+              checked
+                ? "border-accent bg-accent-soft"
+                : "border-border bg-surface hover:border-border-strong",
             )}
           >
             <input
@@ -136,8 +140,8 @@ function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => v
               className="mt-1 size-3.5 shrink-0 accent-[var(--om-accent)]"
             />
             <span className="min-w-0">
-              <span className="block text-[0.86rem] font-semibold text-fg">{m.title}</span>
-              <span className="block text-[0.78rem] leading-snug text-fg-soft">
+              <span className="block text-[0.92rem] font-semibold text-fg">{m.title}</span>
+              <span className="mt-0.5 block text-[0.8rem] leading-snug text-muted">
                 {m.description}
               </span>
             </span>
@@ -294,9 +298,7 @@ function PrivacyStep({ settings }: { settings: Settings }) {
     >
       <dl className="space-y-3 text-[0.82rem]">
         <div>
-          <dt className="mb-1 text-[0.72rem] font-semibold tracking-wide text-muted uppercase">
-            Data flow
-          </dt>
+          <dt className="mb-1 text-[0.78rem] font-medium text-muted">Data flow</dt>
           <dd>
             {flow.loading && !flow.data && (
               <p role="status" className="flex items-center gap-2 text-muted">
@@ -504,7 +506,7 @@ export function StartMeeting({ settings }: { settings: Settings }) {
           e.preventDefault();
           void start();
         }}
-        className="mb-5 divide-y divide-border rounded-lg border border-border bg-surface"
+        className="om-card om-rise mb-6 divide-y divide-border overflow-hidden"
       >
         <Step n={1} title="Mode" description="Which side of the conversation OpenMeet assists.">
           <ModePicker value={form.mode} onChange={(mode) => update({ mode })} />
@@ -568,8 +570,8 @@ export function StartMeeting({ settings }: { settings: Settings }) {
 
         <MeetingAppStep value={form.focusAppId} onChange={(focusAppId) => update({ focusAppId })} />
 
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-          <p className="flex max-w-md items-start gap-2 text-[0.8rem] text-fg-soft">
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-surface-2/40 px-6 py-5">
+          <p className="flex max-w-md items-start gap-2 text-[0.82rem] leading-relaxed text-fg-soft">
             <Icon name="info" className="mt-0.5 text-accent" />
             <span>
               Make sure recording and AI assistance are allowed in this meeting, and tell
@@ -581,7 +583,7 @@ export function StartMeeting({ settings }: { settings: Settings }) {
             variant="primary"
             busy={starting}
             disabled={problem !== null}
-            className="h-10 px-5 text-[0.92rem]"
+            className="h-11 rounded-md px-6 text-[0.95rem]"
           >
             <Icon name="play" />
             Start meeting

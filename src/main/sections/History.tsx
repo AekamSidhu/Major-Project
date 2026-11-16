@@ -75,7 +75,7 @@ function MeetingList() {
             : "You've reached the end of your history."}
         </EmptyState>
       ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+        <ul className="divide-y divide-border overflow-hidden om-card">
           {rows.map((m) => {
             const badge = listStateBadge(m, liveId);
             return (
@@ -83,7 +83,7 @@ function MeetingList() {
                 <button
                   type="button"
                   onClick={() => openMeeting(m.id)}
-                  className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-surface-2"
+                  className="group flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-surface-2/70"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -98,7 +98,10 @@ function MeetingList() {
                       {countLabel(m.segmentCount, "transcript line")}
                     </div>
                   </div>
-                  <span aria-hidden className="text-muted">
+                  <span
+                    aria-hidden
+                    className="text-[1.1rem] text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-fg"
+                  >
                     ›
                   </span>
                 </button>
