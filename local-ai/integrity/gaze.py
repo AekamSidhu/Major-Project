@@ -27,6 +27,8 @@ from typing import Callable, Protocol
 import numpy as np
 
 FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+# Shipped in the repo (Apache 2.0), so the sidecar works offline; downloaded only if it is missing.
+BUNDLED_FACE_MODEL = Path(__file__).parent / "models" / "face_landmarker.task"
 KEEP_SECONDS = 600.0
 MAX_SIDE = 640  # frames are scaled down to this before landmarking
 
@@ -71,6 +73,8 @@ class FaceTracker:
         from mediapipe.tasks.python import vision
 
         path = Path(model_dir) / "face_landmarker.task"
+        if not path.exists() and BUNDLED_FACE_MODEL.exists():
+            path = BUNDLED_FACE_MODEL
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
             urllib.request.urlretrieve(FACE_MODEL_URL, path)  # 3.8 MB, once

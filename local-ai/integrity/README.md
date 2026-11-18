@@ -23,6 +23,7 @@ chosen on development data only.
 | File | What | Trained on | Held-out result |
 |---|---|---|---|
 | `reading_network.onnx` + `.json` | 1-D CNN, 3 seeds averaged, 2.1 MB | GazeBase (CC BY 4.0), 258 people, degraded to webcam quality | 98.8% window balanced accuracy on 64 unseen people; 83.0% on Reading in the Wild test people (real-world reading) |
+| `face_landmarker.task` | MediaPipe Face Landmarker (float16), 3.8 MB, Google's published model, Apache 2.0 | Google | Finds the irises for the reading signal; bundled so nothing is downloaded at run time |
 | `echo_tfidf.json` | TF-IDF (1–2 word grams, 60k terms) + logistic regression, 1.9 MB | HC3 (CC BY-SA 4.0), human vs ChatGPT answers | 97.9% balanced accuracy on unseen questions (AUC 0.998) |
 
 Training code and full results: `training/gaze-detection` (branch
