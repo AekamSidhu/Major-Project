@@ -2,3 +2,5 @@
 *.png binary
 *.ico binary
 *.icns binary
+training/echo-detection/checkpoints/content/model/model.safetensors filter=lfs diff=lfs merge=lfs -text
+training/echo-detection/checkpoints/content/model.onnx filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,67 @@
+HC3: train 51670, val 9138, test 15203 answers; AI share 0.34; device cuda
+[transformers] [1mRobertaForSequenceClassification LOAD REPORT[0m from: distilroberta-base
+Key                         | Status     | 
+----------------------------+------------+-
+lm_head.dense.bias          | UNEXPECTED | 
+roberta.pooler.dense.bias   | UNEXPECTED | 
+roberta.pooler.dense.weight | UNEXPECTED | 
+lm_head.layer_norm.weight   | UNEXPECTED | 
+lm_head.dense.weight        | UNEXPECTED | 
+lm_head.bias                | UNEXPECTED | 
+lm_head.layer_norm.bias     | UNEXPECTED | 
+classifier.out_proj.weight  | MISSING    | 
+classifier.out_proj.bias    | MISSING    | 
+classifier.dense.weight     | MISSING    | 
+classifier.dense.bias       | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+    epoch 1 step 0 loss 0.6583 [4 s]
+    epoch 1 step 500 loss 0.2145 [87 s]
+    epoch 1 step 1000 loss 0.1520 [176 s]
+    epoch 1 step 1500 loss 0.1254 [264 s]
+    epoch 2 step 0 loss 0.0007 [284 s]
+    epoch 2 step 500 loss 0.0437 [372 s]
+    epoch 2 step 1000 loss 0.0417 [459 s]
+    epoch 2 step 1500 loss 0.0394 [547 s]
+validation questions [643 s]
+  VAL tfidf                              AUC 0.9975  balanced acc 97.90%  (AI caught 97.6%, humans flagged 1.8%)  | at 5% FPR: AI caught 99.0%
+  VAL transformer                        AUC 0.9999  balanced acc 99.64%  (AI caught 99.6%, humans flagged 0.3%)  | at 5% FPR: AI caught 100.0%
+  VAL average                            AUC 0.9993  balanced acc 99.15%  (AI caught 99.5%, humans flagged 1.2%)  | at 5% FPR: AI caught 100.0%
+chosen on validation: transformer
+  TEST tfidf                             AUC 0.9972  balanced acc 97.53%  (AI caught 97.3%, humans flagged 2.3%)  | at 5% FPR: AI caught 99.0%
+  TEST tfidf first 50 words              AUC 0.9785  balanced acc 87.81%  (AI caught 77.7%, humans flagged 2.1%)  | at 5% FPR: AI caught 89.7%
+  TEST tfidf first 100 words             AUC 0.9923  balanced acc 94.92%  (AI caught 92.0%, humans flagged 2.2%)  | at 5% FPR: AI caught 97.0%
+  TEST tfidf first 200 words             AUC 0.9969  balanced acc 97.30%  (AI caught 96.8%, humans flagged 2.2%)  | at 5% FPR: AI caught 98.9%
+  TEST transformer                       AUC 0.9998  balanced acc 99.44%  (AI caught 99.5%, humans flagged 0.6%)  | at 5% FPR: AI caught 100.0%
+  TEST transformer first 50 words        AUC 0.9971  balanced acc 97.07%  (AI caught 95.5%, humans flagged 1.4%)  | at 5% FPR: AI caught 99.6%
+  TEST transformer first 100 words       AUC 0.9993  balanced acc 99.08%  (AI caught 99.0%, humans flagged 0.8%)  | at 5% FPR: AI caught 99.9%
+  TEST transformer first 200 words       AUC 0.9998  balanced acc 99.45%  (AI caught 99.5%, humans flagged 0.6%)  | at 5% FPR: AI caught 100.0%
+  TEST average                           AUC 0.9992  balanced acc 98.78%  (AI caught 99.2%, humans flagged 1.6%)  | at 5% FPR: AI caught 100.0%
+  TEST average first 50 words            AUC 0.9925  balanced acc 94.78%  (AI caught 91.8%, humans flagged 2.2%)  | at 5% FPR: AI caught 99.6%
+  TEST average first 100 words           AUC 0.9975  balanced acc 97.79%  (AI caught 97.7%, humans flagged 2.1%)  | at 5% FPR: AI caught 99.9%
+  TEST average first 200 words           AUC 0.9992  balanced acc 98.72%  (AI caught 99.1%, humans flagged 1.7%)  | at 5% FPR: AI caught 100.0%
+  TEST transformer finance               AUC 1.0000  balanced acc 99.77%  (AI caught 99.7%, humans flagged 0.1%)  | at 5% FPR: AI caught 100.0%
+  TEST transformer medicine              AUC 1.0000  balanced acc 99.61%  (AI caught 100.0%, humans flagged 0.8%)  | at 5% FPR: AI caught 100.0%
+  TEST transformer open_qa               AUC 0.9949  balanced acc 97.09%  (AI caught 97.1%, humans flagged 2.9%)  | at 5% FPR: AI caught 99.7%
+  TEST transformer reddit_eli5           AUC 1.0000  balanced acc 99.68%  (AI caught 99.9%, humans flagged 0.5%)  | at 5% FPR: AI caught 100.0%
+  TEST transformer wiki_csai             AUC 0.9997  balanced acc 98.14%  (AI caught 99.4%, humans flagged 3.1%)  | at 5% FPR: AI caught 100.0%
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+  OTHER LLM qwen2.5-1.5b tfidf           AUC 0.8989  balanced acc 75.19%  (AI caught 55.4%, humans flagged 5.1%)  | at 5% FPR: AI caught 68.4%
+  OTHER LLM qwen2.5-1.5b transformer     AUC 0.9879  balanced acc 86.18%  (AI caught 73.4%, humans flagged 1.1%)  | at 5% FPR: AI caught 95.9%
+  OTHER LLM qwen2.5-1.5b average         AUC 0.9743  balanced acc 84.26%  (AI caught 70.4%, humans flagged 1.9%)  | at 5% FPR: AI caught 95.9%
+  OTHER LLM smollm2-1.7b tfidf           AUC 0.9424  balanced acc 81.72%  (AI caught 68.5%, humans flagged 5.1%)  | at 5% FPR: AI caught 80.6%
+  OTHER LLM smollm2-1.7b transformer     AUC 0.9956  balanced acc 96.70%  (AI caught 94.5%, humans flagged 1.1%)  | at 5% FPR: AI caught 99.5%
+  OTHER LLM smollm2-1.7b average         AUC 0.9893  balanced acc 90.88%  (AI caught 83.6%, humans flagged 1.9%)  | at 5% FPR: AI caught 99.2%
+  UNSEEN SOURCE finance (tfidf)          AUC 0.9960  balanced acc 97.89%  (AI caught 96.7%, humans flagged 0.9%)  | at 5% FPR: AI caught 98.3%
+  UNSEEN SOURCE medicine (tfidf)         AUC 1.0000  balanced acc 99.03%  (AI caught 100.0%, humans flagged 1.9%)  | at 5% FPR: AI caught 100.0%
+  UNSEEN SOURCE open_qa (tfidf)          AUC 0.9340  balanced acc 83.64%  (AI caught 71.7%, humans flagged 4.4%)  | at 5% FPR: AI caught 85.2%
+  UNSEEN SOURCE reddit_eli5 (tfidf)      AUC 0.9512  balanced acc 85.94%  (AI caught 73.4%, humans flagged 1.5%)  | at 5% FPR: AI caught 85.2%
+  UNSEEN SOURCE wiki_csai (tfidf)        AUC 0.9565  balanced acc 78.76%  (AI caught 99.4%, humans flagged 41.9%)  | at 5% FPR: AI caught 100.0%
+  torch.onnx.export(model, (enc["input_ids"], enc["attention_mask"]), str(folder / "model.onnx"),
+  if (padding_length := kv_length + kv_offset - attention_mask.shape[-1]) > 0:
+  is_causal = q_length > 1 and attention_mask is None and is_causal
+  return opset9.index(g, self, index)
+
+HEADLINE content (transformer, test questions): balanced accuracy 99.44%, AUC 0.9998 [1275 s] -> /kaggle/working/content/content_results.json
