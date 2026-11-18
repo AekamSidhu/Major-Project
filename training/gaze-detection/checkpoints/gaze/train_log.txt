@@ -1,0 +1,12 @@
+fold0 ep 1/11 loss 0.0486 54s
+fold0 ep 2/11 loss 0.0342 108s
+fold0 ep 3/11 loss 0.0308 161s
+fold0 ep 4/11 loss 0.0286 215s
+fold0 ep 5/11 loss 0.0269 268s
+fold0 ep 6/11 loss 0.0255 322s
+fold0 ep 7/11 loss 0.0243 376s
+fold0 ep 8/11 loss 0.0235 430s
+fold0 ep 9/11 loss 0.0225 484s
+fold0 ep 10/11 loss 0.0223 538s
+fold0 ep 11/11 loss 0.0221 591s
+fold0 DONE (no test set) 594s

@@ -1,0 +1,8 @@
+{
+ "file": "openmeet_gaze_resnet18.onnx",
+ "mb": 44.7,
+ "max_abs_diff_rad": 2.384185791015625e-07,
+ "cpu_ms_1thread": 33.63,
+ "cpu_ms_2thread": 17.56,
+ "cpu_ms_4thread": 17.89
+}
