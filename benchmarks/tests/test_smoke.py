@@ -195,3 +195,24 @@ def test_engine_live_summary():
     assert out["candidate_mode"]["detected"] == 1 and out["candidate_mode"]["single_transcript"] == 1
     assert out["candidate_mode"]["speech_end_to_transcript_ms"]["median"] == 900.0
     assert out["interviewer_mode"]["with_followups"] == 1
+
+
+# --- the doc's tables ------------------------------------------------------------------------
+
+
+def test_tables_fill_only_replaces_marked_blocks(monkeypatch):
+    import tables
+
+    monkeypatch.setattr(tables, "SECTIONS", {"demo": lambda: print("| a | b |\n|---|---|\n| 1 | 2 |")})
+    doc = "# Title\n\nprose\n<!-- tables:demo -->\nold numbers\n<!-- /tables -->\nmore prose\n"
+    new = tables.fill(doc)
+    assert new == "# Title\n\nprose\n<!-- tables:demo -->\n| a | b |\n|---|---|\n| 1 | 2 |\n<!-- /tables -->\nmore prose\n"
+    assert tables.fill(new) == new  # idempotent: --check passes right after a fill
+
+
+def test_table_helpers():
+    import tables
+
+    assert tables.pct(0.12345) == "12.3%" and tables.pct(None) == "–"
+    assert tables.lat({"n": 3, "median": 1.0, "p90": 2.0, "p95": 3.0}) == "1 / 2 / 3"
+    assert tables.lat({"n": 0}) == "–"

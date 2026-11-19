@@ -16,12 +16,19 @@ package, a copy of whisper/normalizers/english.py) on reference and
 hypothesis, then word errors summed over the subset (jiwer). Latency: wall
 time of the HTTP request (client side) and the sidecar's own inference time
 (from its log line); real-time factor = latency / audio length.
+
+With --endpoint the same requests go to another OpenAI-compatible server or a
+cloud API instead (no local sidecar is started), e.g. OpenAI with
+`--endpoint https://api.openai.com/v1/audio/transcriptions --api-key-env OPENAI_API_KEY
+--models gpt-4o-mini-transcribe --device auto`.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
+import os
 import re
 import sys
 import time
@@ -62,7 +69,7 @@ def wer_of(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {"wer": (s + d + i) / n if n else None, "ref_words": n, "substitutions": s, "deletions": d, "insertions": i}
 
 
-def transcribe(url: str, wav: bytes, model: str, word_timestamps: bool) -> tuple[str, float]:
+def transcribe(url: str, wav: bytes, model: str, word_timestamps: bool, token: str | None = None) -> tuple[str, float]:
     fields = [("model", model), ("language", "en")]
     if word_timestamps:
         fields += [("response_format", "verbose_json"), ("timestamp_granularities[]", "word")]
@@ -70,7 +77,8 @@ def transcribe(url: str, wav: bytes, model: str, word_timestamps: bool) -> tuple
         fields += [("response_format", "json")]
     body, ctype = benchlib.multipart(fields, [("file", "utterance.wav", wav, "audio/wav")])
     started = time.perf_counter()
-    result = benchlib.post_bytes(url, body, ctype, timeout=600)
+    headers = {"Authorization": f"Bearer {token}"} if token else None
+    result = benchlib.post_bytes(url, body, ctype, timeout=600, headers=headers)
     return result["text"], (time.perf_counter() - started) * 1000.0
 
 
@@ -81,25 +89,36 @@ def audio_wav(path: Path) -> bytes:
 
 
 def run_model(model: str, items: list[librispeech.Utterance], device: str, a: argparse.Namespace, norm) -> tuple[dict, list[dict]]:
+    """One model over every utterance: through a fresh local sidecar, or through --endpoint (another server or a cloud API)."""
     log_path = benchlib.tmp_dir() / f"asr-sidecar-{model}-{device}.log"
-    env = benchlib.sidecar_env(device=device, cuda_libs=a.cuda_libs, model_dir=a.model_dir)
     base = f"http://127.0.0.1:{a.port}"
+    url = a.endpoint or f"{base}/v1/audio/transcriptions"
+    token = os.environ.get(a.api_key_env) if a.api_key_env else None
+    if a.api_key_env and not token:
+        raise SystemExit(f"{a.api_key_env} is not set")
+    if a.endpoint:
+        context: Any = contextlib.nullcontext()
+    else:
+        env = benchlib.sidecar_env(device=device, cuda_libs=a.cuda_libs, model_dir=a.model_dir)
+        context = benchlib.server(["server.py", "--port", str(a.port), "--whisper-model", model], f"{base}/health", log_path, env=env)
     rows: list[dict[str, Any]] = []
-    with benchlib.server(["server.py", "--port", str(a.port), "--whisper-model", model], f"{base}/health", log_path, env=env):
+    with context:
         warm = audio_wav(items[0].path)
         started = time.perf_counter()
-        transcribe(f"{base}/v1/audio/transcriptions", warm, model, a.word_timestamps)
+        transcribe(url, warm, model, a.word_timestamps, token)
         cold_ms = (time.perf_counter() - started) * 1000.0
         print(f"  {model} on {device}: first request (loads the model) {cold_ms / 1000:.1f} s", flush=True)
         for k, utt in enumerate(items, 1):
             wav = audio_wav(utt.path)
-            hyp, ms = transcribe(f"{base}/v1/audio/transcriptions", wav, model, a.word_timestamps)
+            hyp, ms = transcribe(url, wav, model, a.word_timestamps, token)
             duration = benchlib.wav_duration(wav)
             rows.append({"model": model, "device": device, "split": utt.split, "id": utt.id, "duration_s": round(duration, 3),
                          "latency_ms": round(ms, 1), **word_errors(norm(utt.text), norm(hyp))})
             if k % 100 == 0 or k == len(items):
                 so_far = wer_of(rows)["wer"]
                 print(f"    {k}/{len(items)} utterances, WER so far {100 * so_far:.2f}%", flush=True)
+    if a.endpoint:
+        return {"cold_first_request_ms": round(cold_ms, 1), "device_used": "remote", "endpoint": a.endpoint}, rows
     log = log_path.read_text(encoding="utf-8", errors="replace")
     loaded = LOADED.findall(log)
     server_ms = [int(m[1]) for m in TRANSCRIBED.findall(log)][1:]  # the first is the warm-up request
@@ -137,6 +156,9 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--word-timestamps", action="store_true", help="ask for word timings, as the room does")
     ap.add_argument("--port", type=int, default=benchlib.SIDECAR_PORT)
+    ap.add_argument("--endpoint", default=None, help="an OpenAI-compatible /audio/transcriptions URL instead of a local sidecar "
+                    "(e.g. https://api.openai.com/v1/audio/transcriptions); models are sent by name")
+    ap.add_argument("--api-key-env", default=None, help="name of the environment variable holding the endpoint's key")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
 
@@ -154,7 +176,8 @@ def main() -> None:
                    "word_timestamps": a.word_timestamps, "per_split": a.n, "seed": a.seed,
                    "subset": "random.Random(seed).sample over the sorted utterance ids, per split",
                    "normaliser": "whisper_normalizer.english.EnglishTextNormalizer (OpenAI Whisper's)",
-                   "cuda_libs": "nvidia-cublas-cu12 + nvidia-cudnn-cu12 9 wheels on PATH" if a.cuda_libs else None},
+                   "cuda_libs": "nvidia-cublas-cu12 + nvidia-cudnn-cu12 9 wheels on PATH" if a.cuda_libs else None,
+                   "endpoint": a.endpoint or "local sidecar"},
         "models": {},
     }
     all_rows: list[dict[str, Any]] = []

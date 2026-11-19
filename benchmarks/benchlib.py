@@ -209,8 +209,8 @@ def post_json(url: str, body: Any, timeout: float = 600) -> Any:
         return json.load(response)
 
 
-def post_bytes(url: str, data: bytes, content_type: str, timeout: float = 600) -> Any:
-    request = urllib.request.Request(url, data, {"Content-Type": content_type})
+def post_bytes(url: str, data: bytes, content_type: str, timeout: float = 600, headers: dict[str, str] | None = None) -> Any:
+    request = urllib.request.Request(url, data, {"Content-Type": content_type, **(headers or {})})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.load(response)
 

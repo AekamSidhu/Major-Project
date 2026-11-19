@@ -21,12 +21,15 @@ questions), --repeats times:
   echo similarity compares against.
 
 The room's settings are built here (never loaded from ~/.openmeet/room.env).
-Cloud (Gemini) mode is not run: no API key is used by the benchmarks.
+`--mode online` runs the same on Gemini (the room's online mode; the key is
+read from the OPENMEET_GEMINI_API_KEY environment variable only); without a
+key it stops. The committed results are local only: no key was used.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -74,7 +77,8 @@ def summarise_quality(rows: list[dict[str, Any]], key_kept: str = "kept") -> dic
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repeats", type=int, default=3)
-    ap.add_argument("--model", default="llama3.2")
+    ap.add_argument("--mode", choices=("local", "online"), default="local")
+    ap.add_argument("--model", default=None, help="default llama3.2 (local) or gemini-3.5-flash (online)")
     ap.add_argument("--out", type=Path, default=benchlib.RESULTS / "followups.json")
     a = ap.parse_args()
 
@@ -85,15 +89,23 @@ def main() -> None:
     from room.similarity import ReferenceWriter
 
     pairs = benchlib.read_json(benchlib.HERE / "data" / "interview_pairs.json")["pairs"]
-    settings = followups.Settings(mode="local", ollama_model=a.model, ollama_url=benchlib.OLLAMA_URL)
+    if a.mode == "online":
+        key = os.environ.get("OPENMEET_GEMINI_API_KEY", "")
+        if not key:
+            raise SystemExit("--mode online needs OPENMEET_GEMINI_API_KEY in the environment")
+        a.model = a.model or "gemini-3.5-flash"
+        settings = followups.Settings(mode="online", gemini_model=a.model, gemini_key=key)
+    else:
+        a.model = a.model or "llama3.2"
+        settings = followups.Settings(mode="local", ollama_model=a.model, ollama_url=benchlib.OLLAMA_URL)
     counting = Counting(followups.guard_output)
     followups.guard_output = counting  # build_chain picks it up when the writer builds its chain
-    writer = followups.FollowupWriter(mode="local", settings=settings)
+    writer = followups.FollowupWriter(mode=a.mode, settings=settings)
     result: dict[str, Any] = {
         "what": "room follow-up questions: llama3.2 (local) vs rules; time to first token; reference answers",
         "environment": {**benchlib.environment(["langchain-core", "langchain-ollama", "ollama"]),
                         "ollama": benchlib.ollama_version()},
-        "config": {"model": a.model, "temperature": 0.3, "num_predict": 600, "repeats": a.repeats, "answers": len(pairs),
+        "config": {"mode": a.mode, "model": a.model, "temperature": 0.3, "num_predict": 600, "repeats": a.repeats, "answers": len(pairs),
                    "max_followups": MAX_FOLLOWUPS},
     }
 
@@ -109,8 +121,8 @@ def main() -> None:
     print(f"cold first call {result['local_cold_first_call_ms']} ms; loaded {result['ollama_loaded']}", flush=True)
 
     local_rows, rule_rows, stream_rows, ref_rows = [], [], [], []
-    stream_llm = ChatOllama(model=a.model, base_url=benchlib.OLLAMA_URL, temperature=0.3, num_predict=600)
-    references = ReferenceWriter("local", settings)
+    stream_llm = ChatOllama(model=a.model, base_url=benchlib.OLLAMA_URL, temperature=0.3, num_predict=600) if a.mode == "local" else None
+    references = ReferenceWriter(a.mode, settings)
     for rep in range(a.repeats):
         for pair in pairs:
             transcript = transcript_of(pair)
@@ -131,26 +143,27 @@ def main() -> None:
                               "dropped": [why for _, why in checked.dropped],
                               "grounded": sum(bool(k.get("trigger")) for k in checked.kept)})
 
-            messages = followups.PROMPT.format_messages(**followups.guard_input(
-                {"question": pair["question"], "answer": pair["answer"], "transcript": transcript, "previous": []}))
-            t = time.perf_counter()
             first = None
-            chars = 0
-            for chunk in stream_llm.stream(messages):
-                text = chunk.content if isinstance(chunk.content, str) else ""
-                if text and first is None:
-                    first = (time.perf_counter() - t) * 1000.0
-                chars += len(text)
-            stream_rows.append({"id": pair["id"], "first_token_ms": first, "total_ms": (time.perf_counter() - t) * 1000.0,
-                                "chars": chars})
+            if stream_llm is not None:
+                messages = followups.PROMPT.format_messages(**followups.guard_input(
+                    {"question": pair["question"], "answer": pair["answer"], "transcript": transcript, "previous": []}))
+                t = time.perf_counter()
+                chars = 0
+                for chunk in stream_llm.stream(messages):
+                    text = chunk.content if isinstance(chunk.content, str) else ""
+                    if text and first is None:
+                        first = (time.perf_counter() - t) * 1000.0
+                    chars += len(text)
+                stream_rows.append({"id": pair["id"], "first_token_ms": first, "total_ms": (time.perf_counter() - t) * 1000.0,
+                                    "chars": chars})
 
             if rep == 0:
                 t = time.perf_counter()
                 refs = references.write(pair["question"], 2)
                 ref_rows.append({"id": pair["id"], "ms": (time.perf_counter() - t) * 1000.0, "references": len(refs),
                                  "words": [len(r.split()) for r in refs]})
-            print(f"rep {rep + 1} {pair['id']}: local {ms:.0f} ms ({out['source']}, kept {len(kept)}/{raw}); "
-                  f"stream first token {first:.0f} ms; rules {rms:.2f} ms", flush=True)
+            print(f"rep {rep + 1} {pair['id']}: {a.mode} {ms:.0f} ms ({out['source']}, kept {len(kept)}/{raw}); "
+                  f"stream first token {first if first is None else round(first)} ms; rules {rms:.2f} ms", flush=True)
 
     result["local"] = {"latency_ms": benchlib.summary([r["ms"] for r in local_rows]),
                        "fell_back_to_rules": sum(r["source"] == "rules" for r in local_rows),
