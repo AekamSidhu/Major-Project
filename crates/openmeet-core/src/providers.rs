@@ -93,6 +93,9 @@ pub struct LlmRequest {
     /// Live, latency-critical request: adapters should use the lowest
     /// reasoning effort the model allows.
     pub latency_sensitive: bool,
+    /// Sampling seed, for providers that support one (OpenAI-style APIs,
+    /// Ollama); ignored by the others.
+    pub seed: Option<u64>,
 }
 
 impl LlmRequest {
@@ -106,6 +109,7 @@ impl LlmRequest {
             temperature: None,
             json_output: false,
             latency_sensitive: true,
+            seed: None,
         }
     }
 }

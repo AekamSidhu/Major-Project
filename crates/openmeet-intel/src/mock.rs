@@ -783,7 +783,8 @@ pub(crate) fn default_response(request: &LlmRequest) -> String {
         RequestKind::Compression => compression_text(&user),
         RequestKind::ScreenAnalysis => screen_text(&user),
         RequestKind::TopicAnalysis => topic_analysis_text(&user),
-        RequestKind::IntegrityReference => reference_answer_text(&question),
+        // The reference recipe sends the bare question as the user message.
+        RequestKind::IntegrityReference => reference_answer_text(user.trim()),
         // Integrity checks never call an LLM themselves.
         RequestKind::IntegrityCheck => String::new(),
     }
@@ -1293,6 +1294,7 @@ mod tests {
             temperature: None,
             json_output: false,
             latency_sensitive: true,
+            seed: None,
         }
     }
 

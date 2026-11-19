@@ -352,3 +352,45 @@ fn echo_cases() {
         );
     }
 }
+
+/// `to_transcript` reproduces `local-ai/integrity/text.py` (the expected
+/// strings were produced by that Python function).
+#[test]
+fn to_transcript_matches_the_sidecar() {
+    use openmeet_intel::integrity::to_transcript;
+    let cases: [(&str, &str); 9] = [
+        (
+            "## Caching\n- We used **Redis** for `hot` keys.\n2) Then __expired__ them.",
+            "caching we used redis for hot keys then expired them",
+        ),
+        (
+            "I do n't think it 's right , they 're wrong and I 'm sure .",
+            "i dont think its right theyre wrong and im sure",
+        ),
+        (
+            "It wo n't work and ca n't , could n't , should n't",
+            "it wont work and cant couldnt shouldnt",
+        ),
+        (
+            "See https://example.com/a?b=1 and www.test.org or URL_12 for details.",
+            "see and or for details",
+        ),
+        (
+            "Don\u{2019}t worry: it\u{2019}s 3.14\u{d7} faster \u{2014} na\u{ef}ve caf\u{e9} test!",
+            "dont worry its 3 14 faster na ve caf test",
+        ),
+        (
+            "* bullet one\n* bullet two\n10. ten",
+            "bullet one bullet two ten",
+        ),
+        (
+            "   Multiple   spaces\tand\nnewlines   ",
+            "multiple spaces and newlines",
+        ),
+        ("HELLO World's END", "hello worlds end"),
+        ("", ""),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(to_transcript(input), expected, "{input:?}");
+    }
+}

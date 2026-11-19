@@ -68,6 +68,9 @@ pub async fn get_integrity_status(state: AppStateRef<'_>) -> CmdResult<Integrity
         reading_ready: status.reading_ready,
         embedding_model: status.embedding_model,
         required_embedding_model: required_embedding_model(),
+        echo_calibrated: spec_thresholds().echo_similarity.calibrated,
+        echo_reference_model: spec_thresholds().echo_similarity.reference_model.clone(),
+        delivery_calibrated: spec_thresholds().delivery.calibrated,
         message,
     })
 }
@@ -79,6 +82,9 @@ fn view_error(message: String) -> IntegrityServiceView {
         reading_ready: false,
         embedding_model: None,
         required_embedding_model: required_embedding_model(),
+        echo_calibrated: spec_thresholds().echo_similarity.calibrated,
+        echo_reference_model: spec_thresholds().echo_similarity.reference_model.clone(),
+        delivery_calibrated: spec_thresholds().delivery.calibrated,
         message,
     }
 }

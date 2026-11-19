@@ -343,6 +343,16 @@ impl Engine {
             };
             rt.pending_utterances.remove(&d.utterance_id);
             let segment = segment_from_draft(rt, &d);
+            // Word timings on the meeting clock (integrity delivery signal).
+            let words: Option<Vec<WordTiming>> = d.words.as_ref().map(|ws| {
+                ws.iter()
+                    .map(|w| WordTiming {
+                        word: w.word.clone(),
+                        start_ms: rt.rel_ms(w.start_ms),
+                        end_ms: rt.rel_ms(w.end_ms),
+                    })
+                    .collect()
+            });
             if segment.text.is_empty() {
                 return;
             }
@@ -483,7 +493,11 @@ impl Engine {
                             // The candidate's previous answer is final; the
                             // next one answers this question.
                             integrity_actions.extend(crate::integrity::on_interviewer_question(
-                                rt, &settings, &q,
+                                rt,
+                                &settings,
+                                &q,
+                                &segment,
+                                words.as_deref(),
                             ));
                         }
                         if active
@@ -530,17 +544,11 @@ impl Engine {
                     && !(is_accepted_question && role == SpeakerRole::Unknown)
                 {
                     rt.turn.push(&segment);
-                    let words = d.words.as_ref().map(|ws| {
-                        ws.iter()
-                            .map(|w| WordTiming {
-                                word: w.word.clone(),
-                                start_ms: rt.rel_ms(w.start_ms),
-                                end_ms: rt.rel_ms(w.end_ms),
-                            })
-                            .collect()
-                    });
                     integrity_actions.extend(crate::integrity::on_candidate_segment(
-                        rt, &settings, &segment, words,
+                        rt,
+                        &settings,
+                        &segment,
+                        words.clone(),
                     ));
                     if active {
                         actions.push(Action::TurnTimer {

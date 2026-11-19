@@ -367,6 +367,7 @@ struct ChatParams {
     temperature: Option<f32>,
     reasoning_effort: Option<&'static str>,
     stream_options: bool,
+    seed: Option<u64>,
 }
 
 /// Parameter adjustments learned from rejected requests.
@@ -378,6 +379,7 @@ struct ChatQuirks {
     token_field: Option<TokenField>,
     no_stream_options: bool,
     max_tokens_limit: Option<u32>,
+    no_seed: bool,
 }
 
 /// Streaming chat completions against OpenAI or an OpenAI-compatible server.
@@ -482,6 +484,7 @@ impl OpenAiLlm {
             temperature,
             reasoning_effort,
             stream_options: !quirks.no_stream_options,
+            seed: request.seed.filter(|_| !quirks.no_seed),
         }
     }
 
@@ -552,6 +555,11 @@ impl OpenAiLlm {
         if params.stream_options && message.contains("stream_options") {
             next.stream_options = false;
             quirks.no_stream_options = true;
+            return Some(next);
+        }
+        if params.seed.is_some() && message.contains("seed") {
+            next.seed = None;
+            quirks.no_seed = true;
             return Some(next);
         }
         None
@@ -644,6 +652,9 @@ fn chat_body(model: &str, request: &LlmRequest, params: &ChatParams) -> Value {
     }
     if let Some(effort) = params.reasoning_effort {
         body.insert("reasoning_effort".into(), json!(effort));
+    }
+    if let Some(seed) = params.seed {
+        body.insert("seed".into(), json!(seed));
     }
     Value::Object(body)
 }
@@ -1638,6 +1649,22 @@ mod tests {
         assert_eq!(body["max_completion_tokens"], 1000);
         assert!(body.get("max_tokens").is_none());
         assert!(body.get("reasoning_effort").is_none());
+        assert!(body.get("seed").is_none());
+    }
+
+    #[test]
+    fn seed_is_sent_and_dropped_when_rejected() {
+        let l = llm(OpenAiFlavor::Compatible, "http://127.0.0.1:1234", "local");
+        let mut r = request(false);
+        r.seed = Some(1);
+        let params = l.params_for(&r);
+        assert_eq!(chat_body("local", &r, &params)["seed"], 1);
+        let next = l
+            .downgrade(&params, "unrecognized request argument supplied: seed")
+            .unwrap();
+        assert!(chat_body("local", &r, &next).get("seed").is_none());
+        // Remembered for later requests.
+        assert_eq!(l.params_for(&r).seed, None);
     }
 
     #[test]

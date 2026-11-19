@@ -13,6 +13,7 @@ pub mod delivery;
 pub mod echo;
 pub mod evidence;
 pub mod fusion;
+pub mod text;
 
 use std::sync::OnceLock;
 
@@ -24,6 +25,7 @@ pub use delivery::{
 };
 pub use echo::{EchoResult, cosine64, echo_similarity};
 pub use fusion::{FusedFlag, FusionInput, fuse};
+pub use text::to_transcript;
 
 /// Version of the shared definitions this implementation follows.
 pub const SPEC_VERSION: u32 = 1;
@@ -128,6 +130,18 @@ pub fn is_echo_embedding_model(model: &str, thresholds: &IntegrityThresholds) ->
     !want.is_empty() && model.trim().eq_ignore_ascii_case(want)
 }
 
+/// Whether an LLM model is the one the echo thresholds were measured with
+/// (case-insensitive; an Ollama `:latest` tag is the same model). With any
+/// other model the echo signal is reported as uncalibrated.
+pub fn is_reference_model(model: &str, thresholds: &IntegrityThresholds) -> bool {
+    let norm = |m: &str| {
+        let m = m.trim().to_ascii_lowercase();
+        m.strip_suffix(":latest").map(str::to_string).unwrap_or(m)
+    };
+    let want = norm(&thresholds.echo_similarity.reference_model);
+    !want.is_empty() && norm(model) == want
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,5 +171,16 @@ mod tests {
         ));
         assert!(!is_echo_embedding_model("hash-384", t));
         assert!(!is_echo_embedding_model("", t));
+    }
+
+    #[test]
+    fn reference_model_match() {
+        let t = spec_thresholds();
+        let model = t.echo_similarity.reference_model.clone();
+        assert!(is_reference_model(&model, t));
+        assert!(is_reference_model(&format!("{model}:latest"), t));
+        assert!(is_reference_model(&model.to_uppercase(), t));
+        assert!(!is_reference_model("gpt-5-mini", t));
+        assert!(!is_reference_model(&format!("{model}:70b"), t));
     }
 }

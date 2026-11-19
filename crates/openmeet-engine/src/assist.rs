@@ -723,6 +723,7 @@ async fn run_primary(
         temperature: Some(settings.ai.llm.temperature),
         json_output: false,
         latency_sensitive: true,
+        seed: None,
     };
     set(AnswerState::Requesting, None);
     let info = llm.info();
@@ -926,6 +927,7 @@ async fn run_followups(
         temperature: Some(settings.ai.llm.temperature),
         json_output: true,
         latency_sensitive: true,
+        seed: None,
     };
     rm.set_state(&ticket, AnswerState::Requesting, None);
     let info = llm.info();
@@ -1148,6 +1150,7 @@ pub(crate) fn spawn_semantic_check(
             temperature: Some(0.0),
             json_output: true,
             latency_sensitive: true,
+            seed: None,
         };
         engine
             .inner
@@ -1279,6 +1282,7 @@ pub(crate) fn spawn_compression(
                     temperature: Some(0.1),
                     json_output: false,
                     latency_sensitive: false,
+                    seed: None,
                 };
                 engine
                     .inner
@@ -1377,6 +1381,7 @@ pub(crate) fn spawn_topic_analysis(
             temperature: Some(0.1),
             json_output: true,
             latency_sensitive: false,
+            seed: None,
         };
         let result = complete(&ticket, llm, request, Duration::from_secs(60)).await;
         engine.inner.requests.set_state(
@@ -1602,6 +1607,7 @@ async fn summarize_with(
         temperature: Some(0.2),
         json_output: true,
         latency_sensitive: false,
+        seed: None,
     };
     engine
         .inner

@@ -229,7 +229,7 @@ Details: [docs/INTEGRITY.md](docs/INTEGRITY.md).
 |------|--------------|---------------|
 | AI-written text | The answer's transcript | Local AI sidecar (`POST /v1/integrity/echo`); the text is not stored or logged there |
 | Reading | Frames of the candidate's video region, turned into one gaze point each and dropped; gaze points kept **in memory for at most ten minutes** and reset when the meeting ends | Local AI sidecar (screen capture of the region you set, 10 fps) |
-| Echo of an LLM answer | The interviewer's question (to the LLM), the answer and the reference answers (to the embedder) | Your configured LLM and embedder — local or cloud, shown on the Privacy page |
+| Echo of an LLM answer | The interviewer's question (to the LLM), the answer and the reference answers, normalised to lower-case words (to the embedder) | Your configured LLM and embedder — local or cloud, shown on the Privacy page |
 | Delivery | Transcript timings (and word timestamps, requested only while this signal is on) | Inside OpenMeet |
 
 * Video-region capture runs only while an interviewer meeting with the

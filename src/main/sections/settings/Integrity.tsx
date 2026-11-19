@@ -32,6 +32,16 @@ function WhereItRuns({ nodes }: { nodes: DataFlowNode[] }) {
   );
 }
 
+/** Same LLM as the thresholds' reference model (an Ollama `:latest` tag is ignored). */
+function sameModel(model: string, reference: string): boolean {
+  const norm = (m: string) =>
+    m
+      .trim()
+      .toLowerCase()
+      .replace(/:latest$/, "");
+  return norm(model) !== "" && norm(model) === norm(reference);
+}
+
 export function IntegritySection() {
   const settings = useSettings();
   const i = settings.integrity;
@@ -42,6 +52,12 @@ export function IntegritySection() {
   const reloadFlow = flow.reload;
   const integrityNodes = (flow.data?.nodes ?? []).filter((n) => n.component === "integrity");
   const required = status.data?.requiredEmbeddingModel ?? null;
+  // Calibration comes from the spec thresholds (via the backend); unknown
+  // while loading, shown as uncalibrated then.
+  const echoCalibrated = status.data?.echoCalibrated ?? false;
+  const referenceModel = status.data?.echoReferenceModel ?? null;
+  const deliveryCalibrated = status.data?.deliveryCalibrated ?? false;
+  const llmModel = settings.ai.llm.model;
   const embedder = settings.ai.embeddings.provider;
 
   const save = async (mutate: Parameters<typeof saveSettings>[0]) => {
@@ -97,7 +113,18 @@ export function IntegritySection() {
               Your AI provider answers the interviewer's question itself; the candidate's answer is
               compared with those answers by embedding similarity. Works only with the{" "}
               {required ? <code className="text-[0.78rem]">{required}</code> : "local"} embedder (AI
-              providers → Embeddings: Local AI). <Badge tone="neutral">uncalibrated</Badge>
+              providers → Embeddings: Local AI).{" "}
+              {echoCalibrated && referenceModel ? (
+                <>
+                  Calibrated with reference answers from{" "}
+                  <code className="text-[0.78rem]">{referenceModel}</code>
+                  {sameModel(llmModel, referenceModel)
+                    ? "."
+                    : `; with ${llmModel || "another model"} it counts as uncalibrated.`}
+                </>
+              ) : (
+                <Badge tone="neutral">uncalibrated</Badge>
+              )}
             </>
           }
           checked={i.echoSimilarity}
@@ -113,7 +140,8 @@ export function IntegritySection() {
             <>
               Answer timing — how long the candidate takes to start, pace, pauses and filler words —
               compared with their own first three answers. Uses word timestamps from Local AI
-              transcription when available. <Badge tone="neutral">uncalibrated</Badge>
+              transcription when available.{" "}
+              {!deliveryCalibrated && <Badge tone="neutral">uncalibrated</Badge>}
             </>
           }
           checked={i.delivery}
@@ -186,8 +214,8 @@ export function IntegritySection() {
       <Section title="Limits">
         <ul className="list-disc space-y-1 py-2.5 pl-5 text-[0.82rem] text-fg-soft">
           <li>
-            Thresholds are not calibrated on real interviews yet. Delivery and echo are marked
-            uncalibrated and count at most as “possible”.
+            Thresholds are not calibrated on real interviews yet; the calibrated ones were measured
+            on public data. Signals marked uncalibrated count at most as “possible”.
           </li>
           <li>
             Fluent speakers, prepared answers, accents and transcription errors can raise signals

@@ -585,8 +585,9 @@ impl Engine {
         }
         let settings = self.settings();
         let provider = self.inner.providers.read().transcription.clone();
-        // Word timestamps feed the integrity delivery signal: requested only
-        // for audio that can carry the candidate's voice while it is on.
+        // Word timestamps feed the integrity delivery signal (the candidate's
+        // utterances and the end of the interviewer's questions): requested
+        // only while it is on.
         let (trans_tx, words_for) = {
             let st = self.inner.state.lock();
             match st.runtime.as_ref() {
@@ -596,11 +597,8 @@ impl Engine {
                         rt.mode(),
                         openmeet_core::integrity::IntegritySignalName::Delivery,
                     );
-                    let words_for: Vec<AudioSourceKind> = sources
-                        .iter()
-                        .copied()
-                        .filter(|s| delivery && rt.role_for(*s) != SpeakerRole::User)
-                        .collect();
+                    let words_for: Vec<AudioSourceKind> =
+                        sources.iter().copied().filter(|_| delivery).collect();
                     (rt.trans_tx.clone(), words_for)
                 }
                 None => return,

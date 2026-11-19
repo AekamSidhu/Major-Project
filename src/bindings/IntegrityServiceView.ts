@@ -26,6 +26,19 @@ embeddingModel: string | null,
  */
 requiredEmbeddingModel: string, 
 /**
+ * The echo-similarity thresholds are calibrated (spec thresholds).
+ */
+echoCalibrated: boolean, 
+/**
+ * The LLM the echo thresholds were measured with; reference answers by
+ * another model make the signal count as uncalibrated.
+ */
+echoReferenceModel: string, 
+/**
+ * The delivery thresholds are calibrated (spec thresholds).
+ */
+deliveryCalibrated: boolean, 
+/**
  * Plain-language status ("Ready", "Local AI is not running", ...).
  */
 message: string, };

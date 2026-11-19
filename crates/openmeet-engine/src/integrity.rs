@@ -45,7 +45,8 @@ use openmeet_intel::integrity::evidence::{
 };
 use openmeet_intel::integrity::{
     DeliveryTracker, SPEC_VERSION, SpeechUnit, SpeechWord, delivery_features, echo,
-    echo_similarity, fuse, is_echo_embedding_model, spec_thresholds,
+    echo_similarity, fuse, is_echo_embedding_model, is_reference_model, spec_thresholds,
+    to_transcript,
 };
 use openmeet_intel::prompts::integrity_reference;
 use tokio::sync::{mpsc, watch};
@@ -83,7 +84,11 @@ pub(crate) const DEMO_REGION: Rect = Rect {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ReferenceState {
     Pending,
-    Ready(Vec<String>),
+    /// The answers and the LLM model that wrote them.
+    Ready {
+        answers: Vec<String>,
+        model: String,
+    },
     Failed(String),
 }
 
@@ -208,12 +213,23 @@ pub(crate) struct CheckJob {
 // Conversation hooks (called with the state lock held)
 // ---------------------------------------------------------------------------
 
-/// End of the question, from its transcript segments.
-fn question_end_ms(rt: &MeetingRuntime, q: &DetectedQuestion) -> i64 {
+/// End of the question, from its transcript segments. A segment with word
+/// timestamps ends with its last word (as the sidecar and the room take it);
+/// `words` are the word timings (meeting-relative) of `current`, the segment
+/// that completed the question.
+fn question_end_ms(
+    rt: &MeetingRuntime,
+    q: &DetectedQuestion,
+    current: &TranscriptSegment,
+    words: Option<&[WordTiming]>,
+) -> i64 {
     rt.segments
         .iter()
         .filter(|s| q.segment_ids.contains(&s.id))
-        .map(|s| s.end_time)
+        .map(|s| match words.and_then(<[WordTiming]>::last) {
+            Some(last) if s.id == current.id => last.end_ms,
+            _ => s.end_time,
+        })
         .max()
         .unwrap_or_else(|| rt.now_rel())
 }
@@ -224,6 +240,8 @@ pub(crate) fn on_interviewer_question(
     rt: &mut MeetingRuntime,
     settings: &Settings,
     question: &DetectedQuestion,
+    segment: &TranscriptSegment,
+    words: Option<&[WordTiming]>,
 ) -> Vec<IntegrityAction> {
     let mode = rt.mode();
     if !rt.integrity.active(settings, mode) {
@@ -233,7 +251,7 @@ pub(crate) fn on_interviewer_question(
         .map(|job| IntegrityAction::Check(Box::new(job)))
         .into_iter()
         .collect();
-    let end_ms = question_end_ms(rt, question);
+    let end_ms = question_end_ms(rt, question, segment, words);
     rt.integrity.question = Some(IntegrityQuestion {
         id: question.id.clone(),
         text: question.question.clone(),
@@ -340,19 +358,28 @@ fn to_speech_units(answer: &OpenAnswer) -> Vec<SpeechUnit> {
     answer
         .units
         .iter()
-        .map(|u| SpeechUnit {
-            start: s(u.start_ms),
-            end: s(u.end_ms),
-            text: u.text.clone(),
-            words: u.words.as_ref().map(|ws| {
-                ws.iter()
-                    .map(|w| SpeechWord {
-                        word: w.word.clone(),
-                        start: s(w.start_ms),
-                        end: s(w.end_ms),
-                    })
-                    .collect()
-            }),
+        .map(|u| {
+            // With words, an utterance spans its first word's start to its
+            // last word's end (as the sidecar and the room do).
+            let (start_ms, end_ms) = match u.words.as_deref() {
+                Some([first, .., last]) => (first.start_ms, last.end_ms),
+                Some([only]) => (only.start_ms, only.end_ms),
+                _ => (u.start_ms, u.end_ms),
+            };
+            SpeechUnit {
+                start: s(start_ms),
+                end: s(end_ms),
+                text: u.text.clone(),
+                words: u.words.as_ref().map(|ws| {
+                    ws.iter()
+                        .map(|w| SpeechWord {
+                            word: w.word.clone(),
+                            start: s(w.start_ms),
+                            end: s(w.end_ms),
+                        })
+                        .collect()
+                }),
+            }
         })
         .collect()
 }
@@ -506,9 +533,12 @@ impl Engine {
                         .unwrap_or_else(|| "the model returned no answer".to_string()),
                 )
             } else {
-                ReferenceState::Ready(refs)
+                ReferenceState::Ready {
+                    answers: refs,
+                    model: llm.info().model,
+                }
             };
-            let ok = matches!(state, ReferenceState::Ready(_));
+            let ok = matches!(state, ReferenceState::Ready { .. });
             tracing::debug!(request_id = %ticket.id, ok, "integrity reference answers finished");
             let _ = tx.send(state);
             engine.inner.requests.set_state(
@@ -736,13 +766,13 @@ impl Engine {
             _ = cancel.cancelled() => return unavailable("Cancelled".into()),
             r = tokio::time::timeout(REFERENCE_WAIT, settled) => r,
         };
-        let refs = match waited {
+        let (refs, reference_model) = match waited {
             Ok(Ok(state)) => match state {
-                ReferenceState::Ready(refs) => refs,
+                ReferenceState::Ready { answers, model } => (answers, model),
                 ReferenceState::Failed(e) => {
                     return unavailable(format!("Could not get reference answers: {e}"));
                 }
-                ReferenceState::Pending => Vec::new(),
+                ReferenceState::Pending => (Vec::new(), String::new()),
             },
             Ok(Err(_)) => return unavailable("Reference answers were not produced".into()),
             Err(_) => return unavailable("Reference answers took too long".into()),
@@ -750,8 +780,10 @@ impl Engine {
         if refs.is_empty() {
             return unavailable("No reference answers to compare with".into());
         }
-        let mut texts = vec![job.text.clone()];
-        texts.extend(refs);
+        // As in the calibration: the answer and the references as a
+        // transcript would give them (lower case, words only) before embedding.
+        let mut texts = vec![to_transcript(&job.text)];
+        texts.extend(refs.iter().map(|r| to_transcript(r)));
         let vectors = tokio::select! {
             _ = cancel.cancelled() => return unavailable("Cancelled".into()),
             r = tokio::time::timeout(SCORING_TIMEOUT, embedder.embed(texts.clone(), cancel.clone())) => r,
@@ -766,10 +798,19 @@ impl Engine {
         };
         let answer = echo::widen(&vectors[0]);
         let references: Vec<Vec<f64>> = vectors[1..].iter().map(|v| echo::widen(v)).collect();
-        echo_signal(
-            &echo_similarity(&answer, &references, &th.echo_similarity),
-            llm_local,
-        )
+        let mut result = echo_similarity(&answer, &references, &th.echo_similarity);
+        // The thresholds were measured with references from one model; with
+        // another the signal counts at most as "possible".
+        let same_model = is_reference_model(&reference_model, th);
+        result.calibrated = result.calibrated && same_model;
+        let mut signal = echo_signal(&result, llm_local);
+        if th.echo_similarity.calibrated && !same_model {
+            signal.evidence.push(format!(
+                "Reference answers by {reference_model}; the thresholds hold for {}",
+                th.echo_similarity.reference_model
+            ));
+        }
+        signal
     }
 
     /// The sidecar's embedding model, cached in the meeting runtime.
@@ -891,16 +932,18 @@ async fn reference_answer(
     question: &str,
     variant: usize,
 ) -> Result<String, ProviderError> {
-    let parts = integrity_reference::build(question, variant);
+    // The shared reference recipe (see `integrity_reference`).
+    let parts = integrity_reference::build(question);
     let request = LlmRequest {
         request_id: ticket.id.clone(),
         kind: RequestKind::IntegrityReference,
         system: parts.system,
         messages: vec![ChatMessage::user(parts.user)],
         max_output_tokens: integrity_reference::MAX_OUTPUT_TOKENS,
-        temperature: Some(0.7),
+        temperature: Some(integrity_reference::TEMPERATURE),
         json_output: false,
         latency_sensitive: false,
+        seed: Some(integrity_reference::seed(variant)),
     };
     crate::assist::complete(ticket, llm, request, REFERENCE_TIMEOUT)
         .await
@@ -1155,5 +1198,43 @@ mod tests {
         assert_eq!(run.region(&s), None);
         run.demo_region = Some(DEMO_REGION);
         assert_eq!(run.region(&s), Some(DEMO_REGION));
+    }
+
+    #[test]
+    fn utterances_with_words_span_their_words() {
+        let w = |word: &str, start_ms, end_ms| WordTiming {
+            word: word.into(),
+            start_ms,
+            end_ms,
+        };
+        let answer = OpenAnswer {
+            id: "a".into(),
+            question: None,
+            units: vec![
+                AnswerUnit {
+                    start_ms: 1_000,
+                    end_ms: 4_000,
+                    text: "we cached it".into(),
+                    words: Some(vec![
+                        w(" we", 1_240, 1_400),
+                        w(" cached", 1_450, 1_900),
+                        w(" it", 2_000, 3_800),
+                    ]),
+                },
+                AnswerUnit {
+                    start_ms: 5_000,
+                    end_ms: 6_000,
+                    text: "yes".into(),
+                    words: None,
+                },
+            ],
+            checked_units: 0,
+            revision: 0,
+            created_at: 0,
+            running: None,
+        };
+        let units = to_speech_units(&answer);
+        assert_eq!((units[0].start, units[0].end), (1.24, 3.8));
+        assert_eq!((units[1].start, units[1].end), (5.0, 6.0));
     }
 }

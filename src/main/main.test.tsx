@@ -253,6 +253,9 @@ describe("Answer integrity", () => {
             readingReady: false,
             embeddingModel: "BAAI/bge-small-en-v1.5",
             requiredEmbeddingModel: "BAAI/bge-small-en-v1.5",
+            echoCalibrated: true,
+            echoReferenceModel: "llama3.2",
+            deliveryCalibrated: false,
             message:
               "Local AI is running but the reading model (needs onnxruntime) is not available.",
           };
@@ -316,6 +319,8 @@ describe("Answer integrity", () => {
     expect(await screen.findByText(/reading model \(needs onnxruntime\)/)).toBeTruthy();
     // The echo check needs the local embedder; the page says so.
     expect(screen.getByText(/echo check is unavailable/)).toBeTruthy();
+    // Calibrated echo thresholds hold for the configured reference model.
+    expect(await screen.findByText(/Calibrated with reference answers from/)).toBeTruthy();
     fireEvent.click(toggle);
     await waitFor(() => expect(saved.length).toBe(1));
     expect(saved[0]?.integrity.enabled).toBe(true);

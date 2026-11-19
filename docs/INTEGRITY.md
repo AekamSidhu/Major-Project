@@ -21,8 +21,8 @@ The sidecar's own browser page (`/integrity`) is described in
 | Signal | Question | Computed by | Calibrated |
 |---|---|---|---|
 | `ai_text` | Does the transcript read like AI-written text? | Local AI sidecar, `POST /v1/integrity/echo` | yes (public data) |
-| `echo_similarity` | How close is the answer to what an LLM answers to the same question? | The engine: the configured LLM writes `references` answers when the question is detected; answer and references are embedded with the configured embedder; highest cosine | no (`thresholds.json`) |
-| `delivery` | Does the timing look read rather than spoken freely, compared with this candidate's own first answers? | The engine, from transcript timings (word timestamps when the recognizer gives them) | no |
+| `echo_similarity` | How close is the answer to what an LLM answers to the same question? | The engine: the configured LLM writes `references` answers when the question is detected; answer and references are normalised like a transcript and embedded with the configured embedder; highest cosine | as `thresholds.json` says, and only with references from its `reference_model` |
+| `delivery` | Does the timing look read rather than spoken freely, compared with this candidate's own first answers? | The engine, from transcript timings (word timestamps when the recognizer gives them) | as `thresholds.json` says (not yet) |
 | `reading` | Do the eyes move like reading during the answer? | Local AI sidecar, `POST /v1/integrity/reading` for the answer's time window, while it captures the candidate's video region (`/gaze/screen`) | yes (public data) |
 
 Levels are `low`, `possible`, `high`, plus the not-scored `too_short`,
@@ -48,9 +48,25 @@ alone never makes it `high`. With no scored signal the flag is `unavailable`.
   first three *finished* answers with at least ten words. Those answers show
   "Learning this candidate's usual delivery (answer n of 3)".
 * Reference answers are requested from the LLM as soon as the question is
-  detected (two by default, short), so a local model is free again before
-  follow-ups are generated. Checks never use the UI request slots; an
-  emergency stop cancels them.
+  detected, so a local model is free again before follow-ups are generated.
+  They follow the shared **reference recipe v1** the echo thresholds were
+  measured with (`local-ai/integrity/signals.py`): system prompt "You are a
+  helpful assistant. Answer the user's question directly, in plain prose
+  without headings or lists, in about 150 words.", the trimmed question as the
+  user message, temperature 0.7, at most 400 tokens, `references` answers
+  (two) with seeds 0 and 1 where the provider takes a seed (OpenAI-style APIs,
+  Ollama). Before embedding, the answer and every reference go through
+  `to_transcript` (a port of `local-ai/integrity/text.py`: no URLs, markdown or
+  punctuation, lower case, no apostrophes). Checks never use the UI request
+  slots; an emergency stop cancels them.
+* Echo is `unavailable` unless the embedder is the model in `thresholds.json`
+  (`BAAI/bge-small-en-v1.5`, Local AI embeddings). With references from
+  another LLM than its `reference_model` (`llama3.2`) the signal is reported
+  as uncalibrated (it then counts at most as `possible`) and its evidence says
+  which model wrote the references.
+* With word timestamps an utterance spans its first word's start to its last
+  word's end, for the candidate's utterances and for the end of the question
+  (as the sidecar and the room do).
 
 ## Settings
 
@@ -80,9 +96,11 @@ other than `whisper-1` are never asked.
 
 ## Limits
 
-* **Thresholds are not calibrated on real interviews.** AI-text and reading
-  were trained and thresholded on public data (HC3, GazeBase); delivery and
-  echo thresholds are hand-set and marked uncalibrated.
+* **Thresholds are not calibrated on real interviews.** AI-text, reading and
+  (from the HC3 calibration on `feature/delivery-signal`) echo similarity are
+  thresholded on public data (HC3, GazeBase); delivery thresholds are hand-set
+  and marked uncalibrated. Which signals count as calibrated is read from
+  `thresholds.json`.
 * Fluent or prepared speakers, accents, transcription errors and nerves can
   raise signals without any AI help. Whisper often drops filler words.
 * Without word timestamps, utterance timings include the voice-activity
@@ -103,7 +121,9 @@ other than `whisper-1` are never asked.
   form the baseline, the fourth is read out; runs without devices, models or
   network (scripted sidecar, a stand-in embedder named like the spec model).
 * `crates/openmeet-intel/tests/integrity_spec.rs`: parity with the three spec
-  fixtures (to 1e-6) and the spec constants.
+  fixtures (to 1e-6), the spec constants, and `to_transcript` against outputs
+  of the Python function. The fixtures and thresholds are read from the files,
+  so the tests pass with the provisional and with the calibrated spec.
 * `crates/openmeet-engine/tests/integrity.rs`: question → answer through the
   real VAD → all four signals → fused flag → event → stored.
 * Provider mock-server tests for the sidecar client and word timestamps; store
@@ -114,7 +134,11 @@ other than `whisper-1` are never asked.
 * The sidecar reports `not_enough_gaze` for too little gaze; the app maps it
   to the spec's `no_gaze`.
 * `thresholds.json` names a `reference_model` (`llama3.2`); the app uses the
-  configured LLM whatever it is and does not enforce that model.
+  configured LLM whatever it is and reports echo as uncalibrated when that LLM
+  is a different model (an Ollama `:latest` tag counts as the same model).
+* The reference prompt is the bare recipe, without the data-block framing the
+  other prompts use: changing it would invalidate the thresholds, and its
+  output is only embedded, never shown or acted on.
 * The delivery definition constants (weights, floors, minimums, fillers) live
   in `openmeet-intel` and a test checks them against the `constants` block of
   `delivery_cases.json`; thresholds are read from `thresholds.json`.

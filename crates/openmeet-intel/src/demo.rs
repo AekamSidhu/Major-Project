@@ -373,8 +373,8 @@ fn integrity(r: &LlmRequest) -> Option<String> {
     if r.kind != RequestKind::IntegrityReference {
         return None;
     }
-    let question = extract_question(&user_of(r)).unwrap_or_default();
-    question
+    // The reference recipe sends the bare question as the user message.
+    user_of(r)
         .to_lowercase()
         .contains("consistent hashing")
         .then(|| READ_ANSWER.to_string())
@@ -484,6 +484,7 @@ mod tests {
             temperature: None,
             json_output: false,
             latency_sensitive: true,
+            seed: None,
         }
     }
 
@@ -676,7 +677,7 @@ mod tests {
         let m = demo_llm(INTEGRITY);
         m.set_chunk_delay_ms(0);
         m.set_first_token_latency_ms(0);
-        let p = integrity_reference::build(READ_QUESTION, 0);
+        let p = integrity_reference::build(READ_QUESTION);
         let out = complete_text(
             &m,
             request(RequestKind::IntegrityReference, p.system, p.user),

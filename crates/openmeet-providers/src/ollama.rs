@@ -321,6 +321,9 @@ fn chat_body(model: &str, request: &LlmRequest, params: &Params) -> Value {
     if let Some(t) = params.temperature {
         options.insert("temperature".into(), json!(t));
     }
+    if let Some(seed) = request.seed {
+        options.insert("seed".into(), json!(seed));
+    }
     let mut body = Map::new();
     body.insert("model".into(), json!(model));
     body.insert("messages".into(), Value::Array(messages));
@@ -849,6 +852,10 @@ mod tests {
         assert_eq!(body["options"]["num_predict"], 500);
         assert!((body["options"]["temperature"].as_f64().unwrap() - 0.3).abs() < 1e-6);
         assert_eq!(body["think"], false);
+        assert!(body["options"].get("seed").is_none());
+        r.seed = Some(1);
+        let body = chat_body("llava", &r, &l.params_for(&r));
+        assert_eq!(body["options"]["seed"], 1);
     }
 
     #[test]

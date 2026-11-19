@@ -240,6 +240,13 @@ pub struct IntegrityServiceView {
     /// The embedding model the echo-similarity check needs (named in the
     /// spec thresholds); with any other embedder that signal is unavailable.
     pub required_embedding_model: String,
+    /// The echo-similarity thresholds are calibrated (spec thresholds).
+    pub echo_calibrated: bool,
+    /// The LLM the echo thresholds were measured with; reference answers by
+    /// another model make the signal count as uncalibrated.
+    pub echo_reference_model: String,
+    /// The delivery thresholds are calibrated (spec thresholds).
+    pub delivery_calibrated: bool,
     /// Plain-language status ("Ready", "Local AI is not running", ...).
     pub message: String,
 }

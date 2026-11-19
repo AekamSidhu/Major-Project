@@ -364,6 +364,9 @@ export const INTEGRITY_STATUS: IntegrityServiceView = {
   readingReady: true,
   embeddingModel: "BAAI/bge-small-en-v1.5",
   requiredEmbeddingModel: "BAAI/bge-small-en-v1.5",
+  echoCalibrated: false,
+  echoReferenceModel: "llama3.2",
+  deliveryCalibrated: false,
   message: "Ready.",
 };
 
