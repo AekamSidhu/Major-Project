@@ -65,7 +65,7 @@ src-tauri            the desktop app: windows, overlay, tray, hotkeys, commands,
 8. **Exported TS types.** Any new type that crosses IPC must live in
    openmeet-core (ask instead of adding one). `i64`/`u64` fields need
    `#[ts(type = "number")]`.
-9. Edition 2024, `rust-version = 1.85`. Keep public APIs documented.
+9. Edition 2024, `rust-version = 1.89`. Keep public APIs documented.
 
 ---
 
