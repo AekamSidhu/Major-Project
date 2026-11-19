@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
+import zlib
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 import room_server
 import server
+from integrity import signals
 from room import is_phantom
 from langchain_core.runnables import RunnableLambda
 
-from room import guardrails
+from room import checks, guardrails
 from room.followups import FollowUp, FollowUps, FollowupWriter, Settings, guard_input, parse_followups
 from room.followup_rules import rule_followups
+from room.similarity import ReferenceWriter, same_model
+from room.study import StudyRecorder
 from test_integrity import AI_ANSWER, Clock, SawtoothTracker, feed
 from test_server import wav_bytes
 
@@ -22,14 +30,42 @@ REMOTE = ("192.168.1.50", 50000)
 
 
 class ScriptedTranscriber:
-    def __init__(self, text: str, confidence: float = 0.9) -> None:
-        self.text, self.confidence = text, confidence
+    """Says `text` (or the next of `texts`); with word timestamps, one word every `step` s from 0.2 s."""
 
-    def transcribe(self, audio, model, language, prompt):  # type: ignore[no-untyped-def]
-        return server.TranscriptionResult(text=self.text, language="en", duration=len(audio) / 16000, confidence=self.confidence)
+    def __init__(self, text: str, confidence: float = 0.9, texts: list[str] | None = None, step: float = 0.3) -> None:
+        self.text, self.confidence, self.texts, self.step = text, confidence, list(texts or []), step
+
+    def transcribe(self, audio, model, language, prompt, word_timestamps=False):  # type: ignore[no-untyped-def]
+        text = self.texts.pop(0) if self.texts else self.text
+        result = server.TranscriptionResult(text=text, language="en", duration=len(audio) / 16000, confidence=self.confidence)
+        if word_timestamps:
+            result.words = [{"word": w, "start": round(0.2 + self.step * i, 3), "end": round(0.2 + self.step * i + 0.2, 3)}
+                            for i, w in enumerate(text.split())]
+        return result
 
     def loaded_model(self) -> str | None:
         return None
+
+
+class BagOfWords:
+    """A stand-in embedder: word counts hashed into 64 dimensions."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def embed(self, texts, model):  # type: ignore[no-untyped-def]
+        self.calls.append(list(texts))
+        out = []
+        for text in texts:
+            v = [0.0] * 64
+            for word in text.split():
+                v[zlib.crc32(word.encode()) % 64] += 1.0
+            out.append(v)
+        return out
+
+
+REFERENCE = ("Caching stores frequently used results in fast memory so repeated requests skip the slow database; "
+             "invalidate entries when the source data changes and monitor the hit rate.")
 
 
 def unreachable(prompt):  # type: ignore[no-untyped-def]
@@ -40,11 +76,26 @@ def writer(model, mode: str = "local") -> FollowupWriter:  # type: ignore[no-unt
     return FollowupWriter(mode=mode, model=RunnableLambda(model), settings=Settings(gemini_key="test"))
 
 
-def make(text: str = "I built the cache layer myself", confidence: float = 0.9, reading: bool = True, model=unreachable, mode: str = "local"):  # type: ignore[no-untyped-def]
+def references(mode: str = "local", answer: str = REFERENCE, sent: list | None = None, fail: bool = False) -> ReferenceWriter:
+    """The room model's reference answers, faked: never calls Ollama or Gemini."""
+
+    def model(messages):  # type: ignore[no-untyped-def]
+        if sent is not None:
+            sent.append(messages)
+        if fail:
+            raise ConnectionError("connection refused")
+        return answer
+
+    return ReferenceWriter(mode, Settings(gemini_key="test"), model_factory=lambda i: RunnableLambda(model))
+
+
+def make(text: str = "I built the cache layer myself", confidence: float = 0.9, reading: bool = True, model=unreachable,  # type: ignore[no-untyped-def]
+         mode: str = "local", transcriber=None, refs: ReferenceWriter | None = None, study_dir=None):
     clock = Clock()
-    app = room_server.create_room_app(8443, "https", "base.en", transcriber=ScriptedTranscriber(text, confidence),
+    app = room_server.create_room_app(8443, "https", "base.en", transcriber=transcriber or ScriptedTranscriber(text, confidence),
                                       tracker_factory=lambda: SawtoothTracker(clock, reading), clock=clock,
-                                      followup_writer=writer(model, mode))
+                                      followup_writer=writer(model, mode), reference_writer=refs or references(mode),
+                                      embedder=BagOfWords(), study_dir=study_dir)
     return app, clock
 
 
@@ -118,12 +169,228 @@ def test_answer_check_and_report():
     assert answer["index"] == 1
     assert answer["echo"]["level"] == "high"
     assert answer["reading"]["reading_probability"] > 0.8
+    # One flag over the four signals, with evidence; echo similarity follows in the background.
+    names = [s["name"] for s in answer["flag"]["signals"]]
+    assert names == ["ai_text", "echo_similarity", "delivery", "reading"]
+    assert answer["similarity"]["level"] == "pending"
+    assert answer["delivery"]["score"]["level"] == "too_short"  # nothing transcribed: no timing
+    assert answer["flag"]["level"] == "high" and answer["flag"]["elevated"][:1] == ["ai_text"]
+    done = local.post(f"/api/rooms/{room}/answers/1/similarity").json()
+    assert done["similarity"]["level"] in ("low", "possible", "high") and done["similarity"]["references"] == 2
+    assert done["flag"]["signals"][1]["level"] == done["similarity"]["level"]
     report = local.get(f"/api/rooms/{room}/report").json()
     assert report["answers"][0]["question"] == "How would you scale it?"
+    md = local.get(f"/api/rooms/{room}/report.md").text
+    assert "**Signal:** Worth a follow-up: several signals agree" in md and "never a verdict" in md
+    assert "- AI-written text: high. " in md and "- Reading: high. " in md
 
 
 ANSWER = ("We moved the checkout service to Kubernetes and cut p99 latency by 40% over three months. "
           "We also added a Redis cache in front of the product catalogue.")
+WORDS23 = "so we put a cache in front of the reporting queries and it held up for the rest of the year after that"
+QUESTION = "Tell me about the reporting service and how you kept it fast"
+
+
+def interview(local: TestClient, room: str, latencies: list[float]) -> list[dict]:
+    """One question and one 23-word answer per latency; returns the answers."""
+    t, out = 1000.0, []
+    for lat in latencies:
+        local.post(f"/api/rooms/{room}/transcribe?speaker=interviewer&start={t}&end={t + 4}", content=wav_bytes(1.0))
+        q_end = t + 0.2 + 0.3 * (len(QUESTION.split()) - 1) + 0.2  # the last word's end
+        a0 = q_end + lat - 0.2  # the first word starts 0.2 s into the segment
+        local.post(f"/api/rooms/{room}/transcribe?speaker=candidate&start={a0}&end={a0 + 6.5}", content=wav_bytes(1.0))
+        out.append(local.post(f"/api/rooms/{room}/answers", json={"start": a0, "end": a0 + 6.5, "text": WORDS23,
+                                                                   "question": QUESTION}).json())
+        t = a0 + 30
+    return out
+
+
+def test_delivery_from_word_timings_against_the_candidates_baseline():
+    n = 5
+    app, _ = make(transcriber=ScriptedTranscriber("", texts=[QUESTION, WORDS23] * n))
+    local = TestClient(app, client=LOCAL)
+    room = local.post("/api/rooms").json()["room"]
+    answers = interview(local, room, [1.0, 1.2, 0.9, 5.0, 1.1])
+    first = answers[0]["delivery"]
+    assert first["features"]["granularity"] == "word" and first["features"]["word_count"] == len(WORDS23.split()) == 23
+    assert first["features"]["latency_s"] == pytest.approx(1.0, abs=1e-6)
+    assert [a["delivery"]["score"]["level"] for a in answers[:3]] == ["baseline"] * 3
+    late, usual = answers[3]["delivery"]["score"], answers[4]["delivery"]["score"]
+    assert late["level"] == "high" and late["z"]["latency_s"] > 7 and usual["level"] == "low"
+    assert late["calibrated"] is signals.thresholds()["delivery"]["calibrated"]
+    # The room's numbers are the spec's: the same session through the spec implementation.
+    utts = [checks.answer_utterances(app_transcript(local, room), a["start"], a["end"]) for a in answers]
+    expected = signals.score_session([{"question_end": a["question_end"], "utterances": u} for a, u in zip(answers, utts)])
+    assert [e["score"]["index"] for e in expected] == [a["delivery"]["score"]["index"] for a in answers]
+    # Uncalibrated delivery alone never makes the flag high, and says why.
+    flag = answers[3]["flag"]
+    assert flag["level"] == "possible" and "delivery" in flag["elevated"]
+    evidence = next(s for s in flag["signals"] if s["name"] == "delivery")["evidence"]
+    assert "started 5.0 s after the question (usually 1.0 s)" in evidence
+    md = local.get(f"/api/rooms/{room}/report.md").text
+    assert "- Delivery: high, uncalibrated. Started 5.0 s after the question" in md
+
+
+def app_transcript(local: TestClient, room: str) -> list[dict]:
+    """The room's transcript with word timings (the report leaves the words out)."""
+    report = local.get(f"/api/rooms/{room}/report").json()
+    assert all("words" not in s for s in report["transcript"])
+    return local.app.state.rooms[room].transcript
+
+
+def test_question_end_and_utterances():
+    t = [{"speaker": "interviewer", "start": 0.0, "end": 4.0, "text": "q", "words": [{"word": "q", "start": 0.5, "end": 3.1}]},
+         {"speaker": "candidate", "start": 4.0, "end": 9.0, "text": "a b"},
+         {"speaker": "interviewer", "start": 20.0, "end": 22.0, "text": "next"}]
+    assert checks.question_end(t, 4.0, None) == 3.1  # the last word, not the cut
+    assert checks.question_end(t, 4.0, 3.5) is None  # no question since the last answer
+    assert checks.answer_utterances(t, 4.2, 9.0) == [{"start": 4.0, "end": 9.0, "text": "a b"}]
+
+
+def test_echo_similarity_from_the_rooms_model():
+    sent: list = []
+    app, _ = make(refs=references("local", answer=REFERENCE, sent=sent))
+    local = TestClient(app, client=LOCAL)
+    room = local.post("/api/rooms").json()["room"]
+    assert local.post(f"/api/rooms/{room}/references", json={"question": "How do you use caching?"}).json() == {"started": True}
+    local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 30, "text": REFERENCE, "question": "How do you use caching?"})
+    local.post(f"/api/rooms/{room}/answers", json={"start": 40, "end": 70, "text": "I like hiking and dogs on weekends with friends",
+                                                   "question": "How do you use caching?"})
+    same = local.post(f"/api/rooms/{room}/answers/1/similarity").json()["similarity"]
+    other = local.post(f"/api/rooms/{room}/answers/2/similarity").json()["similarity"]
+    th = signals.thresholds()["echo_similarity"]
+    assert same["similarity"] == pytest.approx(1.0) and same["level"] == "high"
+    assert same["calibrated"] is th["calibrated"] and same["reference_model"] == "llama3.2"
+    assert other["level"] == "low" and other["similarity"] < same["similarity"]
+    assert len(sent) == th["references"]  # written once for the question, then reused
+    assert sent[0][0][0] == "system" and sent[0][1] == ("human", "How do you use caching?")
+
+
+@pytest.mark.parametrize("case", ["rules", "unreachable", "no_question"])
+def test_echo_similarity_unavailable(case):
+    refs = references("rules") if case == "rules" else references("local", fail=case == "unreachable")
+    app, _ = make(refs=refs, mode="rules" if case == "rules" else "local")
+    local = TestClient(app, client=LOCAL)
+    room = local.post("/api/rooms").json()["room"]
+    local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 30, "text": REFERENCE,
+                                                   "question": "" if case == "no_question" else "Why cache?"})
+    sim = local.post(f"/api/rooms/{room}/answers/1/similarity").json()["similarity"]
+    assert sim["level"] == "unavailable"
+    assert {"rules": "rules mode", "unreachable": "ConnectionError", "no_question": "not transcribed"}[case] in sim["detail"]
+
+
+def test_online_references_send_only_the_question_and_count_as_uncalibrated():
+    sent: list = []
+    app, _ = make(mode="online", refs=references("online", answer=REFERENCE, sent=sent))
+    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    room = local.post("/api/rooms").json()
+    guest_key = room["invites"][0].split("k=")[1]
+    with remote.websocket_connect(f"/ws/{room['room']}?role=guest&k={guest_key}&name=Asha Rao") as guest:
+        guest.receive_json()
+        local.post(f"/api/rooms/{room['room']}/answers", json={"start": 0, "end": 30, "text": "My secret answer " + REFERENCE,
+                                                               "question": "Asha, how do you use caching? Mail asha@example.com"})
+        sim = local.post(f"/api/rooms/{room['room']}/answers/1/similarity").json()["similarity"]
+    assert sim["calibrated"] is False and "measured with llama3.2" in sim["detail"]
+    text = json.dumps(sent)
+    assert "Asha" not in text and "example.com" not in text and "secret" not in text  # the question only, redacted
+    assert "how do you use caching" in text
+    page = remote.get(f"/join/{room['room']}").text
+    assert "interviewer's questions and the text of your answers" in page and "sent to Google Gemini" in page
+    assert same_model("llama3.2:latest", "llama3.2") and not same_model("gemini-3.5-flash", "llama3.2")
+
+
+def test_nothing_reaches_the_candidate():
+    app, clock = make()
+    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    room = local.post("/api/rooms").json()
+    rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
+    with local.websocket_connect(f"/ws/{rid}?role=host&k={room['host_key']}") as host:
+        host.receive_json()
+        with remote.websocket_connect(f"/ws/{rid}?role=guest&k={guest_key}") as guest:
+            guest.receive_json()
+            host.receive_json()
+            local.post(f"/api/rooms/{rid}/answers", json={"start": 0, "end": 30, "text": AI_ANSWER, "question": "Why?"})
+            local.post(f"/api/rooms/{rid}/answers/1/similarity")
+            host.send_json({"type": "ice", "candidate": None})
+            assert guest.receive_json() == {"type": "ice", "candidate": None}  # the next message is signaling, no scores
+    for method, path in (("post", f"/api/rooms/{rid}/answers/1/similarity"), ("get", f"/api/rooms/{rid}/report.md"),
+                         ("post", f"/api/rooms/{rid}/references"), ("get", f"/api/rooms/{rid}/study"),
+                         ("post", f"/api/rooms/{rid}/answers/1/label")):
+        assert getattr(remote, method)(path).status_code == 403
+    page = remote.get(f"/join/{rid}").text
+    assert "Worth a follow-up" not in page and "ai_probability" not in page and "similarity" not in page
+    assert "compares them with answers an AI model gives to the same questions" in page
+    assert "Nothing goes to an online service and nothing is recorded" in page and 'id="study"' not in page
+
+
+def test_study_folder_must_be_outside_the_repository(tmp_path):
+    with pytest.raises(ValueError):
+        StudyRecorder(Path(__file__).resolve().parent / "study-data")
+    with pytest.raises(ValueError):
+        make(study_dir=Path(__file__).resolve().parents[1] / "training" / "data")
+    StudyRecorder(tmp_path)  # outside: fine
+
+
+def test_study_mode_saves_labelled_answers_only_with_the_candidates_consent(tmp_path):
+    app, clock = make(study_dir=tmp_path, transcriber=ScriptedTranscriber("", texts=[QUESTION, WORDS23] * 4))
+    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    room = local.post("/api/rooms").json()
+    rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
+    page = remote.get(f"/join/{rid}").text
+    assert 'id="study"' in page and "nothing is recorded unless you join the study below" in page
+    assert local.get("/api/status").json()["study"] == {"enabled": True, "conditions": list(StudyRecorder.conditions)}
+
+    # Joined without the study consent: nothing is saved.
+    with remote.websocket_connect(f"/ws/{rid}?role=guest&k={guest_key}&name=Asha Rao") as guest:
+        guest.receive_json()
+        interview(local, rid, [1.0])
+    assert local.get(f"/api/rooms/{rid}/study").json()["consent"] is False
+    assert not any(tmp_path.iterdir())
+
+    # With it: session and answers, labelled, under an anonymous id.
+    assert local.post(f"/api/rooms/{rid}/study", json={"participant": "Asha Rao"}).status_code == 400
+    with remote.websocket_connect(f"/ws/{rid}?role=guest&k={guest_key}&name=Asha Rao&study_consent=1") as guest:
+        guest.receive_json()
+        assert local.post(f"/api/rooms/{rid}/study", json={"participant": "P07"}).json()["consent"] is True
+        start = clock.t
+        feed(local, clock, 12)
+        a = local.post(f"/api/rooms/{rid}/answers", json={"start": start, "end": clock.t, "text": WORDS23, "question": QUESTION,
+                                                          "condition": "read_ai"}).json()
+        assert local.post(f"/api/rooms/{rid}/answers", json={"start": 0, "end": 1, "condition": "cheating"}).status_code == 400
+        local.post(f"/api/rooms/{rid}/answers/{a['index']}/similarity")
+        assert local.post(f"/api/rooms/{rid}/answers/{a['index']}/label", json={"condition": "read_script"}).json()["saved"] is True
+        # Answer 1 was given before the consent: relabelling it now must not save it.
+        assert local.post(f"/api/rooms/{rid}/answers/1/label", json={"condition": "honest"}).json()["saved"] is False
+    sessions = list(tmp_path.glob("session-*"))
+    assert len(sessions) == 1
+    files = sorted(p.name for p in sessions[0].iterdir())
+    assert files == ["answer-002.json", "session.json"]  # answer 1 came before the consent
+    saved = json.loads((sessions[0] / "answer-002.json").read_text(encoding="utf-8"))
+    session = json.loads((sessions[0] / "session.json").read_text(encoding="utf-8"))
+    assert saved["condition"] == "read_script" and saved["participant"] == "P07" and session["participant"] == "P07"
+    assert len(saved["gaze"]["x"]) == 120 and saved["gaze"]["fps"] == 10.0
+    assert set(saved["signals"]) == {"ai_text", "echo_similarity", "delivery", "reading"}
+    assert saved["signals"]["echo_similarity"]["level"] != "pending" and saved["flag"]["signals"]
+    for path in sessions[0].iterdir():
+        assert "Asha" not in path.read_text(encoding="utf-8")
+    assert session["thresholds"]["spec_version"] == signals.SPEC_VERSION
+
+    # Joining again without the consent stops the saving.
+    with remote.websocket_connect(f"/ws/{rid}?role=guest&k={guest_key}") as guest:
+        guest.receive_json()
+        local.post(f"/api/rooms/{rid}/answers", json={"start": 0, "end": 30, "text": WORDS23, "question": QUESTION})
+    assert local.get(f"/api/rooms/{rid}/study").json()["consent"] is False
+    assert len(list(sessions[0].iterdir())) == 2
+
+    # The collection kit's calibrate.py reads exactly what the room saved.
+    spec = importlib.util.spec_from_file_location(
+        "study_calibrate", Path(__file__).resolve().parents[1] / "training" / "data-collection" / "calibrate.py")
+    kit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kit)
+    rows = kit.load_sessions(tmp_path)
+    assert [(r["participant"], r["answer"], r["condition"]) for r in rows] == [("P07", 2, "read_script")]
+    assert kit.score_of(rows[0], kit.SIGNALS["ai_text"]["score"]) == saved["signals"]["ai_text"]["ai_probability"]
+    assert kit.score_of(rows[0], kit.SIGNALS["reading"]["score"]) == saved["signals"]["reading"]["reading_probability"]
 
 
 def test_followups_come_from_the_model_through_the_guardrails():

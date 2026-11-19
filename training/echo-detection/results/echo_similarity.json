@@ -1,0 +1,190 @@
+{
+ "what": "echo similarity on HC3: human vs ChatGPT answers against llama3.2 reference answers",
+ "data": "HC3 all.jsonl (CC BY-SA 4.0), answers as transcripts (content/text.py), train_content.py's question split",
+ "embedding_model": "BAAI/bge-small-en-v1.5",
+ "reference_model": "llama3.2",
+ "references": 2,
+ "recipe": {
+  "version": "v1",
+  "system": "You are a helpful assistant. Answer the user's question directly, in plain prose without headings or lists, in about 150 words.",
+  "temperature": 0.7,
+  "max_tokens": 400,
+  "seed": "reference i uses seed i"
+ },
+ "sampling": {
+  "per_source_dev": 100,
+  "per_source_test": 100,
+  "seed": 2026
+ },
+ "fpr_target": 0.05,
+ "thresholds": {
+  "possible": 0.8712,
+  "high": 0.9201,
+  "balanced_cut": 0.8711257492736939,
+  "fpr_5_cut": 0.9200662102230587
+ },
+ "development": {
+  "answers": 1396,
+  "questions": 500,
+  "chatgpt_answers": 711,
+  "human_answers": 685,
+  "roc_auc": 0.8816409498290678,
+  "mean_similarity": {
+   "chatgpt": 0.9068255537027591,
+   "human": 0.8011071213774533
+  },
+  "at_possible": {
+   "balanced_accuracy": 0.8300502017308817,
+   "recall": 0.8396624472573839,
+   "false_positive_rate": 0.17956204379562046
+  },
+  "at_high": {
+   "balanced_accuracy": 0.7311599782356504,
+   "recall": 0.5119549929676512,
+   "false_positive_rate": 0.04963503649635037
+  }
+ },
+ "test": {
+  "answers": 1411,
+  "questions": 500,
+  "chatgpt_answers": 724,
+  "human_answers": 687,
+  "roc_auc": 0.8761007503196699,
+  "mean_similarity": {
+   "chatgpt": 0.9045024204895851,
+   "human": 0.8002324839636624
+  },
+  "at_possible": {
+   "balanced_accuracy": 0.8122280794872413,
+   "recall": 0.8107734806629834,
+   "false_positive_rate": 0.1863173216885008
+  },
+  "at_high": {
+   "balanced_accuracy": 0.7006743226615841,
+   "recall": 0.46685082872928174,
+   "false_positive_rate": 0.06550218340611358
+  },
+  "within_question_auc": 0.9319429198682766,
+  "by_source": {
+   "finance": {
+    "answers": 223,
+    "questions": 100,
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "roc_auc": 0.9312195121951219,
+    "mean_similarity": {
+     "chatgpt": 0.8962211878362111,
+     "human": 0.7804822102191671
+    },
+    "at_possible": {
+     "balanced_accuracy": 0.8936991869918699,
+     "recall": 0.8373983739837398,
+     "false_positive_rate": 0.050000000000000044
+    },
+    "at_high": {
+     "balanced_accuracy": 0.7154471544715447,
+     "recall": 0.43089430894308944,
+     "false_positive_rate": 0.0
+    }
+   },
+   "medicine": {
+    "answers": 204,
+    "questions": 100,
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "roc_auc": 0.9365384615384615,
+    "mean_similarity": {
+     "chatgpt": 0.9051351470334973,
+     "human": 0.7926010983498013
+    },
+    "at_possible": {
+     "balanced_accuracy": 0.8534615384615385,
+     "recall": 0.8269230769230769,
+     "false_positive_rate": 0.12
+    },
+    "at_high": {
+     "balanced_accuracy": 0.6823076923076923,
+     "recall": 0.38461538461538464,
+     "false_positive_rate": 0.020000000000000018
+    }
+   },
+   "open_qa": {
+    "answers": 397,
+    "questions": 100,
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "roc_auc": 0.8605387205387206,
+    "mean_similarity": {
+     "chatgpt": 0.9083249794232928,
+     "human": 0.8185804839605691
+    },
+    "at_possible": {
+     "balanced_accuracy": 0.7626094276094275,
+     "recall": 0.8552188552188552,
+     "false_positive_rate": 0.33000000000000007
+    },
+    "at_high": {
+     "balanced_accuracy": 0.7208922558922559,
+     "recall": 0.5117845117845118,
+     "false_positive_rate": 0.07000000000000006
+    }
+   },
+   "reddit_eli5": {
+    "answers": 387,
+    "questions": 100,
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "roc_auc": 0.9001393728222996,
+    "mean_similarity": {
+     "chatgpt": 0.8722042088995972,
+     "human": 0.773305784722187
+    },
+    "at_possible": {
+     "balanced_accuracy": 0.7460627177700349,
+     "recall": 0.52,
+     "false_positive_rate": 0.027874564459930307
+    },
+    "at_high": {
+     "balanced_accuracy": 0.575,
+     "recall": 0.15,
+     "false_positive_rate": 0.0
+    }
+   },
+   "wiki_csai": {
+    "answers": 200,
+    "questions": 100,
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "roc_auc": 0.7922,
+    "mean_similarity": {
+     "chatgpt": 0.9349755126044422,
+     "human": 0.8865457701481475
+    },
+    "at_possible": {
+     "balanced_accuracy": 0.6100000000000001,
+     "recall": 0.92,
+     "false_positive_rate": 0.7
+    },
+    "at_high": {
+     "balanced_accuracy": 0.71,
+     "recall": 0.78,
+     "false_positive_rate": 0.36
+    }
+   }
+  },
+  "one_reference_roc_auc": 0.8591039590822458
+ },
+ "calibration_rule": "calibrated only if, on test questions, ROC-AUC >= 0.70 and the false-positive rate at `high` <= 10%",
+ "calibrated": true,
+ "speed": {
+  "development": {
+   "generated": 0,
+   "seconds_per_reference": null
+  },
+  "test": {
+   "generated": 0,
+   "seconds_per_reference": null
+  }
+ },
+ "seconds": 286
+}
