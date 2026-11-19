@@ -1,0 +1,40 @@
+id,type,question
+W01,warmup,How has your week been so far?
+W02,warmup,What did you study or work on most recently?
+W03,warmup,What do you like to do outside work or study?
+T01,technical,What is the difference between a process and a thread?
+T02,technical,How does a hash table handle two keys that land in the same bucket?
+T03,technical,What happens when you type a web address into a browser and press enter?
+T04,technical,When would you choose a relational database over a document store?
+T05,technical,What is a race condition and how do you prevent one?
+T06,technical,How does HTTPS keep traffic between a browser and a server private?
+T07,technical,What is the difference between a stack and a queue? Give an example of each in use.
+T08,technical,How would you find out why a web page has become slow?
+T09,technical,What does Big O notation tell you about an algorithm?
+T10,technical,What is caching and what can go wrong with it?
+T11,technical,How does version control help a team work on the same code?
+T12,technical,What is the difference between unit tests and integration tests?
+O01,open,How would you explain machine learning to someone who has never heard of it?
+O02,open,What makes a piece of software easy to use?
+O03,open,How should a small company decide between building a tool and buying one?
+O04,open,What do you think is the biggest risk of relying on AI tools at work?
+O05,open,How would you design a system that recommends books to readers?
+O06,open,What would you change about how students learn programming?
+O07,open,How can a team keep a large codebase understandable over time?
+O08,open,What should a company consider before moving its systems to the cloud?
+O09,open,How would you measure whether a new app feature is a success?
+O10,open,What makes documentation good?
+O11,open,How would you plan a project with an unclear deadline?
+O12,open,Which technology change in the last ten years mattered most and why?
+B01,behavioural,Tell me about a time you had to learn something new quickly.
+B02,behavioural,Describe a disagreement in a team and how it was resolved.
+B03,behavioural,Tell me about a mistake you made and what you did about it.
+B04,behavioural,Describe a project you are proud of and your part in it.
+B05,behavioural,Tell me about a time you had too much to do. How did you decide what to drop?
+B06,behavioural,Describe a time you received critical feedback. What did you change?
+B07,behavioural,Tell me about a time you helped someone who was stuck.
+B08,behavioural,Describe a situation where the requirements changed late. What did you do?
+B09,behavioural,Tell me about a decision you made with incomplete information.
+B10,behavioural,Describe a time you had to explain something technical to a non-technical person.
+B11,behavioural,Tell me about a goal you did not reach. What happened?
+B12,behavioural,Describe how you prepared for an important presentation or exam.

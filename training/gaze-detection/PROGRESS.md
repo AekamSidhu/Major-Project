@@ -30,11 +30,17 @@ the page posts `{"kernelSessionId": N, "fileName": "results/<file>"}` to
    This scores the GazeBase-only network on RitW test people, untouched.
    Add the number to the README's RitW table.
 2. One chart for the README (test balanced accuracy by condition).
-3. Run the full pytest suite once (`python -m pytest -q`); not run since the
-   Kaggle changes.
+3. [x] Run the full pytest suite once (`python -m pytest -q`). Done
+   2026-11-16 on Python 3.11 (mediapipe 0.10.35, torch 2.15 CPU, numpy 2):
+   55 passed with the face model downloaded (`download_model.py`); without
+   it the 3 MediaPipe tests skip (52 passed, 3 skipped). No failures, no
+   code changes needed.
 4. DesktopActivity shows the GazeBase threshold is too strict for real
    desktop reading. Set the threshold from our own recordings (Phase 3),
-   not from test data.
+   not from test data. The collection kit is ready in
+   `training/data-collection` (protocol, consent, randomisation, the room's
+   `--study` mode, and `calibrate.py`, which proposes the reading
+   thresholds split by person).
 
 ## Data on the laptop (outside OneDrive)
 

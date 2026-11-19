@@ -40,9 +40,9 @@ function fakeMedia() {
 }
 
 // One WebSocket to the room; messages are JSON objects with a "type".
-export function connect(room, role, key, name, onMessage) {
+export function connect(room, role, key, name, onMessage, extra = {}) {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const q = new URLSearchParams({ role, k: key, name: name || "" });
+  const q = new URLSearchParams({ role, k: key, name: name || "", ...extra });
   const ws = new WebSocket(`${proto}://${location.host}/ws/${room}?${q}`);
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   return { send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)), ws };

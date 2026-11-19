@@ -79,6 +79,10 @@ jobs:
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
+    # audit-check reports through a check run, which needs write access to checks.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2
