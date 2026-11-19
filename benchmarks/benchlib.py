@@ -298,6 +298,16 @@ def wav_bytes(samples: Sequence[float] | Any, rate: int = 16000) -> bytes:
     return out.getvalue()
 
 
+def wav_samples(path: Path) -> Any:
+    """A 16 kHz mono 16-bit WAV file as float32 samples in [-1, 1]."""
+    import numpy as np
+
+    with wave.open(io.BytesIO(Path(path).read_bytes()), "rb") as w:
+        if (w.getframerate(), w.getnchannels(), w.getsampwidth()) != (16000, 1, 2):
+            raise ValueError(f"{path}: need 16 kHz mono 16-bit PCM")
+        return np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768.0
+
+
 def wav_duration(data: bytes) -> float:
     with wave.open(io.BytesIO(data), "rb") as w:
         return w.getnframes() / float(w.getframerate())
@@ -308,6 +318,52 @@ def load_wav(path: Path) -> bytes:
     if data[:4] != b"RIFF":
         raise ValueError(f"{path} is not a WAV file")
     return data
+
+
+def jpeg_frame(path: Path, max_side: int = 640, quality: int = 80) -> bytes:
+    """An image as the room's host page sends video frames: at most 640 px on the long side, JPEG quality 0.8."""
+    from PIL import Image
+
+    image = Image.open(path).convert("RGB")
+    scale = min(1.0, max_side / max(image.size))
+    if scale < 1.0:
+        image = image.resize((round(image.width * scale), round(image.height * scale)))
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=quality)
+    return out.getvalue()
+
+
+class FrameFeed:
+    """Posts one frame at a time to a gaze endpoint at `fps`, like the host page (never two in flight)."""
+
+    def __init__(self, url: str, frame: bytes, fps: float = 10.0) -> None:
+        import threading
+
+        self.url, self.frame, self.period = url, frame, 1.0 / fps
+        self.latencies_ms: list[float] = []
+        self.face_found = 0
+        self.errors = 0
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="frame-feed")
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            started = time.perf_counter()
+            try:
+                out = post_bytes(self.url, self.frame, "image/jpeg", timeout=30)
+                self.latencies_ms.append((time.perf_counter() - started) * 1000.0)
+                self.face_found += bool(out.get("face_found"))
+            except Exception:  # noqa: BLE001 - counted, the feed goes on
+                self.errors += 1
+            self._stop.wait(max(0.0, self.period - (time.perf_counter() - started)))
+
+    def __enter__(self) -> "FrameFeed":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self._stop.set()
+        self._thread.join(timeout=10)
 
 
 def tmp_dir() -> Path:
