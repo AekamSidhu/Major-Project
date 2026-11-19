@@ -1,0 +1,1419 @@
+{
+ "what": "the spec's fused integrity flag (ai_text + echo similarity) on HC3 test questions",
+ "environment": {
+  "date": "2026-11-19T17:39:52+05:30",
+  "cpu": "13th Gen Intel(R) Core(TM) i9-13900H",
+  "logical_cpus": 20,
+  "ram_gb": 15.7,
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24",
+  "os": "Windows-10-10.0.26300-SP0",
+  "python": "3.11.9",
+  "packages": {
+   "fastembed": "0.9.1",
+   "onnxruntime": "1.32.0",
+   "numpy": "2.4.6",
+   "pandas": "3.1.1",
+   "scikit-learn": "1.9.1"
+  },
+  "repo_commit": "e2efbaa"
+ },
+ "data": "HC3 all.jsonl (CC BY-SA 4.0); train_content.py's question split; calibrate_similarity.py's test sample",
+ "protocol": {
+  "questions": 500,
+  "per_source": 100,
+  "seed": 2038,
+  "references": 2,
+  "reference_model": "llama3.2",
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "thresholds": {
+   "ai_text": {
+    "possible": 0.24939103216004502,
+    "high": 0.4444321836061315
+   },
+   "echo_similarity": {
+    "possible": 0.8712,
+    "high": 0.9201
+   }
+  },
+  "calibrated": {
+   "ai_text": true,
+   "echo_similarity": true
+  },
+  "fusion": "spec/integrity/README.md: high needs a calibrated high signal plus another elevated one"
+ },
+ "answers": 1411,
+ "configs": {
+  "ai_text alone": {
+   "chatgpt_answers": 724,
+   "human_answers": 687,
+   "at_possible": {
+    "detection_rate": 0.9848066298342542,
+    "detection_95ci": [
+     0.973,
+     0.9915
+    ],
+    "false_flag_rate": 0.12954876273653565,
+    "false_flag_95ci": [
+     0.1065,
+     0.1567
+    ],
+    "detected": 713,
+    "false_flags": 89
+   },
+   "at_high": {
+    "detection_rate": 0.9737569060773481,
+    "detection_95ci": [
+     0.9594,
+     0.9831
+    ],
+    "false_flag_rate": 0.06404657933042213,
+    "false_flag_95ci": [
+     0.0481,
+     0.0849
+    ],
+    "detected": 705,
+    "false_flags": 44
+   }
+  },
+  "echo similarity alone": {
+   "chatgpt_answers": 724,
+   "human_answers": 687,
+   "at_possible": {
+    "detection_rate": 0.8107734806629834,
+    "detection_95ci": [
+     0.7806,
+     0.8376
+    ],
+    "false_flag_rate": 0.18631732168850074,
+    "false_flag_95ci": [
+     0.159,
+     0.2171
+    ],
+    "detected": 587,
+    "false_flags": 128
+   },
+   "at_high": {
+    "detection_rate": 0.46685082872928174,
+    "detection_95ci": [
+     0.4308,
+     0.5033
+    ],
+    "false_flag_rate": 0.06550218340611354,
+    "false_flag_95ci": [
+     0.0493,
+     0.0865
+    ],
+    "detected": 338,
+    "false_flags": 45
+   }
+  },
+  "fused (ai_text + echo)": {
+   "chatgpt_answers": 724,
+   "human_answers": 687,
+   "at_possible": {
+    "detection_rate": 0.9958563535911602,
+    "detection_95ci": [
+     0.9879,
+     0.9986
+    ],
+    "false_flag_rate": 0.25036390101892286,
+    "false_flag_95ci": [
+     0.2194,
+     0.2841
+    ],
+    "detected": 721,
+    "false_flags": 172
+   },
+   "at_high": {
+    "detection_rate": 0.7983425414364641,
+    "detection_95ci": [
+     0.7676,
+     0.826
+    ],
+    "false_flag_rate": 0.043668122270742356,
+    "false_flag_95ci": [
+     0.0308,
+     0.0617
+    ],
+    "detected": 578,
+    "false_flags": 30
+   }
+  },
+  "fused, ai_text only available": {
+   "chatgpt_answers": 724,
+   "human_answers": 687,
+   "at_possible": {
+    "detection_rate": 0.9848066298342542,
+    "detection_95ci": [
+     0.973,
+     0.9915
+    ],
+    "false_flag_rate": 0.12954876273653565,
+    "false_flag_95ci": [
+     0.1065,
+     0.1567
+    ],
+    "detected": 713,
+    "false_flags": 89
+   },
+   "at_high": {
+    "detection_rate": 0.0,
+    "detection_95ci": [
+     0.0,
+     0.0053
+    ],
+    "false_flag_rate": 0.0,
+    "false_flag_95ci": [
+     0.0,
+     0.0056
+    ],
+    "detected": 0,
+    "false_flags": 0
+   }
+  },
+  "fused, echo only available": {
+   "chatgpt_answers": 724,
+   "human_answers": 687,
+   "at_possible": {
+    "detection_rate": 0.8107734806629834,
+    "detection_95ci": [
+     0.7806,
+     0.8376
+    ],
+    "false_flag_rate": 0.18631732168850074,
+    "false_flag_95ci": [
+     0.159,
+     0.2171
+    ],
+    "detected": 587,
+    "false_flags": 128
+   },
+   "at_high": {
+    "detection_rate": 0.0,
+    "detection_95ci": [
+     0.0,
+     0.0053
+    ],
+    "false_flag_rate": 0.0,
+    "false_flag_95ci": [
+     0.0,
+     0.0056
+    ],
+    "detected": 0,
+    "false_flags": 0
+   }
+  },
+  "echo similarity alone, 1 reference": {
+   "chatgpt_answers": 724,
+   "human_answers": 687,
+   "at_possible": {
+    "detection_rate": 0.7361878453038674,
+    "detection_95ci": [
+     0.7029,
+     0.767
+    ],
+    "false_flag_rate": 0.1586608442503639,
+    "false_flag_95ci": [
+     0.1332,
+     0.1879
+    ],
+    "detected": 533,
+    "false_flags": 109
+   },
+   "at_high": {
+    "detection_rate": 0.3770718232044199,
+    "detection_95ci": [
+     0.3425,
+     0.4129
+    ],
+    "false_flag_rate": 0.055312954876273655,
+    "false_flag_95ci": [
+     0.0406,
+     0.075
+    ],
+    "detected": 273,
+    "false_flags": 38
+   }
+  },
+  "fused (ai_text + echo, 1 reference)": {
+   "chatgpt_answers": 724,
+   "human_answers": 687,
+   "at_possible": {
+    "detection_rate": 0.9958563535911602,
+    "detection_95ci": [
+     0.9879,
+     0.9986
+    ],
+    "false_flag_rate": 0.23435225618631733,
+    "false_flag_95ci": [
+     0.2042,
+     0.2675
+    ],
+    "detected": 721,
+    "false_flags": 161
+   },
+   "at_high": {
+    "detection_rate": 0.7237569060773481,
+    "detection_95ci": [
+     0.6901,
+     0.7551
+    ],
+    "false_flag_rate": 0.034934497816593885,
+    "false_flag_95ci": [
+     0.0236,
+     0.0515
+    ],
+    "detected": 524,
+    "false_flags": 24
+   }
+  }
+ },
+ "by_source": {
+  "finance": {
+   "ai_text alone": {
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9697,
+      1.0
+     ],
+     "false_flag_rate": 0.06,
+     "false_flag_95ci": [
+      0.0278,
+      0.1248
+     ],
+     "detected": 123,
+     "false_flags": 6
+    },
+    "at_high": {
+     "detection_rate": 0.991869918699187,
+     "detection_95ci": [
+      0.9554,
+      0.9986
+     ],
+     "false_flag_rate": 0.01,
+     "false_flag_95ci": [
+      0.0018,
+      0.0545
+     ],
+     "detected": 122,
+     "false_flags": 1
+    }
+   },
+   "echo similarity alone": {
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.8373983739837398,
+     "detection_95ci": [
+      0.7622,
+      0.8922
+     ],
+     "false_flag_rate": 0.05,
+     "false_flag_95ci": [
+      0.0215,
+      0.1118
+     ],
+     "detected": 103,
+     "false_flags": 5
+    },
+    "at_high": {
+     "detection_rate": 0.43089430894308944,
+     "detection_95ci": [
+      0.3468,
+      0.5192
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 53,
+     "false_flags": 0
+    }
+   },
+   "fused (ai_text + echo)": {
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9697,
+      1.0
+     ],
+     "false_flag_rate": 0.11,
+     "false_flag_95ci": [
+      0.0625,
+      0.1863
+     ],
+     "detected": 123,
+     "false_flags": 11
+    },
+    "at_high": {
+     "detection_rate": 0.8373983739837398,
+     "detection_95ci": [
+      0.7622,
+      0.8922
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 103,
+     "false_flags": 0
+    }
+   },
+   "fused, ai_text only available": {
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9697,
+      1.0
+     ],
+     "false_flag_rate": 0.06,
+     "false_flag_95ci": [
+      0.0278,
+      0.1248
+     ],
+     "detected": 123,
+     "false_flags": 6
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.0303
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "fused, echo only available": {
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.8373983739837398,
+     "detection_95ci": [
+      0.7622,
+      0.8922
+     ],
+     "false_flag_rate": 0.05,
+     "false_flag_95ci": [
+      0.0215,
+      0.1118
+     ],
+     "detected": 103,
+     "false_flags": 5
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.0303
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "echo similarity alone, 1 reference": {
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.7723577235772358,
+     "detection_95ci": [
+      0.6907,
+      0.8375
+     ],
+     "false_flag_rate": 0.04,
+     "false_flag_95ci": [
+      0.0157,
+      0.0984
+     ],
+     "detected": 95,
+     "false_flags": 4
+    },
+    "at_high": {
+     "detection_rate": 0.3170731707317073,
+     "detection_95ci": [
+      0.2414,
+      0.4038
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 39,
+     "false_flags": 0
+    }
+   },
+   "fused (ai_text + echo, 1 reference)": {
+    "chatgpt_answers": 123,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9697,
+      1.0
+     ],
+     "false_flag_rate": 0.1,
+     "false_flag_95ci": [
+      0.0552,
+      0.1744
+     ],
+     "detected": 123,
+     "false_flags": 10
+    },
+    "at_high": {
+     "detection_rate": 0.7723577235772358,
+     "detection_95ci": [
+      0.6907,
+      0.8375
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 95,
+     "false_flags": 0
+    }
+   }
+  },
+  "medicine": {
+   "ai_text alone": {
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9644,
+      1.0
+     ],
+     "false_flag_rate": 0.02,
+     "false_flag_95ci": [
+      0.0055,
+      0.07
+     ],
+     "detected": 104,
+     "false_flags": 2
+    },
+    "at_high": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9644,
+      1.0
+     ],
+     "false_flag_rate": 0.01,
+     "false_flag_95ci": [
+      0.0018,
+      0.0545
+     ],
+     "detected": 104,
+     "false_flags": 1
+    }
+   },
+   "echo similarity alone": {
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.8269230769230769,
+     "detection_95ci": [
+      0.7429,
+      0.8876
+     ],
+     "false_flag_rate": 0.12,
+     "false_flag_95ci": [
+      0.07,
+      0.1981
+     ],
+     "detected": 86,
+     "false_flags": 12
+    },
+    "at_high": {
+     "detection_rate": 0.38461538461538464,
+     "detection_95ci": [
+      0.2968,
+      0.4806
+     ],
+     "false_flag_rate": 0.02,
+     "false_flag_95ci": [
+      0.0055,
+      0.07
+     ],
+     "detected": 40,
+     "false_flags": 2
+    }
+   },
+   "fused (ai_text + echo)": {
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9644,
+      1.0
+     ],
+     "false_flag_rate": 0.14,
+     "false_flag_95ci": [
+      0.0853,
+      0.2214
+     ],
+     "detected": 104,
+     "false_flags": 14
+    },
+    "at_high": {
+     "detection_rate": 0.8269230769230769,
+     "detection_95ci": [
+      0.7429,
+      0.8876
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 86,
+     "false_flags": 0
+    }
+   },
+   "fused, ai_text only available": {
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9644,
+      1.0
+     ],
+     "false_flag_rate": 0.02,
+     "false_flag_95ci": [
+      0.0055,
+      0.07
+     ],
+     "detected": 104,
+     "false_flags": 2
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.0356
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "fused, echo only available": {
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.8269230769230769,
+     "detection_95ci": [
+      0.7429,
+      0.8876
+     ],
+     "false_flag_rate": 0.12,
+     "false_flag_95ci": [
+      0.07,
+      0.1981
+     ],
+     "detected": 86,
+     "false_flags": 12
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.0356
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "echo similarity alone, 1 reference": {
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.7403846153846154,
+     "detection_95ci": [
+      0.6486,
+      0.815
+     ],
+     "false_flag_rate": 0.12,
+     "false_flag_95ci": [
+      0.07,
+      0.1981
+     ],
+     "detected": 77,
+     "false_flags": 12
+    },
+    "at_high": {
+     "detection_rate": 0.3173076923076923,
+     "detection_95ci": [
+      0.2357,
+      0.4119
+     ],
+     "false_flag_rate": 0.01,
+     "false_flag_95ci": [
+      0.0018,
+      0.0545
+     ],
+     "detected": 33,
+     "false_flags": 1
+    }
+   },
+   "fused (ai_text + echo, 1 reference)": {
+    "chatgpt_answers": 104,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.9644,
+      1.0
+     ],
+     "false_flag_rate": 0.14,
+     "false_flag_95ci": [
+      0.0853,
+      0.2214
+     ],
+     "detected": 104,
+     "false_flags": 14
+    },
+    "at_high": {
+     "detection_rate": 0.7403846153846154,
+     "detection_95ci": [
+      0.6486,
+      0.815
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 77,
+     "false_flags": 0
+    }
+   }
+  },
+  "open_qa": {
+   "ai_text alone": {
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.9730639730639731,
+     "detection_95ci": [
+      0.9478,
+      0.9863
+     ],
+     "false_flag_rate": 0.32,
+     "false_flag_95ci": [
+      0.2367,
+      0.4166
+     ],
+     "detected": 289,
+     "false_flags": 32
+    },
+    "at_high": {
+     "detection_rate": 0.9528619528619529,
+     "detection_95ci": [
+      0.9224,
+      0.9717
+     ],
+     "false_flag_rate": 0.15,
+     "false_flag_95ci": [
+      0.0931,
+      0.2328
+     ],
+     "detected": 283,
+     "false_flags": 15
+    }
+   },
+   "echo similarity alone": {
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.8552188552188552,
+     "detection_95ci": [
+      0.8107,
+      0.8907
+     ],
+     "false_flag_rate": 0.33,
+     "false_flag_95ci": [
+      0.2456,
+      0.4269
+     ],
+     "detected": 254,
+     "false_flags": 33
+    },
+    "at_high": {
+     "detection_rate": 0.5117845117845118,
+     "detection_95ci": [
+      0.4551,
+      0.5681
+     ],
+     "false_flag_rate": 0.07,
+     "false_flag_95ci": [
+      0.0343,
+      0.1375
+     ],
+     "detected": 152,
+     "false_flags": 7
+    }
+   },
+   "fused (ai_text + echo)": {
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.9966329966329966,
+     "detection_95ci": [
+      0.9812,
+      0.9994
+     ],
+     "false_flag_rate": 0.52,
+     "false_flag_95ci": [
+      0.4232,
+      0.6154
+     ],
+     "detected": 296,
+     "false_flags": 52
+    },
+    "at_high": {
+     "detection_rate": 0.8282828282828283,
+     "detection_95ci": [
+      0.7813,
+      0.8669
+     ],
+     "false_flag_rate": 0.08,
+     "false_flag_95ci": [
+      0.0411,
+      0.15
+     ],
+     "detected": 246,
+     "false_flags": 8
+    }
+   },
+   "fused, ai_text only available": {
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.9730639730639731,
+     "detection_95ci": [
+      0.9478,
+      0.9863
+     ],
+     "false_flag_rate": 0.32,
+     "false_flag_95ci": [
+      0.2367,
+      0.4166
+     ],
+     "detected": 289,
+     "false_flags": 32
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.0128
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "fused, echo only available": {
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.8552188552188552,
+     "detection_95ci": [
+      0.8107,
+      0.8907
+     ],
+     "false_flag_rate": 0.33,
+     "false_flag_95ci": [
+      0.2456,
+      0.4269
+     ],
+     "detected": 254,
+     "false_flags": 33
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.0128
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "echo similarity alone, 1 reference": {
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.797979797979798,
+     "detection_95ci": [
+      0.7486,
+      0.8397
+     ],
+     "false_flag_rate": 0.23,
+     "false_flag_95ci": [
+      0.1584,
+      0.3215
+     ],
+     "detected": 237,
+     "false_flags": 23
+    },
+    "at_high": {
+     "detection_rate": 0.4208754208754209,
+     "detection_95ci": [
+      0.3661,
+      0.4777
+     ],
+     "false_flag_rate": 0.04,
+     "false_flag_95ci": [
+      0.0157,
+      0.0984
+     ],
+     "detected": 125,
+     "false_flags": 4
+    }
+   },
+   "fused (ai_text + echo, 1 reference)": {
+    "chatgpt_answers": 297,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.9966329966329966,
+     "detection_95ci": [
+      0.9812,
+      0.9994
+     ],
+     "false_flag_rate": 0.47,
+     "false_flag_95ci": [
+      0.3751,
+      0.5671
+     ],
+     "detected": 296,
+     "false_flags": 47
+    },
+    "at_high": {
+     "detection_rate": 0.7710437710437711,
+     "detection_95ci": [
+      0.72,
+      0.8152
+     ],
+     "false_flag_rate": 0.03,
+     "false_flag_95ci": [
+      0.0103,
+      0.0845
+     ],
+     "detected": 229,
+     "false_flags": 3
+    }
+   }
+  },
+  "reddit_eli5": {
+   "ai_text alone": {
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "at_possible": {
+     "detection_rate": 0.97,
+     "detection_95ci": [
+      0.9155,
+      0.9897
+     ],
+     "false_flag_rate": 0.027874564459930314,
+     "false_flag_95ci": [
+      0.0142,
+      0.054
+     ],
+     "detected": 97,
+     "false_flags": 8
+    },
+    "at_high": {
+     "detection_rate": 0.96,
+     "detection_95ci": [
+      0.9016,
+      0.9843
+     ],
+     "false_flag_rate": 0.003484320557491289,
+     "false_flag_95ci": [
+      0.0006,
+      0.0195
+     ],
+     "detected": 96,
+     "false_flags": 1
+    }
+   },
+   "echo similarity alone": {
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "at_possible": {
+     "detection_rate": 0.52,
+     "detection_95ci": [
+      0.4232,
+      0.6154
+     ],
+     "false_flag_rate": 0.027874564459930314,
+     "false_flag_95ci": [
+      0.0142,
+      0.054
+     ],
+     "detected": 52,
+     "false_flags": 8
+    },
+    "at_high": {
+     "detection_rate": 0.15,
+     "detection_95ci": [
+      0.0931,
+      0.2328
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.0132
+     ],
+     "detected": 15,
+     "false_flags": 0
+    }
+   },
+   "fused (ai_text + echo)": {
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "at_possible": {
+     "detection_rate": 0.98,
+     "detection_95ci": [
+      0.93,
+      0.9945
+     ],
+     "false_flag_rate": 0.05226480836236934,
+     "false_flag_95ci": [
+      0.0319,
+      0.0844
+     ],
+     "detected": 98,
+     "false_flags": 15
+    },
+    "at_high": {
+     "detection_rate": 0.51,
+     "detection_95ci": [
+      0.4135,
+      0.6058
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.0132
+     ],
+     "detected": 51,
+     "false_flags": 0
+    }
+   },
+   "fused, ai_text only available": {
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "at_possible": {
+     "detection_rate": 0.97,
+     "detection_95ci": [
+      0.9155,
+      0.9897
+     ],
+     "false_flag_rate": 0.027874564459930314,
+     "false_flag_95ci": [
+      0.0142,
+      0.054
+     ],
+     "detected": 97,
+     "false_flags": 8
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.037
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.0132
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "fused, echo only available": {
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "at_possible": {
+     "detection_rate": 0.52,
+     "detection_95ci": [
+      0.4232,
+      0.6154
+     ],
+     "false_flag_rate": 0.027874564459930314,
+     "false_flag_95ci": [
+      0.0142,
+      0.054
+     ],
+     "detected": 52,
+     "false_flags": 8
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.037
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.0132
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "echo similarity alone, 1 reference": {
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "at_possible": {
+     "detection_rate": 0.34,
+     "detection_95ci": [
+      0.2546,
+      0.4372
+     ],
+     "false_flag_rate": 0.010452961672473868,
+     "false_flag_95ci": [
+      0.0036,
+      0.0303
+     ],
+     "detected": 34,
+     "false_flags": 3
+    },
+    "at_high": {
+     "detection_rate": 0.07,
+     "detection_95ci": [
+      0.0343,
+      0.1375
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.0132
+     ],
+     "detected": 7,
+     "false_flags": 0
+    }
+   },
+   "fused (ai_text + echo, 1 reference)": {
+    "chatgpt_answers": 100,
+    "human_answers": 287,
+    "at_possible": {
+     "detection_rate": 0.98,
+     "detection_95ci": [
+      0.93,
+      0.9945
+     ],
+     "false_flag_rate": 0.03484320557491289,
+     "false_flag_95ci": [
+      0.019,
+      0.0629
+     ],
+     "detected": 98,
+     "false_flags": 10
+    },
+    "at_high": {
+     "detection_rate": 0.33,
+     "detection_95ci": [
+      0.2456,
+      0.4269
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.0132
+     ],
+     "detected": 33,
+     "false_flags": 0
+    }
+   }
+  },
+  "wiki_csai": {
+   "ai_text alone": {
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.963,
+      1.0
+     ],
+     "false_flag_rate": 0.41,
+     "false_flag_95ci": [
+      0.3187,
+      0.508
+     ],
+     "detected": 100,
+     "false_flags": 41
+    },
+    "at_high": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.963,
+      1.0
+     ],
+     "false_flag_rate": 0.26,
+     "false_flag_95ci": [
+      0.184,
+      0.3537
+     ],
+     "detected": 100,
+     "false_flags": 26
+    }
+   },
+   "echo similarity alone": {
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.92,
+     "detection_95ci": [
+      0.85,
+      0.9589
+     ],
+     "false_flag_rate": 0.7,
+     "false_flag_95ci": [
+      0.6041,
+      0.7811
+     ],
+     "detected": 92,
+     "false_flags": 70
+    },
+    "at_high": {
+     "detection_rate": 0.78,
+     "detection_95ci": [
+      0.6893,
+      0.85
+     ],
+     "false_flag_rate": 0.36,
+     "false_flag_95ci": [
+      0.2727,
+      0.4576
+     ],
+     "detected": 78,
+     "false_flags": 36
+    }
+   },
+   "fused (ai_text + echo)": {
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.963,
+      1.0
+     ],
+     "false_flag_rate": 0.8,
+     "false_flag_95ci": [
+      0.7112,
+      0.8666
+     ],
+     "detected": 100,
+     "false_flags": 80
+    },
+    "at_high": {
+     "detection_rate": 0.92,
+     "detection_95ci": [
+      0.85,
+      0.9589
+     ],
+     "false_flag_rate": 0.22,
+     "false_flag_95ci": [
+      0.15,
+      0.3107
+     ],
+     "detected": 92,
+     "false_flags": 22
+    }
+   },
+   "fused, ai_text only available": {
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.963,
+      1.0
+     ],
+     "false_flag_rate": 0.41,
+     "false_flag_95ci": [
+      0.3187,
+      0.508
+     ],
+     "detected": 100,
+     "false_flags": 41
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.037
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "fused, echo only available": {
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.92,
+     "detection_95ci": [
+      0.85,
+      0.9589
+     ],
+     "false_flag_rate": 0.7,
+     "false_flag_95ci": [
+      0.6041,
+      0.7811
+     ],
+     "detected": 92,
+     "false_flags": 70
+    },
+    "at_high": {
+     "detection_rate": 0.0,
+     "detection_95ci": [
+      0.0,
+      0.037
+     ],
+     "false_flag_rate": 0.0,
+     "false_flag_95ci": [
+      0.0,
+      0.037
+     ],
+     "detected": 0,
+     "false_flags": 0
+    }
+   },
+   "echo similarity alone, 1 reference": {
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 0.9,
+     "detection_95ci": [
+      0.8256,
+      0.9448
+     ],
+     "false_flag_rate": 0.67,
+     "false_flag_95ci": [
+      0.5731,
+      0.7544
+     ],
+     "detected": 90,
+     "false_flags": 67
+    },
+    "at_high": {
+     "detection_rate": 0.69,
+     "detection_95ci": [
+      0.5937,
+      0.7722
+     ],
+     "false_flag_rate": 0.33,
+     "false_flag_95ci": [
+      0.2456,
+      0.4269
+     ],
+     "detected": 69,
+     "false_flags": 33
+    }
+   },
+   "fused (ai_text + echo, 1 reference)": {
+    "chatgpt_answers": 100,
+    "human_answers": 100,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "detection_95ci": [
+      0.963,
+      1.0
+     ],
+     "false_flag_rate": 0.8,
+     "false_flag_95ci": [
+      0.7112,
+      0.8666
+     ],
+     "detected": 100,
+     "false_flags": 80
+    },
+    "at_high": {
+     "detection_rate": 0.9,
+     "detection_95ci": [
+      0.8256,
+      0.9448
+     ],
+     "false_flag_rate": 0.21,
+     "false_flag_95ci": [
+      0.1417,
+      0.2998
+     ],
+     "detected": 90,
+     "false_flags": 21
+    }
+   }
+  }
+ },
+ "roc_auc": {
+  "ai_text": 0.9929652504684471,
+  "echo similarity (2 references)": 0.8761007503196699,
+  "echo similarity (1 reference)": 0.8591039590822458
+ },
+ "false_flags_by_cause": {
+  "possible: ai_text low, echo possible": 60,
+  "possible: ai_text possible, echo low": 23,
+  "possible: ai_text low, echo high": 23,
+  "possible: ai_text high, echo low": 21,
+  "possible: ai_text possible, echo possible": 15,
+  "high: ai_text high, echo high": 15,
+  "high: ai_text high, echo possible": 8,
+  "high: ai_text possible, echo high": 7
+ },
+ "seconds": 116
+}
