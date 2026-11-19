@@ -8,6 +8,7 @@ pub mod assistant;
 pub mod dev;
 pub mod devices;
 pub mod history;
+pub mod integrity;
 pub mod meeting;
 pub mod overlay;
 pub mod privacy;

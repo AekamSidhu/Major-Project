@@ -52,10 +52,10 @@ pub async fn set_screen_capture(
             "Choose what to capture first.".into(),
         ));
     }
-    if let Some(s) = &source {
-        if s.id.len() > 256 || s.label.chars().count() > 300 {
-            return Err(CoreError::InvalidInput("Invalid screen source.".into()));
-        }
+    if let Some(s) = &source
+        && (s.id.len() > 256 || s.label.chars().count() > 300)
+    {
+        return Err(CoreError::InvalidInput("Invalid screen source.".into()));
     }
     state
         .inner()

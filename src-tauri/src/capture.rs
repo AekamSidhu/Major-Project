@@ -336,10 +336,10 @@ impl CaptureManager {
         let inner = self.inner.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Duration::from_secs(AUDIO_TEST_SECONDS)).await;
-            if current.load(Ordering::SeqCst) == generation {
-                if let Some(c) = inner.lock().test.take() {
-                    c.stop();
-                }
+            if current.load(Ordering::SeqCst) == generation
+                && let Some(c) = inner.lock().test.take()
+            {
+                c.stop();
             }
         });
         Ok(())

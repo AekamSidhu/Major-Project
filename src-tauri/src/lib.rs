@@ -60,10 +60,10 @@ pub fn run() {
                 // OpenMeet lives in the tray: closing a window hides it.
                 api.prevent_close();
                 let _ = window.hide();
-                if window.label() == windows::OVERLAY {
-                    if let Some(state) = window.app_handle().try_state::<Arc<AppState>>() {
-                        state.overlay.hide();
-                    }
+                if window.label() == windows::OVERLAY
+                    && let Some(state) = window.app_handle().try_state::<Arc<AppState>>()
+                {
+                    state.overlay.hide();
                 }
             }
         })
@@ -84,6 +84,8 @@ pub fn run() {
             commands::providers::list_models,
             commands::providers::get_data_flow,
             commands::providers::get_local_ai_status,
+            commands::integrity::get_integrity_status,
+            commands::integrity::preview_integrity_region,
             commands::providers::start_local_ai,
             commands::providers::stop_local_ai,
             commands::devices::list_audio_devices,
@@ -146,11 +148,11 @@ pub fn run() {
         .expect("error while building OpenMeet");
 
     app.run(|app, event| {
-        if let RunEvent::Exit = event {
-            if let Some(state) = app.try_state::<Arc<AppState>>() {
-                state.capture.stop_all(&state.engine);
-                state.local_ai.stop();
-            }
+        if let RunEvent::Exit = event
+            && let Some(state) = app.try_state::<Arc<AppState>>()
+        {
+            state.capture.stop_all(&state.engine);
+            state.local_ai.stop();
         }
     });
 }

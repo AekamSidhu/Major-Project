@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ids::Id;
+use crate::integrity::IntegrityFlag;
 
 // ---------------------------------------------------------------------------
 // Modes, speakers and sources
@@ -119,6 +120,25 @@ pub struct TranscriptDraft {
     pub confidence: Option<f32>,
     /// Optional explicit speaker override (simulation / diarizing providers).
     pub speaker_role: Option<SpeakerRole>,
+    /// Word timestamps (Unix milliseconds) when the recognizer provided them
+    /// (requested only while the answer-integrity delivery signal is on).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub words: Option<Vec<WordTiming>>,
+}
+
+/// One recognized word with its timing in milliseconds. In a
+/// [`TranscriptDraft`] the times are Unix milliseconds; in a transcription
+/// result they are relative to the start of the uploaded audio.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WordTiming {
+    pub word: String,
+    #[ts(type = "number")]
+    pub start_ms: i64,
+    #[ts(type = "number")]
+    pub end_ms: i64,
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +398,10 @@ pub enum RequestKind {
     QuestionClassification,
     TopicAnalysis,
     ScreenAnalysis,
+    /// Answer-integrity check of one candidate answer (background).
+    IntegrityCheck,
+    /// LLM reference answer for the echo-similarity signal (background).
+    IntegrityReference,
 }
 
 /// Logical UI slot a request renders into. Starting a request in a slot
@@ -773,6 +797,9 @@ pub struct MeetingRecord {
     pub observations: Vec<ScreenObservation>,
     pub action_items: Vec<ActionItem>,
     pub summary: Option<MeetingSummary>,
+    /// Answer-integrity flags (interviewer mode, when the check was on).
+    #[serde(default)]
+    pub integrity_flags: Vec<IntegrityFlag>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -813,6 +840,8 @@ pub enum Component {
     Overlay,
     CapturePrivacy,
     Hotkeys,
+    /// The answer-integrity check (interviewer mode, opt-in).
+    Integrity,
 }
 
 impl Component {
@@ -831,6 +860,7 @@ impl Component {
             Component::Overlay => "Overlay",
             Component::CapturePrivacy => "Capture privacy",
             Component::Hotkeys => "Hotkeys",
+            Component::Integrity => "Answer integrity",
         }
     }
 }

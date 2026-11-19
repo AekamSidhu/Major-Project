@@ -657,19 +657,21 @@ pub fn parse_retry_after(headers: &HeaderMap, now: SystemTime) -> Option<u64> {
             .and_then(|v| v.to_str().ok())
             .map(str::trim)
     };
-    if let Some(ms) = header("retry-after-ms").and_then(|v| v.parse::<f64>().ok()) {
-        if ms.is_finite() && ms >= 0.0 {
-            return Some((ms / 1000.0).ceil() as u64);
-        }
+    if let Some(ms) = header("retry-after-ms").and_then(|v| v.parse::<f64>().ok())
+        && ms.is_finite()
+        && ms >= 0.0
+    {
+        return Some((ms / 1000.0).ceil() as u64);
     }
     let value = headers.get(RETRY_AFTER)?.to_str().ok()?.trim();
     if let Ok(secs) = value.parse::<u64>() {
         return Some(secs);
     }
-    if let Ok(secs) = value.parse::<f64>() {
-        if secs.is_finite() && secs >= 0.0 {
-            return Some(secs.ceil() as u64);
-        }
+    if let Ok(secs) = value.parse::<f64>()
+        && secs.is_finite()
+        && secs >= 0.0
+    {
+        return Some(secs.ceil() as u64);
     }
     let at = parse_http_date(value)?;
     let now = now.duration_since(UNIX_EPOCH).ok()?.as_secs();
@@ -755,10 +757,10 @@ pub(crate) fn parse_token_limit(message: &str) -> Option<u32> {
                 .take_while(|c| c.is_ascii_digit() || *c == ',')
                 .filter(|c| *c != ',')
                 .collect();
-            if let Ok(n) = digits.parse::<u32>() {
-                if n > 0 {
-                    return Some(n);
-                }
+            if let Ok(n) = digits.parse::<u32>()
+                && n > 0
+            {
+                return Some(n);
             }
             search = after;
         }

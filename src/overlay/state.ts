@@ -17,6 +17,7 @@ import type {
   DetectedQuestion,
   EngineSnapshot,
   FollowUpQuestion,
+  IntegrityFlag,
   MeetingEvent,
   MeetingState,
   Mode,
@@ -32,6 +33,7 @@ import type {
   VoiceCommand,
 } from "@/bindings";
 import { categoryLabel } from "@/lib/format";
+import { isElevated } from "@/lib/integrity";
 
 export const MAX_RETIRED = 64;
 export const MAX_NOTICES = 3;
@@ -114,6 +116,10 @@ export interface OverlayState {
   levels: Partial<Record<AudioSourceKind, number>>;
   notices: Notice[];
   noticeSeq: number;
+  /** Interviewer mode: the latest answer-integrity check of this meeting. */
+  integrity: IntegrityFlag | null;
+  /** `id:revision` of a check the user dismissed (a newer revision shows again). */
+  integrityDismissed: string | null;
 }
 
 /** Actions that originate in the overlay itself (not from the backend). */
@@ -123,7 +129,8 @@ export type LocalAction =
   | { type: "LOCAL_NOTICE"; level: NoticeLevel; message: string }
   | { type: "LOCAL_DISMISS_NOTICE"; id: number }
   | { type: "LOCAL_PRIVACY_STATUS"; status: CapturePrivacyStatus }
-  | { type: "LOCAL_CLEAR_STOPPED" };
+  | { type: "LOCAL_CLEAR_STOPPED" }
+  | { type: "LOCAL_DISMISS_INTEGRITY" };
 
 export type OverlayAction = MeetingEvent | LocalAction;
 
@@ -152,6 +159,8 @@ export const INITIAL_STATE: OverlayState = {
   levels: {},
   notices: [],
   noticeSeq: 0,
+  integrity: null,
+  integrityDismissed: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -463,6 +472,8 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
         suggestedNextTopic: null,
         pinned: [],
         levels: {},
+        integrity: null,
+        integrityDismissed: null,
       };
 
     case "MEETING_STATE_CHANGED": {
@@ -490,6 +501,8 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
           suggestedNextTopic: null,
           pinned: [],
           levels: {},
+          integrity: null,
+          integrityDismissed: null,
         };
       }
       const ended = ev.state === "idle" || ev.state === "completed";
@@ -590,6 +603,26 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
     case "LOCAL_DISMISS_QUESTION":
       return state.pendingQuestion ? { ...state, pendingQuestion: null } : state;
 
+    // -- answer integrity (interviewer mode) ----------------------------------
+    case "INTEGRITY_CHECKED": {
+      const f = ev.flag;
+      if (state.meetingId && f.meetingId !== state.meetingId) return state;
+      const cur = state.integrity;
+      // A re-check of the same answer never goes back to an older revision,
+      // and a check of an earlier answer never replaces a later one.
+      if (cur && cur.id === f.id && cur.revision > f.revision) return state;
+      if (cur && cur.id !== f.id && cur.answerStartMs > f.answerStartMs) return state;
+      return { ...state, integrity: f };
+    }
+
+    case "LOCAL_DISMISS_INTEGRITY":
+      return state.integrity
+        ? {
+            ...state,
+            integrityDismissed: `${state.integrity.id}:${state.integrity.revision}`,
+          }
+        : state;
+
     // Not rendered by the overlay.
     case "SCREEN_UPDATED":
     case "CLAIMS_EXTRACTED":
@@ -682,7 +715,17 @@ export function hydrateFromSnapshot(prev: OverlayState, s: EngineSnapshot): Over
     components: s.components,
     pinned,
     levels: {},
+    integrity: s.integrityFlags[0] ?? null,
+    integrityDismissed: prev.integrityDismissed,
   };
+}
+
+/** The integrity check to show (interviewer mode, not dismissed). */
+export function visibleIntegrity(s: OverlayState): IntegrityFlag | null {
+  const f = s.integrity;
+  if (!f || s.mode !== "interviewer") return null;
+  if (s.integrityDismissed === `${f.id}:${f.revision}`) return null;
+  return f;
 }
 
 /**
@@ -775,6 +818,8 @@ export function hudLabel(s: OverlayState): string {
   if (p && p.state === "streaming") {
     return p.kind === "candidate_answer" ? `Q detected${suffix}` : "Answering…";
   }
+  const flag = visibleIntegrity(s);
+  if (flag && isElevated(flag.level)) return "Answer flagged · worth a follow-up";
   if (s.mode === "interviewer" && s.followups && s.followups.questions.length > 0) {
     const n = s.followups.questions.length;
     return `${n} follow-up${n === 1 ? "" : "s"}`;
@@ -837,6 +882,7 @@ const COMPONENT_LABELS: Record<Component, string> = {
   overlay: "Overlay",
   capture_privacy: "Capture privacy",
   hotkeys: "Hotkeys",
+  integrity: "Answer integrity",
 };
 
 export function componentLabel(c: Component): string {
@@ -861,6 +907,8 @@ export function componentSection(c: Component): string {
       return "settings/shortcuts";
     case "capture_privacy":
       return "privacy";
+    case "integrity":
+      return "settings/integrity";
     default:
       return "diagnostics";
   }

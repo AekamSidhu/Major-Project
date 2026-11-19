@@ -21,6 +21,9 @@ turn every part of it off or delete it.
   says "No meeting data leaves this device." when that is actually true.
 * Meeting data is kept for **7 days by default**, can be kept in memory only,
   and can be deleted with one click.
+* The interviewer-mode **answer-integrity check is off by default**. When you
+  turn it on, it runs locally by default too (see
+  [Answer-integrity check](#answer-integrity-check-interviewer-mode)).
 
 ---
 
@@ -33,6 +36,7 @@ turn every part of it off or delete it.
 | Screen frames | Only while a meeting is active **and** you enabled screen context for a specific display / window / application / region, or when you press *Capture screen* | **Off** |
 | Text you type into *Ask OpenMeet* | When you submit it | — |
 | Your profile notes (background, role, planned topics, instructions) | Only what you type into Settings → Profile | Empty |
+| The candidate's video region (screen pixels of the meeting window) | Only in interviewer meetings with the answer-integrity check **and** its Reading signal on and a region set; captured by the local AI sidecar at 10 frames per second and turned into gaze points | **Off** |
 
 OpenMeet does **not**: record keystrokes, inject code into meeting apps, read
 other applications' memory, capture audio or screen outside a meeting, or use
@@ -55,6 +59,8 @@ Screen (opt-in) ────────────▶ OCR / Vision  ──▶ 
 | Screen understanding | Windows OCR (Windows.Media.Ocr), Ollama vision models | OpenAI, Anthropic vision |
 | Embeddings (retrieval) | Built-in hashing embeddings (default), local AI sidecar (fastembed), Ollama | OpenAI |
 | Context engine, question detection, topic tracking, storage | Always local | — |
+| Answer-integrity check (opt-in): AI-written text, reading/gaze | Local AI sidecar | A sidecar on another machine (remote, blocked in local-only mode) |
+| Answer-integrity check: reference answers, answer embeddings | The configured LLM and embedder when they are local | The configured LLM / embedder when they are cloud |
 
 A provider is classified as **local** only if its endpoint is on this machine
 (`localhost`, `127.0.0.0/8`, `::1`). An Ollama or LM Studio server on another
@@ -78,6 +84,12 @@ HTTPS, with your API key:
   only when the screen content changed meaningfully.
 * **Embedding provider** (only if you choose a cloud embedding model):
   transcript snippets and observations to compute retrieval vectors.
+* **Answer-integrity check** (only in interviewer meetings with the check on):
+  the LLM receives the interviewer's question to write reference answers, and
+  the embedder receives the candidate's answer and those reference answers.
+  The echo signal only runs with the local embedding model named in
+  `spec/integrity/thresholds.json`, so in practice only the question can reach
+  a cloud LLM. The Privacy page lists these parts with their location.
 
 Each provider's own privacy policy and data-retention terms apply to what it
 receives. Check them before using a cloud provider with confidential meetings.
@@ -110,7 +122,11 @@ Stored per meeting (subject to the retention policy):
 * topics, extracted claims, action items, the post-meeting summary,
 * screen **observations** (structured text descriptions and recognized text —
   not images),
-* retrieval embeddings (numeric vectors derived from the above).
+* retrieval embeddings (numeric vectors derived from the above),
+* answer-integrity flags, when the check was on: per checked answer, its time
+  range, the question text, the level of each signal and its evidence lines
+  (for example "AI-written text score 0.91 (high)"). No video frames and no
+  gaze samples.
 
 Also stored: your settings (including profile notes) and screen privacy rules.
 
@@ -142,7 +158,8 @@ removed content is overwritten rather than left in free pages.
 * One meeting: History → meeting → **Delete**.
 * Everything: Privacy → **Delete all meeting data** (keeps settings and privacy
   rules). This removes all meetings, transcripts, suggestions, summaries,
-  observations, embeddings and kept screenshots, then compacts the database.
+  observations, embeddings, answer-integrity flags and kept screenshots, then
+  compacts the database.
 * API keys: Settings → AI providers → **Remove** next to each key (removes it
   from the OS credential store).
 * Complete removal: uninstall OpenMeet and delete the data folder listed above
@@ -159,6 +176,7 @@ You never have to hunt through settings to stop processing:
 | Disable screen processing | Leave screen context off (default), or Home → live meeting → Screen toggle, or Settings → Screen context |
 | Disable audio processing | Start a meeting with microphone and system audio off (manual *Ask OpenMeet* still works), or Settings → Transcription & audio |
 | Disable cloud processing | Privacy → **Local-only mode** |
+| Disable the answer-integrity check | Settings → Answer integrity (off by default; each signal can be turned off on its own). Pause and emergency stop also stop its video-region capture |
 | Switch providers | Settings → AI providers / Transcription |
 
 The main window always shows whether a meeting is capturing ("Meeting in
@@ -199,6 +217,33 @@ while you move the overlay into view by other means. OpenMeet does not and will
 not use undocumented techniques, driver hooks or anything designed to defeat
 security, proctoring, DRM or anti-cheat software.
 
+## Answer-integrity check (interviewer mode)
+
+An opt-in check, **off by default**, for interviewers: after each candidate
+answer OpenMeet computes four signals and shows a private flag with its
+evidence in the overlay. A flag is a reason to ask a follow-up question,
+**never a verdict**; OpenMeet does not score, rank or decide about anyone.
+Details: [docs/INTEGRITY.md](docs/INTEGRITY.md).
+
+| Part | Data it uses | Where it runs |
+|------|--------------|---------------|
+| AI-written text | The answer's transcript | Local AI sidecar (`POST /v1/integrity/echo`); the text is not stored or logged there |
+| Reading | Frames of the candidate's video region, turned into one gaze point each and dropped; gaze points kept **in memory for at most ten minutes** and reset when the meeting ends | Local AI sidecar (screen capture of the region you set, 10 fps) |
+| Echo of an LLM answer | The interviewer's question (to the LLM), the answer and the reference answers, normalised to lower-case words (to the embedder) | Your configured LLM and embedder — local or cloud, shown on the Privacy page |
+| Delivery | Transcript timings (and word timestamps, requested only while this signal is on) | Inside OpenMeet |
+
+* Video-region capture runs only while an interviewer meeting with the
+  Reading signal is active; it stops on pause, emergency stop, mode change,
+  when you turn the check off and at the end of the meeting.
+* The region preview in Settings is captured on demand, shown once and not
+  stored; screen privacy rules apply to it.
+* Flags are meeting data: they follow the retention policy, appear in History
+  and export, and are deleted with the meeting or with *Delete all meeting
+  data*.
+* **Tell the candidate.** Analysing a candidate's answers and eye movements
+  may require their consent and may be regulated where you are. The settings
+  page reminds you of this; following the rules is your responsibility.
+
 ## 8. Logs
 
 Logs contain identifiers, counts, sizes, durations and error kinds only — never
@@ -218,7 +263,8 @@ make capture visible and controllable, not hidden:
   interview or exam that forbids it),
 * in interviewer mode, OpenMeet helps you ask better questions and take notes —
   it does not score, rank or make hiring decisions about anyone; the human
-  decides.
+  decides. The optional answer-integrity check only raises signals with their
+  evidence; tell candidates before using it.
 
 ## 10. Questions
 

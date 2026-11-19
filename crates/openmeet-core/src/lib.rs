@@ -11,6 +11,7 @@ pub mod audio;
 pub mod error;
 pub mod events;
 pub mod ids;
+pub mod integrity;
 pub mod ipc;
 pub mod providers;
 pub mod settings;
