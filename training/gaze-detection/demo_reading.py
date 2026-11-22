@@ -260,25 +260,85 @@ def main():
 
 
 def score_window_rule(window: np.ndarray) -> float:
-    """Simple rule-based scoring fallback when ONNX is not used."""
+    """Rule-based reading score: detects horizontal sweep+return patterns.
+
+    Reading produces a sawtooth in x: sustained sweep across (5+ frames),
+    quick return saccade, then another sweep. Works for both L→R and R→L
+    (flipped screens). Also detects alternating-direction scanning (zigzag).
+    Requires at least 2 full oscillation cycles to flag as reading.
+    """
     valid = np.isfinite(window).all(axis=1)
     if valid.sum() < 60:
         return 0.0
     x = window[valid, 0]
     dx = np.diff(x)
-    positive_runs = 0
+
+    min_sweep_frames = 5
+    min_sweep_range = 0.05
+
+    # Find all sustained sweeps (direction, start_x, end_x)
+    sweeps: list[tuple[int, float, float]] = []
     run_len = 0
-    for d in dx:
-        if d > 0.001:
-            run_len += 1
+    run_dir = 0
+    run_start_x = x[0]
+    for i, d in enumerate(dx):
+        if abs(d) > 0.0005:
+            new_dir = 1 if d > 0 else -1
+            if new_dir == run_dir:
+                run_len += 1
+            else:
+                sweep_range = abs(x[i] - run_start_x)
+                if run_len >= min_sweep_frames and sweep_range >= min_sweep_range:
+                    sweeps.append((run_dir, run_start_x, x[i]))
+                run_dir = new_dir
+                run_len = 1
+                run_start_x = x[i]
         else:
-            if run_len >= 5:
-                positive_runs += 1
+            sweep_range = abs(x[i] - run_start_x)
+            if run_len >= min_sweep_frames and sweep_range >= min_sweep_range:
+                sweeps.append((run_dir, run_start_x, x[i]))
             run_len = 0
-    if run_len >= 5:
-        positive_runs += 1
-    sweep_rate = positive_runs / (valid.sum() / FPS) * 60
-    return min(sweep_rate / 20.0, 1.0)
+            run_dir = 0
+            if i + 1 < len(x):
+                run_start_x = x[i + 1]
+    sweep_range = abs(x[-1] - run_start_x)
+    if run_len >= min_sweep_frames and sweep_range >= min_sweep_range:
+        sweeps.append((run_dir, run_start_x, x[-1]))
+
+    if len(sweeps) < 2:
+        return 0.0
+
+    # Count oscillation cycles:
+    # Pattern A: repeated sweeps in SAME direction with returns (sawtooth)
+    #   e.g. →, →, → means 2 return saccades = 2 oscillations
+    # Pattern B: alternating directions (zigzag)
+    #   e.g. →, ←, →, ← means 3 direction changes = 3 oscillations
+    dirs = [s[0] for s in sweeps]
+
+    # Count same-direction repeats (sawtooth reading pattern)
+    same_dir_runs = 0
+    for d in (1, -1):
+        consecutive = 0
+        for sd in dirs:
+            if sd == d:
+                consecutive += 1
+            else:
+                if consecutive >= 2:
+                    same_dir_runs += consecutive - 1
+                consecutive = 0
+        if consecutive >= 2:
+            same_dir_runs += consecutive - 1
+
+    # Count direction alternations (zigzag / re-reading)
+    alternations = sum(1 for i in range(1, len(dirs)) if dirs[i] != dirs[i - 1])
+
+    oscillations = max(same_dir_runs, alternations)
+    duration_s = valid.sum() / FPS
+
+    if oscillations >= 2:
+        osc_rate = oscillations / duration_s * 10
+        return min(0.4 + osc_rate * 0.12, 1.0)
+    return 0.0
 
 
 if __name__ == "__main__":
