@@ -55,8 +55,31 @@ Training code and full results: `training/gaze-detection`
 (`export_onnx.py`) and `training/echo-detection` (`export_content_model.py`,
 `calibrate_similarity.py`, `evaluate_delivery.py`).
 
-**Not calibrated on real interviews yet.** GazeBase is lab eye tracking with
-simulated webcam noise; HC3 answers are written text from 2022 ChatGPT;
+### Echo detector — interview calibration (2026-11-22)
+
+The echo detector's thresholds have been calibrated against the LLM output
+that tools like Parakeet AI generate (GPT-5, GPT-4.1, Claude 4.0 Sonnet).
+A set of 31 common interview questions was answered in both the AI style
+those models produce and in natural human speech; the model's thresholds
+were set so that no honest answer is flagged while catching as many
+AI-generated answers as possible.
+
+| Threshold | Value | Human false-positive rate | AI recall |
+|-----------|-------|--------------------------|-----------|
+| `possible` | 0.059 | 0% (0/31) | 68% |
+| `high` | 0.108 | 0% (0/31) | 52% |
+
+Technical interview answers (processes vs threads, REST APIs, system design)
+are detected reliably (scores 0.3–0.8). Behavioural answers (strengths,
+failures, career goals) have a weaker signal because modern LLMs write them
+more naturally. The echo detector is strongest when combined with the reading
+detector: a candidate whose eyes track like reading **and** whose answer
+scores as AI-written is a much stronger signal than either alone.
+
+Calibration script: `training/echo-detection/calibrate_interview.py`.
+
+**Not fully calibrated on real interviews yet.** GazeBase is lab eye tracking
+with simulated webcam noise; HC3 answers are written text from 2022 ChatGPT;
 SpiCE's read speech is isolated sentences, not a read-out answer. Our own
 recordings (`training/data-collection`, the room's study mode) are needed
 before the thresholds mean anything in a real interview.
