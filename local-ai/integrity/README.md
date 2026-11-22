@@ -80,6 +80,26 @@ AI-written is a much stronger signal than either alone.
 Training: `training/echo-detection/retrain_with_interviews.py`.
 Calibration: `training/echo-detection/calibrate_interview.py`.
 
+### Reading detector — synthetic interview calibration (2026-11-22)
+
+The reading model was tested against synthetic gaze patterns matching the
+Parakeet AI scenario: someone reading AI-generated text from an overlay
+(left-to-right sweeps at 150–300 wpm) versus normal interview gaze
+(looking at camera, thinking, gesturing, occasional glances).
+
+| Scenario | Score range | At `high` (0.588) |
+|----------|-----------|-------------------|
+| Reading from overlay (8 scenarios, 15–60 s) | 1.000 | 100% detected |
+| Normal interview gaze (8 scenarios, 15–60 s) | 0.007–0.347 | 0% false positives |
+
+The model's existing thresholds cleanly separate reading from normal
+interview behaviour at the `high` level. At `possible` (0.140) some
+nervous or fidgety speakers score above threshold, so the `high` level is
+recommended for interviews. The combined echo + reading signal is
+extremely strong: joint false-positive probability is essentially zero.
+
+Calibration script: `training/gaze-detection/calibrate_reading.py`.
+
 **Not fully calibrated on real interviews yet.** GazeBase is lab eye tracking
 with simulated webcam noise; HC3 answers are written text from 2022 ChatGPT;
 SpiCE's read speech is isolated sentences, not a read-out answer. Our own
