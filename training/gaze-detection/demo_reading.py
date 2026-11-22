@@ -32,6 +32,8 @@ MODEL_DIR = _ROOT / "local-ai" / "integrity" / "models"
 FPS = 10.0
 WINDOW_FRAMES = 100  # 10 seconds
 HOP_FRAMES = 50      # 5 seconds
+EARLY_FRAMES = 30    # 3 seconds — fast early detection
+EARLY_HOP = 10       # 1 second
 
 
 def load_onnx_model():
@@ -207,8 +209,21 @@ def main():
             gaze = tracker.track(rgb, int(round(t * 1000)))
             gaze_history.append((gaze.x, gaze.y))
 
-            # Score when we have enough windows
+            # Early detection on short windows (3s) — triggers quickly
             n = len(gaze_history)
+            if n >= EARLY_FRAMES and (n - EARLY_FRAMES) % EARLY_HOP == 0:
+                early_data = np.array(list(gaze_history)[-EARLY_FRAMES:], dtype=np.float32)
+                early_valid = np.isfinite(early_data).all(axis=1).mean()
+                if early_valid >= 0.6:
+                    early_prob = score_early_reading(early_data)
+                    if early_prob > 0 and (not window_scores or early_prob > window_scores[-1]):
+                        early_score = early_prob
+                        if early_score >= high_thresh:
+                            current_level = "HIGH"
+                        elif early_score >= possible_thresh:
+                            current_level = "possible"
+
+            # Full-window scoring (10s) — definitive score
             if n >= WINDOW_FRAMES and (n - WINDOW_FRAMES) % HOP_FRAMES == 0:
                 window_data = np.array(list(gaze_history)[-WINDOW_FRAMES:], dtype=np.float32)
                 valid_frac = np.isfinite(window_data).all(axis=1).mean()
@@ -339,6 +354,77 @@ def score_window_rule(window: np.ndarray) -> float:
         osc_rate = oscillations / duration_s * 10
         return min(0.4 + osc_rate * 0.12, 1.0)
     return 0.0
+
+
+def score_early_reading(window: np.ndarray) -> float:
+    """Fast early detector for short windows (3-5 seconds).
+
+    Triggers on a single sustained horizontal sweep — one line of reading.
+    More sensitive than score_window_rule (which needs 2+ oscillations) so
+    short answers get flagged quickly. A single sweep scores up to 0.5;
+    a sweep+return scores higher.
+    """
+    valid = np.isfinite(window).all(axis=1)
+    if valid.sum() < 15:
+        return 0.0
+    x = window[valid, 0]
+
+    # Overall x-spread must indicate real horizontal movement, not noise
+    x_spread = float(np.nanmax(x) - np.nanmin(x))
+    if x_spread < 0.12:
+        return 0.0
+
+    dx = np.diff(x)
+
+    min_sweep_frames = 4
+    min_sweep_range = 0.04
+
+    best_sweep_range = 0.0
+    sweeps: list[int] = []
+    run_len = 0
+    run_dir = 0
+    run_start_x = x[0]
+    for i, d in enumerate(dx):
+        if abs(d) > 0.0005:
+            new_dir = 1 if d > 0 else -1
+            if new_dir == run_dir:
+                run_len += 1
+            else:
+                sweep_range = abs(x[i] - run_start_x)
+                if run_len >= min_sweep_frames and sweep_range >= min_sweep_range:
+                    sweeps.append(run_dir)
+                    best_sweep_range = max(best_sweep_range, sweep_range)
+                run_dir = new_dir
+                run_len = 1
+                run_start_x = x[i]
+        else:
+            sweep_range = abs(x[i] - run_start_x)
+            if run_len >= min_sweep_frames and sweep_range >= min_sweep_range:
+                sweeps.append(run_dir)
+                best_sweep_range = max(best_sweep_range, sweep_range)
+            run_len = 0
+            run_dir = 0
+            if i + 1 < len(x):
+                run_start_x = x[i + 1]
+    sweep_range = abs(x[-1] - run_start_x)
+    if run_len >= min_sweep_frames and sweep_range >= min_sweep_range:
+        sweeps.append(run_dir)
+        best_sweep_range = max(best_sweep_range, sweep_range)
+
+    if not sweeps:
+        return 0.0
+
+    # Scale by sweep quality: wider sweeps = more confident
+    range_bonus = min(best_sweep_range / 0.15, 1.0)
+
+    if len(sweeps) >= 2:
+        has_reversal = any(sweeps[i] != sweeps[i - 1] for i in range(1, len(sweeps)))
+        if has_reversal:
+            return min(0.5 + 0.3 * range_bonus, 0.8)
+        return min(0.4 + 0.2 * range_bonus, 0.6)
+
+    # Single sweep — early signal, moderate confidence
+    return min(0.2 + 0.2 * range_bonus, 0.4)
 
 
 if __name__ == "__main__":

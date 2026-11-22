@@ -16,10 +16,11 @@ import numpy as np
 _ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_ROOT))
 
-from demo_reading import score_window_rule
+from demo_reading import score_early_reading, score_window_rule
 
 FPS = 10.0
 WINDOW = 100  # 10 s at 10 fps
+SHORT = 30    # 3 s at 10 fps — early detection
 
 
 def make_ltr_reading(speed_factor: float = 1.0, seed: int = 0) -> np.ndarray:
@@ -182,6 +183,76 @@ def main() -> None:
     print(f"  False positives: {fp}  (normal flagged as reading)")
     print(f"  False negatives: {fn}  (reading missed)")
     print(f"\n  Precision: {precision:.2f}  Recall: {recall:.2f}  F1: {f1:.2f}")
+
+    # --- Early detection tests (3-second windows) ---
+    print(f"\n\n{'='*70}")
+    print("EARLY DETECTION (3-second windows — short answers)")
+    print(f"{'='*70}\n")
+
+    def short_ltr(speed: float = 1.0, seed: int = 0) -> np.ndarray:
+        return make_ltr_reading(speed, seed)[:SHORT]
+
+    def short_rtl(speed: float = 1.0, seed: int = 0) -> np.ndarray:
+        return make_rtl_reading(speed, seed)[:SHORT]
+
+    def short_camera(seed: int = 0) -> np.ndarray:
+        return make_camera_look(seed)[:SHORT]
+
+    def short_glancing(seed: int = 0) -> np.ndarray:
+        return make_glancing(seed)[:SHORT]
+
+    early_cases = [
+        ("Short LTR normal", short_ltr(1.0, 1), True),
+        ("Short LTR fast", short_ltr(1.5, 2), True),
+        ("Short LTR slow", short_ltr(0.7, 3), True),
+        ("Short LTR seed=42", short_ltr(1.0, 42), True),
+        ("Short RTL normal", short_rtl(1.0, 4), True),
+        ("Short RTL fast", short_rtl(1.5, 5), True),
+        ("Short RTL seed=77", short_rtl(1.0, 77), True),
+        ("Short camera 1", short_camera(10), False),
+        ("Short camera 2", short_camera(11), False),
+        ("Short camera 3", short_camera(42), False),
+        ("Short camera 4", short_camera(99), False),
+        ("Short camera 5", short_camera(200), False),
+        ("Short glancing 1", short_glancing(20), False),
+        ("Short glancing 2", short_glancing(21), False),
+        ("Short glancing 3", short_glancing(42), False),
+    ]
+
+    print(f"{'Test Case':<30} {'Score':>8} {'Detected':>10} {'Expected':>10} {'OK':>5}")
+    print("-" * 70)
+
+    tp2, fp2, tn2, fn2 = 0, 0, 0, 0
+    for name, gaze, expected in early_cases:
+        score = score_early_reading(gaze)
+        detected = score >= possible_thresh
+        ok = detected == expected
+        status = "PASS" if ok else "FAIL"
+
+        if detected and expected:
+            tp2 += 1
+        elif detected and not expected:
+            fp2 += 1
+        elif not detected and expected:
+            fn2 += 1
+        else:
+            tn2 += 1
+
+        print(f"{name:<30} {score:>8.3f} {'READING' if detected else 'normal':>10} {'READING' if expected else 'normal':>10} {status:>5}")
+
+    print("-" * 70)
+    total2 = len(early_cases)
+    acc2 = (tp2 + tn2) / total2
+    prec2 = tp2 / (tp2 + fp2) if (tp2 + fp2) > 0 else 0
+    rec2 = tp2 / (tp2 + fn2) if (tp2 + fn2) > 0 else 0
+    f1_2 = 2 * prec2 * rec2 / (prec2 + rec2) if (prec2 + rec2) > 0 else 0
+
+    print(f"\nEarly results: {tp2 + tn2}/{total2} correct ({acc2:.0%})")
+    print(f"  True positives:  {tp2}  (reading detected in 3s)")
+    print(f"  True negatives:  {tn2}  (normal correctly ignored)")
+    print(f"  False positives: {fp2}  (normal flagged as reading)")
+    print(f"  False negatives: {fn2}  (reading missed)")
+    print(f"\n  Precision: {prec2:.2f}  Recall: {rec2:.2f}  F1: {f1_2:.2f}")
 
 
 if __name__ == "__main__":
