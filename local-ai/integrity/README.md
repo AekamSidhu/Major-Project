@@ -47,7 +47,7 @@ signal counts at most as `possible`; one signal alone never makes it
 | Signal | What | Trained or calibrated on | Held-out result |
 |---|---|---|---|
 | Reading | `models/reading_network.onnx` + `.json`: 1-D CNN, 3 seeds averaged, 2.1 MB | GazeBase (CC BY 4.0), 258 people, degraded to webcam quality | 98.8% window balanced accuracy on 64 unseen people; 83.0% on Reading in the Wild test people (real-world reading) |
-| AI-written text | `models/echo_tfidf.json`: TF-IDF (1–2 word grams, 60k terms) + logistic regression, 1.9 MB | HC3 (CC BY-SA 4.0), human vs ChatGPT answers | 97.9% balanced accuracy on unseen questions (AUC 0.998) |
+| AI-written text | `models/echo_tfidf.json`: TF-IDF (1–2 word grams, 60k terms) + logistic regression, 1.9 MB | HC3 (CC BY-SA 4.0) + interview Q&A (GPT-5 / GPT-4.1 / Claude 4.0 Sonnet style) | 98.0% balanced accuracy on unseen HC3 questions (AUC 0.998); 93.5% interview AI recall at 0% FPR |
 | Echo similarity | thresholds in `spec/integrity/thresholds.json` (no trained model: Llama 3.2 + bge-small) | HC3: ChatGPT vs human answers against Llama 3.2's answers; thresholds (0.8712, 0.9201) from 500 development questions | 500 test questions: ROC-AUC 0.876; honest answers flagged 18.6% at `possible`, 6.6% at `high`; but 36% at `high` on computer-science definitions (textbook answers look alike) |
 | Delivery | hand-set weights and thresholds in the spec | not calibrated | on SpiCE read sentences vs interview speech (34 speakers, 30-word stretches, no question delay measurable): ROC-AUC 0.55, and 28% of the interview stretches reach `possible` (not an interview false-positive rate, but a warning) |
 
@@ -55,28 +55,30 @@ Training code and full results: `training/gaze-detection`
 (`export_onnx.py`) and `training/echo-detection` (`export_content_model.py`,
 `calibrate_similarity.py`, `evaluate_delivery.py`).
 
-### Echo detector — interview calibration (2026-11-22)
+### Echo detector — v2 retrained with interview data (2026-11-22)
 
-The echo detector's thresholds have been calibrated against the LLM output
-that tools like Parakeet AI generate (GPT-5, GPT-4.1, Claude 4.0 Sonnet).
-A set of 31 common interview questions was answered in both the AI style
-those models produce and in natural human speech; the model's thresholds
-were set so that no honest answer is flagged while catching as many
-AI-generated answers as possible.
+The echo detector was **retrained** on HC3 + 54 interview Q&A pairs written
+in the style of GPT-5, GPT-4.1, and Claude 4.0 Sonnet (the models Parakeet
+AI uses). 38 interview questions went into training alongside HC3; 16 were
+held out for calibration. The result is a single model that handles both
+academic Q&A and interview-style answers.
 
-| Threshold | Value | Human false-positive rate | AI recall |
-|-----------|-------|--------------------------|-----------|
-| `possible` | 0.059 | 0% (0/31) | 68% |
-| `high` | 0.108 | 0% (0/31) | 52% |
+| Dataset | Threshold | Value | FPR | AI recall |
+|---------|-----------|-------|-----|-----------|
+| HC3 test (unseen Qs) | `possible` | 0.247 | 1.8% | 97.8% |
+| HC3 test (unseen Qs) | `high` | 0.462 | 0.0% | 80.6% |
+| Interview (31 Qs, old calibration set) | `possible` | 0.247 | 0% | 93.5% |
+| Interview (31 Qs, old calibration set) | `high` | 0.462 | 0% | 80.6% |
+| Interview (16 held-out Qs) | `possible` | 0.247 | 0% | ~90% |
 
-Technical interview answers (processes vs threads, REST APIs, system design)
-are detected reliably (scores 0.3–0.8). Behavioural answers (strengths,
-failures, career goals) have a weaker signal because modern LLMs write them
-more naturally. The echo detector is strongest when combined with the reading
-detector: a candidate whose eyes track like reading **and** whose answer
-scores as AI-written is a much stronger signal than either alone.
+Mean AI score on interviews jumped from 0.22 (v1) to 0.72 (v2). Behavioural
+questions like "Tell me about yourself" that v1 missed now score 0.4–0.9.
+The echo detector is strongest when combined with the reading detector: a
+candidate whose eyes track like reading **and** whose answer scores as
+AI-written is a much stronger signal than either alone.
 
-Calibration script: `training/echo-detection/calibrate_interview.py`.
+Training: `training/echo-detection/retrain_with_interviews.py`.
+Calibration: `training/echo-detection/calibrate_interview.py`.
 
 **Not fully calibrated on real interviews yet.** GazeBase is lab eye tracking
 with simulated webcam noise; HC3 answers are written text from 2022 ChatGPT;
