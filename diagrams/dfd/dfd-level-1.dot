@@ -5,6 +5,11 @@
 // entity, circle = process, open-ended box = data store. External entities
 // marked * are drawn more than once to keep flows short; double-headed
 // arrows are a request and its response; dashed arrows are optional flows.
+// Workplace mode (team meetings) uses the same processes: 3.0 feeds the live
+// board (decisions, action items, open questions) through the workplace tracker,
+// 6.0 serves "Catch me up" from the last minutes, and 10.0 writes the minutes
+// (action items with owner and due, follow-up message) instead of the interview
+// summary. Integrity (11.0) and follow-up generation do not run in workplace mode.
 // Balanced with Level 0 (same external inputs and outputs) and with every
 // Level 2 diagram (each Level 2 boundary flow appears here).
 digraph dfd1 {
@@ -91,7 +96,8 @@ digraph dfd1 {
   p6 -> d3    [label="answered /\nsuggested"];
   p2 -> p7    [label="live transcript"];
   user_u -> p7 [dir=both, label="hotkeys, Ask /\noverlay"];
-  p7 -> p6    [label="generate, refine,\nask commands"];
+  p7 -> p6    [label="generate, refine,\nask, catch-up commands"];
+  d3 -> p6    [label="recent lines, board\n(catch-up window)", style=dashed];
 
   // 8: settings & secrets
   user_s -> p8 [dir=both, label="settings, keys, rules, profile /\nvalidation errors, hotkey status"];
@@ -107,7 +113,7 @@ digraph dfd1 {
 
   // 9-10: persistence and summary
   p6 -> p9    [label="suggestions"];
-  p3 -> p9    [label="questions, answers,\ntopics, claims"];
+  p3 -> p9    [label="questions, answers,\ntopics, claims,\naction items (board)"];
   p9 -> d1    [dir=both, label="records"];
   d2 -> p9    [label="retention policy"];
   p9 -> d4    [label="delete expired /\ndeleted meetings"];
@@ -116,8 +122,8 @@ digraph dfd1 {
   p9 -> fs    [label="exports"];
   p9 -> p10   [label="cancel summary\n(meeting deleted)"];
   d3 -> p10   [label="meeting record"];
-  p10 -> ai_l [dir=both, label="summary prompt /\nsummary"];
-  p10 -> p9   [label="summary"];
+  p10 -> ai_l [dir=both, label="summary or minutes prompt /\nsummary, minutes"];
+  p10 -> p9   [label="summary (workplace: minutes\nwith action items and\nfollow-up message)"];
 
   // 11: integrity analysis (AI-echo, delivery, reading gaze)
   p2 -> p11   [label="answer segments\n+ word timing"];

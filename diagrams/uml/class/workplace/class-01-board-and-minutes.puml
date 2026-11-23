@@ -1,0 +1,178 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/types.rs (WorkplaceBoard, OpenQuestion, ClarifyingQuestion,
+' VagueIssue, WorkItemKind, WorkplaceMinutes, MinutesActionItem, MeetingSummary.workplace, Claim,
+' ActionItem, SpeakerRole) and crates/openmeet-intel/src/workplace.rs (WorkplaceTracker, WorkplaceUpdate,
+' TrackedItem, TrackedQuestion, action_item_issues, decision_issues, clarifying_question,
+' extractive_minutes, follow_up_message, render_minutes_markdown, extractive_catch_up).
+' Field names are the Rust names; the JSON names are camelCase (serde rename_all).
+title Workplace mode: live board, clarifying questions and minutes (types.rs, workplace.rs)
+
+hide empty members
+skinparam nodesep 35
+skinparam ranksep 55
+
+package "openmeet-core: types.rs" {
+
+  class WorkplaceBoard <<struct>> {
+    +decisions: Vec<Claim>
+    +action_items: Vec<ActionItem>
+    +open_questions: Vec<OpenQuestion>
+    +clarifications: Vec<ClarifyingQuestion>
+  }
+
+  class OpenQuestion <<struct>> {
+    +id: Id
+    +question: String
+    +speaker_role: SpeakerRole
+    +addressed_to_you: bool
+    +asked_at_ms: i64
+    +answered: bool
+    +answer: Option<String>
+    +deferred: bool
+  }
+
+  class ClarifyingQuestion <<struct>> {
+    +id: Id
+    +target_id: Id
+    +target_kind: WorkItemKind
+    +target_text: String
+    +issues: Vec<VagueIssue>
+    +question: String
+    +created_at: i64
+  }
+
+  enum WorkItemKind {
+    Decision
+    ActionItem
+  }
+
+  enum VagueIssue {
+    NoOwner
+    NoDueDate
+    UnclearScope
+    Tentative
+  }
+
+  class Claim <<struct>> {
+    +kind: ClaimKind
+    +text: String
+  }
+
+  class ActionItem <<struct>> {
+    +text: String
+    +owner: Option<String>
+    +due: Option<String>
+  }
+
+  class WorkplaceMinutes <<struct>> {
+    +action_items: Vec<MinutesActionItem>
+    +follow_up_message: String
+  }
+
+  class MinutesActionItem <<struct>> {
+    +task: String
+    +owner: Option<String>
+    +due: Option<String>
+  }
+
+  class MeetingSummary <<struct>> {
+    +overview: String
+    +decisions: Vec<String>
+    +open_questions: Vec<String>
+    +workplace: Option<WorkplaceMinutes>
+    +markdown: String
+  }
+}
+
+package "openmeet-intel: workplace.rs" {
+
+  class WorkplaceTracker <<struct>> {
+    -decisions: Vec<Claim>
+    -items: Vec<TrackedItem>
+    -questions: Vec<TrackedQuestion>
+    -clarifications: Vec<ClarifyingQuestion>
+    +new(): WorkplaceTracker
+    +observe(segment, claims, items, question): WorkplaceUpdate
+    +board(): WorkplaceBoard
+    +action_items(): Vec<ActionItem>
+  }
+
+  class WorkplaceUpdate <<struct>> {
+    +changed: bool
+    +items: Vec<ActionItem>
+    +answered: Vec<Id>
+  }
+
+  class TrackedItem <<struct>> {
+    +item: ActionItem
+    +at_ms: i64
+  }
+
+  class TrackedQuestion <<struct>> {
+    +q: OpenQuestion
+    +seen_any: u32
+    +seen_other: u32
+  }
+
+  note as RULES
+    Pure functions used by the tracker and the minutes:
+    action_item_issues(item): Vec<VagueIssue>
+    decision_issues(decision): Vec<VagueIssue>
+    clarifying_question(kind, text, owner, issues): Option<String>
+    task_phrase(text): String
+    extractive_minutes(record): MeetingSummary   (no LLM)
+    follow_up_message(...): String
+    render_minutes_markdown(summary, title): String
+    extractive_catch_up(lines, board, minutes, ...): String
+      (no production caller yet: tests only)
+  end note
+}
+
+WorkplaceBoard *-- "0..*" Claim : decisions
+WorkplaceBoard *-- "0..*" ActionItem : action_items
+WorkplaceBoard *-- "0..*" OpenQuestion : open_questions
+WorkplaceBoard *-- "0..*" ClarifyingQuestion : clarifications
+OpenQuestion --> "1" SpeakerRole : speaker_role
+ClarifyingQuestion --> "1" WorkItemKind : target_kind
+ClarifyingQuestion o-- "0..*" VagueIssue : issues
+ClarifyingQuestion ..> Claim : target_id (decision)
+ClarifyingQuestion ..> ActionItem : target_id (action item)
+
+WorkplaceMinutes *-- "0..*" MinutesActionItem : action_items
+MeetingSummary *-- "0..1" WorkplaceMinutes : workplace
+
+WorkplaceTracker *-- "0..*" TrackedItem : items
+WorkplaceTracker *-- "0..*" TrackedQuestion : questions
+WorkplaceTracker *-- "0..*" ClarifyingQuestion : clarifications
+WorkplaceTracker o-- "0..*" Claim : decisions
+WorkplaceTracker ..> WorkplaceBoard : board()
+WorkplaceTracker ..> WorkplaceUpdate : observe() returns
+TrackedItem *-- "1" ActionItem : item
+TrackedQuestion *-- "1" OpenQuestion : q
+
+note right of WorkplaceTracker
+  Fed from FINAL segments only, in workplace mode only.
+  Decisions: claims of kind decision (not repeated, lexical
+  similarity under 0.85). Action items: merged with an earlier
+  one when they restate it, or fill a missing owner or due date.
+  Questions: resolved (answered) or deferred by a later reply.
+  The board is replaced as a whole in each update event.
+end note
+
+note bottom of ActionItem
+  due is kept as said ("by Friday"),
+  never resolved to a calendar date.
+end note
+
+note bottom of WorkplaceMinutes
+  Built by the minutes prompt (LLM, JSON output) or
+  by extractive_minutes. Stored in meeting_summaries.workplace.
+  The follow-up message is a draft for the user to copy.
+end note
+
+note bottom of VagueIssue
+  Shown as the Clarify section of the board.
+  Clarifying questions are suggestions, not required steps.
+end note
+@enduml

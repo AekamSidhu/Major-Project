@@ -39,7 +39,7 @@ package "openmeet-engine" {
     + start_meeting(req) / stop_meeting()
     + pause() / resume() / emergency_stop()
     + push_audio(frame) / push_screen_frame(frame)
-    + generate_answer / generate_followups / ask
+    + generate_answer / generate_followups / ask / catch_up
     + clarify / refine / cancel_request / dismiss / pin
     + set_mode / toggle_mode / set_style / cycle_style
     + update_settings / set_providers / provider_set

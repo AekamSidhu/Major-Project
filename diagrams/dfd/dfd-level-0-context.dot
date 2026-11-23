@@ -5,7 +5,9 @@
 // rectangle = external entity, circle = process. Speech (the interviewer's
 // and the candidate's) and the candidate's video reach OpenMeet only through
 // the operating system's audio devices and displays, so they are flows from
-// the OS entity. Internal data stores (meeting database, settings) are not
+// the OS entity. In workplace mode the colleagues' speech (the "workplace team"
+// entity) also reaches OpenMeet only through the OS audio devices; OpenMeet
+// sends nothing to the team (the follow-up message is copied by the user). Internal data stores (meeting database, settings) are not
 // shown at this level; they appear as D1–D4 in Level 1.
 digraph dfd0 {
   graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.7, ranksep=1.3,
@@ -18,12 +20,14 @@ digraph dfd0 {
   local  [shape=box, style="filled", fillcolor="#FFFFFF", label="Local AI services\n(Ollama, OpenMeet\nlocal AI sidecar)"];
   cloud  [shape=box, style="filled,dashed", fillcolor="#FFFFFF", label="Cloud AI providers\n(OpenAI, Anthropic,\nOpenAI-compatible)\noptional"];
   files  [shape=box, style="filled", fillcolor="#FFFFFF", label="File system\n(save dialog)"];
+  team   [shape=box, style="filled", fillcolor="#FFFFFF", label="Workplace team\n(colleagues in a team\nmeeting; not a user of\nOpenMeet)"];
 
   sys [shape=circle, style="filled", fillcolor="#E6E9FB", color="#4F5BD5", penwidth=2, label="0\nOpenMeet"];
 
   user -> sys   [label="hotkeys, Ask prompts,\nsettings, profile, privacy rules,\nAPI keys, start / stop / pause,\nexport / delete requests"];
   sys  -> user  [label="follow-up suggestions,\nintegrity flags with evidence,\ntranscript, summaries,\nhistory, status"];
   os -> sys     [label="audio frames (your microphone,\ncandidate audio via loopback),\nscreen frames incl. candidate video,\nOCR text, stored API keys,\ndisplay / window info"];
+  team -> os    [label="speech of colleagues\n(played through the\nlocal audio output)", style=dashed];
   sys -> os     [label="capture requests, keychain writes,\ncapture-exclusion flag,\nhotkey registration"];
   sys -> local  [label="audio clips, prompts with\nmeeting context, text to embed,\ncandidate face crops"];
   local -> sys  [label="transcripts, streamed replies,\nembeddings, gaze landmarks"];

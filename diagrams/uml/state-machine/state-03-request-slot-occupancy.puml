@@ -24,7 +24,7 @@ Occupied --> Running : begin(slot, kind) / previous ticket\ncancelled -> Cancell
 
 note bottom of Occupied
   Slot use (begin call sites):
-  Primary   - CandidateAnswer, AskAi, Refinement, Clarification (start_primary)
+  Primary   - CandidateAnswer, AskAi, Refinement, Clarification, CatchUp (start_primary)
   Followups - InterviewerFollowups
   Background (never exclusive, not tracked in Slots.current; cancelled only by
   cancel_all(true) / cancel(id)): QuestionClassification, Compression,

@@ -1,6 +1,7 @@
 // Derived from: crates/openmeet-intel/src/detect/mod.rs
 //   detect(), requires_response(), is_lead_in(), split_parts(), classify_category(),
 //   constants LEAD_IN_GAP_MS, FRAGMENT_GAP_MS, CONTINUATION_GAP_MS, QUESTION_THRESHOLD
+//   Workplace rows: requires_response() in workplace mode (only questions addressed to the listener need an answer)
 digraph flowchart_04 {
   graph [fontname="Segoe UI", fontsize=16, labelloc=t, labeljust=c,
          label=<<B>Question detection (2/3): detect() — rhetorical check, lead-ins, fragments, continuations, speaker role</B><BR/><FONT POINT-SIZE="11">intel::detect::detect(&amp;DetectionInput) → DetectionResult ; QUESTION_THRESHOLD = 0.5</FONT>>,
@@ -39,7 +40,7 @@ digraph flowchart_04 {
   cont  [label="supersedes = last_question.id\lquestion = last.question + question\lprepend last.segment_ids\lcontinuation\l"];
 
   role  [label="(requires, factor) = requires_response(mode, speaker_role)\lconfidence = clamp(confidence × factor, 0, 1)\l"];
-  roletab [shape=note, fillcolor="#FFF8E1", color="#C9A227", label="requires_response(mode, role)\lCandidate   + Remote  → (true, 1.0)\lCandidate   + Unknown → (true, 0.85)\lCandidate   + User    → (false, 1.0)\lInterviewer + User    → (false, 1.0)\lInterviewer + Remote  → (true, 1.0)\lInterviewer + Unknown → (true, 0.85)\l"];
+  roletab [shape=note, fillcolor="#FFF8E1", color="#C9A227", label="requires_response(mode, role)\lCandidate   + Remote  → (true, 1.0)\lCandidate   + Unknown → (true, 0.85)\lCandidate   + User    → (false, 1.0)\lInterviewer + User    → (false, 1.0)\lInterviewer + Remote  → (true, 1.0)\lInterviewer + Unknown → (true, 0.85)\lWorkplace   + User    → (false, 1.0)\lWorkplace   + Remote  → (addressed_to_listener(q), 1.0)\lWorkplace   + Unknown → (addressed_to_listener(q), 0.85)\l"];
   isq   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="confidence ≥ 0.5 ?"];
   pyes  [label="is_question = true\lparts = split_parts(question)\l(or [question + '?'] when empty)\l"];
   pno   [label="is_question = false\lparts = []\l"];
