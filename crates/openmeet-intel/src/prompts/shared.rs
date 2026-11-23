@@ -574,11 +574,11 @@ pub(crate) fn split_sections(text: &str) -> Vec<(&'static str, String)> {
         let mut alt: Vec<(&'static str, String)> = Vec::new();
         let mut pre = String::new();
         for line in cleaned.lines() {
-            if let Some(caps) = HEADING_RE.captures(line) {
-                if let Some(name) = canonical_section(&caps[1]) {
-                    alt.push((name, String::new()));
-                    continue;
-                }
+            if let Some(caps) = HEADING_RE.captures(line)
+                && let Some(name) = canonical_section(&caps[1])
+            {
+                alt.push((name, String::new()));
+                continue;
             }
             let target = match alt.last_mut() {
                 Some((_, content)) => content,

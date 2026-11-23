@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use image::RgbaImage;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder};
-use openmeet_core::ipc::{ScreenSourceInfo, ScreenSourceKind, ScreenSourceSpec};
+use openmeet_core::ipc::{Rect, ScreenSourceInfo, ScreenSourceKind, ScreenSourceSpec};
 use openmeet_core::settings::ScreenFrequency;
 use openmeet_core::types::{PrivacyRule, ScreenFrame};
 use openmeet_core::{new_id, now_ms};
@@ -282,6 +282,77 @@ pub fn capture_once(
     })
 }
 
+/// Captures an absolute rectangle of the virtual desktop, in the global
+/// coordinates the OS reports for displays (physical pixels on Windows and
+/// Linux) — the coordinates the local AI sidecar uses for the candidate
+/// video region of the answer-integrity check. The rectangle is clipped to
+/// the display that contains its centre. Privacy rules apply as for any
+/// capture. Used to preview that region.
+pub fn capture_rect(
+    rect: Rect,
+    rules: &[PrivacyRule],
+    max_width: u32,
+) -> Result<ScreenFrame, PlatformError> {
+    let spec = guard_panics("finding the display of a region", || {
+        #[cfg(windows)]
+        let _dpi = crate::win::DpiAwareGuard::new();
+        let monitors = xcap::Monitor::all().map_err(|e| xcap_error("listing displays", e))?;
+        let mut displays = Vec::with_capacity(monitors.len());
+        for monitor in &monitors {
+            let (Ok(id), Ok(geo)) = (monitor.id(), MonitorGeometry::of(monitor)) else {
+                continue;
+            };
+            displays.push((
+                id.to_string(),
+                geo.label.clone(),
+                geo.rect(),
+                geo.estimated_scale,
+            ));
+        }
+        let (id, label, region) = region_on_display(rect, &displays)
+            .ok_or_else(|| PlatformError::Capture("The region is not on any display".into()))?;
+        Ok(ScreenSourceSpec {
+            kind: ScreenSourceKind::Region,
+            id,
+            label,
+            region: Some(region),
+        })
+    })?;
+    capture_once(&spec, rules, max_width)
+}
+
+/// The display containing the centre of `rect` (global units) and `rect`
+/// relative to it in physical pixels. `displays`: (id, label, bounds,
+/// pixels per global unit).
+fn region_on_display(
+    rect: Rect,
+    displays: &[(String, String, geometry::IRect, f64)],
+) -> Option<(String, String, Rect)> {
+    let cx = i64::from(rect.x) + i64::from(rect.width) / 2;
+    let cy = i64::from(rect.y) + i64::from(rect.height) / 2;
+    let (id, label, bounds, scale) = displays
+        .iter()
+        .find(|(_, _, b, _)| cx >= b.x0 && cx < b.x1 && cy >= b.y0 && cy < b.y1)?;
+    let clipped = geometry::IRect::from_xywh(
+        i64::from(rect.x),
+        i64::from(rect.y),
+        i64::from(rect.width),
+        i64::from(rect.height),
+    )
+    .intersect(bounds)?;
+    let px = |v: i64| (v as f64 * scale.max(1.0)).round() as i64;
+    Some((
+        id.clone(),
+        label.clone(),
+        Rect {
+            x: i32::try_from(px(clipped.x0 - bounds.x0)).ok()?,
+            y: i32::try_from(px(clipped.y0 - bounds.y0)).ok()?,
+            width: u32::try_from(px(clipped.width())).ok()?,
+            height: u32::try_from(px(clipped.height())).ok()?,
+        },
+    ))
+}
+
 /// Checks that the source exists and can be captured before a sampler starts.
 fn preflight(spec: &ScreenSourceSpec, own_pid: u32) -> Result<(), PlatformError> {
     guard_panics("checking the screen source", || {
@@ -471,7 +542,7 @@ fn downscale(image: RgbaImage, max_width: u32) -> RgbaImage {
 /// makes the file smaller and faster to encode).
 fn encode_png(image: &RgbaImage) -> Result<Vec<u8>, PlatformError> {
     let mut rgb = Vec::with_capacity(image.width() as usize * image.height() as usize * 3);
-    for px in image.as_raw().chunks_exact(4) {
+    for px in image.as_raw().as_chunks::<4>().0 {
         rgb.extend_from_slice(&px[..3]);
     }
     let mut out = Vec::with_capacity(rgb.len() / 4);
@@ -506,6 +577,48 @@ fn truncate(s: &str, max_chars: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn regions_map_to_the_display_that_contains_them() {
+        use super::geometry::IRect;
+        let displays = vec![
+            (
+                "1".to_string(),
+                "Display 1".to_string(),
+                IRect::from_xywh(0, 0, 1920, 1080),
+                1.0,
+            ),
+            (
+                "2".to_string(),
+                "Display 2".to_string(),
+                IRect::from_xywh(1920, 0, 2560, 1440),
+                1.0,
+            ),
+        ];
+        let r = |x, y, width, height| super::Rect {
+            x,
+            y,
+            width,
+            height,
+        };
+        let (id, _, rel) = super::region_on_display(r(2000, 100, 640, 360), &displays).unwrap();
+        assert_eq!(id, "2");
+        assert_eq!(rel, r(80, 100, 640, 360));
+        // Clipped to the display that holds the centre.
+        let (id, _, rel) = super::region_on_display(r(1800, 0, 200, 100), &displays).unwrap();
+        assert_eq!(id, "1");
+        assert_eq!(rel, r(1800, 0, 120, 100));
+        assert!(super::region_on_display(r(-5000, 0, 100, 100), &displays).is_none());
+        // Points to pixels on scaled (macOS) displays.
+        let retina = vec![(
+            "3".to_string(),
+            "R".to_string(),
+            IRect::from_xywh(0, 0, 1440, 900),
+            2.0,
+        )];
+        let (_, _, rel) = super::region_on_display(r(100, 50, 200, 100), &retina).unwrap();
+        assert_eq!(rel, r(200, 100, 400, 200));
+    }
+
     use super::*;
     use image::Rgba;
 

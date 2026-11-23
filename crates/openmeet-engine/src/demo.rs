@@ -12,8 +12,9 @@ use openmeet_core::CoreError;
 use openmeet_core::error::ProviderError;
 use openmeet_core::events::NoticeLevel;
 use openmeet_core::ids::{Id, new_id, now_ms};
+use openmeet_core::integrity::IntegrityService;
 use openmeet_core::ipc::{DemoScenario, SimulationAction, StartMeetingRequest};
-use openmeet_core::providers::ProviderSet;
+use openmeet_core::providers::{EmbeddingProvider, ProviderSet};
 use openmeet_core::types::*;
 use openmeet_intel::claims::extract_entities;
 use openmeet_intel::demo::{self, DemoStep};
@@ -61,7 +62,10 @@ impl Engine {
                 transcription: None,
                 vision: Some(Arc::new(MockVisionProvider)),
                 ocr: None,
-                embeddings: None,
+                embeddings: demo::demo_embeddings(scenario_id)
+                    .map(|e| Arc::new(e) as Arc<dyn EmbeddingProvider>),
+                integrity: demo::demo_integrity(scenario_id)
+                    .map(|i| Arc::new(i) as Arc<dyn IntegrityService>),
                 issues: Vec::new(),
             };
         }
@@ -82,6 +86,15 @@ impl Engine {
                 return Err(e);
             }
         };
+        if scenario_id == demo::INTEGRITY {
+            // The integrity demo shows the check whatever the settings say,
+            // with the scripted sidecar standing in for the candidate video.
+            if let Some(rt) = self.inner.state.lock().runtime.as_mut() {
+                rt.integrity.forced = true;
+                rt.integrity.demo_region = Some(crate::integrity::DEMO_REGION);
+            }
+            self.integrity_meeting_started();
+        }
         let cancel = CancellationToken::new();
         {
             let mut sim = self.inner.sim.lock();
@@ -122,8 +135,14 @@ impl Engine {
                 return;
             }
             match step {
-                DemoStep::Say { speaker, text, .. } => {
-                    self.simulate_speech(speaker, &text, Some(&cancel)).await;
+                DemoStep::Say {
+                    speaker,
+                    text,
+                    words_per_minute,
+                    ..
+                } => {
+                    self.simulate_speech(speaker, &text, words_per_minute, Some(&cancel))
+                        .await;
                 }
                 DemoStep::Screen {
                     description,
@@ -156,13 +175,20 @@ impl Engine {
     }
 
     /// Emits the words of `text` as partial transcripts, then the final one,
-    /// exactly like a live transcription session would.
+    /// exactly like a live transcription session would. With a pace, the
+    /// words are spoken at that many words per minute and the final carries
+    /// word timestamps (as a recognizer asked for them would).
     async fn simulate_speech(
         &self,
         speaker: SpeakerRole,
         text: &str,
+        words_per_minute: Option<u32>,
         cancel: Option<&CancellationToken>,
     ) {
+        let word_ms = words_per_minute.map(|wpm| 60_000 / i64::from(wpm.clamp(60, 400)));
+        let group_delay = word_ms
+            .map(|ms| Duration::from_millis((ms * 3) as u64))
+            .unwrap_or(WORD_GROUP_DELAY);
         let utterance_id = new_id();
         let source = if speaker == SpeakerRole::User {
             AudioSourceKind::Microphone
@@ -190,10 +216,28 @@ impl Engine {
                     is_final: false,
                     confidence: None,
                     speaker_role: Some(speaker),
+                    words: None,
                 });
-                tokio::time::sleep(WORD_GROUP_DELAY).await;
+                tokio::time::sleep(group_delay).await;
             }
         }
+        if let Some(ms) = word_ms {
+            // The words after the last partial are still being spoken.
+            let n = words.len() as i64;
+            let rest = (n - 3 * ((n - 1).max(0) / 3)).max(1);
+            tokio::time::sleep(Duration::from_millis((ms * rest) as u64)).await;
+        }
+        let timings = word_ms.map(|ms| {
+            words
+                .iter()
+                .enumerate()
+                .map(|(i, w)| WordTiming {
+                    word: format!(" {w}"),
+                    start_ms: start + i as i64 * ms,
+                    end_ms: start + i as i64 * ms + ms * 4 / 5,
+                })
+                .collect()
+        });
         let _ = self.inject_draft(TranscriptDraft {
             utterance_id,
             source,
@@ -203,6 +247,7 @@ impl Engine {
             is_final: true,
             confidence: Some(0.95),
             speaker_role: Some(speaker),
+            words: timings,
         });
     }
 
@@ -307,6 +352,7 @@ impl Engine {
             is_final: true,
             confidence: Some(1.0),
             speaker_role: Some(speaker),
+            words: None,
         })
     }
 

@@ -6,7 +6,8 @@ OpenAI-compatible endpoints:
 
     GET  /health
     GET  /v1/models
-    POST /v1/audio/transcriptions   (multipart: file, model, language, prompt)
+    POST /v1/audio/transcriptions   (multipart: file, model, language, prompt, response_format,
+                                     timestamp_granularities[]=word|segment with verbose_json)
     POST /v1/embeddings             ({"model": ..., "input": str | [str]})
     GET  /integrity, /v1/integrity/...  answer-integrity checks (integrity/__init__.py)
 
@@ -59,6 +60,7 @@ ALLOWED_WHISPER_MODELS = {
 # OpenAI-style aliases mapped to the default local model.
 WHISPER_ALIASES = {"whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "default"}
 
+WHISPER_WINDOW_S = 30.0  # Whisper decodes audio in 30 s windows
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 MAX_EMBED_INPUTS = 256
 MAX_EMBED_CHARS = 8000
@@ -75,9 +77,15 @@ class TranscriptionResult:
     language: str | None
     duration: float
     confidence: float | None
+    # Only when timestamps were asked for: [{"id", "start", "end", "text"}] and
+    # [{"word", "start", "end"}], in seconds from the start of the audio.
+    segments: list[dict[str, Any]] | None = None
+    words: list[dict[str, Any]] | None = None
 
 
 class Transcriber(Protocol):
+    # Callers add word_timestamps=True only when they need timings, so a
+    # backend without timestamps can keep this four-argument form.
     def transcribe(
         self, audio: np.ndarray, model: str, language: str | None, prompt: str | None
     ) -> TranscriptionResult: ...
@@ -149,7 +157,11 @@ class WhisperTranscriber:
             self._force_cpu = True
             self._models.clear()
 
-    def _run(self, whisper: Any, audio: np.ndarray, language: str | None, prompt: str | None) -> tuple[list[Any], Any]:
+    def _run(self, whisper: Any, audio: np.ndarray, language: str | None, prompt: str | None,
+             word_timestamps: bool = False) -> tuple[list[Any], Any]:
+        # Word timings come from aligning the decoded words afterwards
+        # (cross-attention), so the decoding settings stay the same.
+        timing: dict[str, Any] = {"word_timestamps": True} if word_timestamps else {}
         segments, info = whisper.transcribe(
             audio,
             language=language,
@@ -158,23 +170,36 @@ class WhisperTranscriber:
             vad_filter=False,  # OpenMeet already segments speech with its own VAD
             condition_on_previous_text=False,
             without_timestamps=True,
+            **timing,
         )
+        if word_timestamps and float(getattr(info, "duration", 0.0)) <= WHISPER_WINDOW_S:
+            # With word timestamps faster-whisper seeks back to the last word
+            # and decodes the leftover tail again, which on short clips invents
+            # words ("Thanks for watching."). A clip that fits one window keeps
+            # the first decode only: the same text as without timestamps.
+            first: list[Any] = []
+            for seg in segments:
+                if first and seg.seek != first[0].seek:
+                    break
+                first.append(seg)
+            return first, info
         # The segment generator decodes lazily: consume it here so runtime
         # errors (e.g. missing cuBLAS) surface inside the fallback guard.
         return list(segments), info
 
     def transcribe(
-        self, audio: np.ndarray, model: str, language: str | None, prompt: str | None
+        self, audio: np.ndarray, model: str, language: str | None, prompt: str | None,
+        word_timestamps: bool = False,
     ) -> TranscriptionResult:
         whisper = self._get(model)
         try:
-            segments, info = self._run(whisper, audio, language, prompt)
+            segments, info = self._run(whisper, audio, language, prompt, word_timestamps)
         except Exception as exc:  # noqa: BLE001
             if self._force_cpu or self.device == "cuda" or not is_gpu_runtime_error(exc):
                 raise
             LOG.warning("GPU transcription failed (%s); switching to the CPU", type(exc).__name__)
             self._fall_back_to_cpu()
-            segments, info = self._run(self._get(model), audio, language, prompt)
+            segments, info = self._run(self._get(model), audio, language, prompt, word_timestamps)
         texts: list[str] = []
         logprobs: list[float] = []
         for seg in segments:
@@ -183,15 +208,39 @@ class WhisperTranscriber:
         confidence = None
         if logprobs:
             confidence = float(min(1.0, max(0.0, math.exp(sum(logprobs) / len(logprobs)))))
+        timed, words = timings(segments) if word_timestamps else (None, None)
         return TranscriptionResult(
             text="".join(texts).strip(),
             language=getattr(info, "language", None),
             duration=float(getattr(info, "duration", len(audio) / 16000)),
             confidence=confidence,
+            segments=timed,
+            words=words,
         )
 
     def loaded_model(self) -> str | None:
         return self._last
+
+
+def timings(segments: Sequence[Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """faster-whisper segments decoded with word timestamps, in OpenAI's verbose_json shape.
+
+    A segment's times are its first word's start and last word's end (the
+    decoder runs without timestamp tokens, so its own segment times only
+    mark the 30 s window).
+    """
+    out_segments: list[dict[str, Any]] = []
+    out_words: list[dict[str, Any]] = []
+    for seg in segments:
+        text = " ".join(str(seg.text).split())
+        words = [w for w in (getattr(seg, "words", None) or []) if str(w.word).strip()]
+        out_words += [{"word": str(w.word).strip(), "start": round(float(w.start), 3), "end": round(float(w.end), 3)}
+                      for w in words]
+        if text:
+            start, end = (words[0].start, words[-1].end) if words else (seg.start, seg.end)
+            out_segments.append({"id": len(out_segments), "start": round(float(start), 3), "end": round(float(end), 3),
+                                 "text": text})
+    return out_segments, out_words
 
 
 class FastEmbedder:
@@ -216,7 +265,8 @@ class FastEmbedder:
 
     def embed(self, texts: Sequence[str], model: str) -> list[list[float]]:
         engine = self._get(model)
-        return [vec.astype(float).tolist() for vec in engine.embed(list(texts))]
+        # fastembed's default batch of 256 long texts needs several GB of RAM; same vectors in smaller batches.
+        return [vec.astype(float).tolist() for vec in engine.embed(list(texts), batch_size=32)]
 
     def loaded_model(self) -> str | None:
         return self._last
@@ -267,6 +317,16 @@ def decode_audio(data: bytes) -> np.ndarray:
 class EmbeddingRequest(BaseModel):
     model: str | None = None
     input: str | list[str] = Field(...)
+
+
+GRANULARITIES = ("word", "segment")
+
+
+def resolve_granularities(values: list[str]) -> set[str]:
+    found = {v.strip().lower() for v in values if v.strip()}
+    if found - set(GRANULARITIES):
+        raise HTTPException(status_code=400, detail="timestamp_granularities[] must be word or segment")
+    return found
 
 
 def resolve_whisper_model(requested: str | None, default: str) -> str:
@@ -325,6 +385,8 @@ def create_app(
         language: str | None = Form(default=None),
         prompt: str | None = Form(default=None),
         response_format: str | None = Form(default="json"),
+        granularities: list[str] | None = Form(default=None, alias="timestamp_granularities[]"),
+        granularities_plain: list[str] | None = Form(default=None, alias="timestamp_granularities"),
     ) -> JSONResponse:
         data = await file.read(MAX_AUDIO_BYTES + 1)
         if len(data) > MAX_AUDIO_BYTES:
@@ -335,13 +397,23 @@ def create_app(
         lang = (language or "").strip().lower() or None
         if lang is not None and (len(lang) > 8 or not lang.replace("-", "").isalpha()):
             raise HTTPException(status_code=400, detail="invalid language")
+        # As in OpenAI's API: timestamps only with verbose_json; segments unless
+        # only words are asked for, words only when asked for.
+        granularity = resolve_granularities((granularities or []) + (granularities_plain or []))
+        verbose = response_format == "verbose_json"
+        want_words = verbose and "word" in granularity
+        want_segments = verbose and ("segment" in granularity or not granularity)
         try:
             audio = decode_audio(data)
         except Exception as exc:  # noqa: BLE001 - report decoding problems as 400
             raise HTTPException(status_code=400, detail=f"could not decode audio: {type(exc).__name__}") from exc
         started = time.perf_counter()
+        prompt = (prompt or "")[:1000] or None
         with infer_lock:
-            result = transcriber.transcribe(audio, name, lang, (prompt or "")[:1000] or None)
+            if want_words or want_segments:
+                result = transcriber.transcribe(audio, name, lang, prompt, word_timestamps=True)
+            else:
+                result = transcriber.transcribe(audio, name, lang, prompt)
         LOG.info(
             "transcribed %.1fs audio in %.0f ms (%d chars)",
             len(audio) / 16000,
@@ -352,8 +424,13 @@ def create_app(
         if response_format == "text":
             return JSONResponse(content=text)
         body: dict[str, Any] = {"text": text}
-        if response_format == "verbose_json":
-            body.update({"language": result.language, "duration": result.duration})
+        if verbose:
+            body = {"task": "transcribe", "language": result.language, "duration": result.duration, "text": text}
+            if want_segments:
+                fallback = [{"id": 0, "start": 0.0, "end": round(result.duration, 3), "text": text}] if text else []
+                body["segments"] = result.segments if result.segments is not None else fallback
+            if want_words:
+                body["words"] = result.words if result.words is not None else []
         if result.confidence is not None:
             body["confidence"] = result.confidence
         return JSONResponse(content=body)

@@ -14,12 +14,14 @@ import type {
   Mode,
   AnswerStyle,
   PauseReason,
+  IntegrityFlag,
   Settings,
   Topic,
   TranscriptSegment,
   AudioSourceKind,
 } from "@/bindings";
 import { api, errorMessage } from "@/lib/ipc";
+import { sortFlags, upsertFlag } from "@/lib/integrity";
 
 export type SectionId =
   | "home"
@@ -32,6 +34,7 @@ export type SectionId =
   | "settings/shortcuts"
   | "settings/profile"
   | "settings/general"
+  | "settings/integrity"
   | "diagnostics";
 
 export const SECTIONS: ReadonlyArray<SectionId> = [
@@ -45,6 +48,7 @@ export const SECTIONS: ReadonlyArray<SectionId> = [
   "settings/shortcuts",
   "settings/profile",
   "settings/general",
+  "settings/integrity",
   "diagnostics",
 ];
 
@@ -77,6 +81,8 @@ export interface LiveState {
   processingStopped: boolean;
   demoRunning: boolean;
   levels: Partial<Record<AudioSourceKind, number>>;
+  /** Answer-integrity flags of the meeting, latest answer first. */
+  integrityFlags: IntegrityFlag[];
 }
 
 const EMPTY_LIVE: LiveState = {
@@ -94,6 +100,7 @@ const EMPTY_LIVE: LiveState = {
   processingStopped: false,
   demoRunning: false,
   levels: {},
+  integrityFlags: [],
 };
 
 export function liveFromSnapshot(s: EngineSnapshot): LiveState {
@@ -112,6 +119,7 @@ export function liveFromSnapshot(s: EngineSnapshot): LiveState {
     processingStopped: s.processingStopped,
     demoRunning: s.demoRunning,
     levels: {},
+    integrityFlags: sortFlags(s.integrityFlags),
   };
 }
 
@@ -190,6 +198,9 @@ export function reduceLive(live: LiveState, ev: MeetingEvent): LiveState {
       return { ...live, style: ev.style };
     case "AUDIO_LEVEL":
       return { ...live, levels: { ...live.levels, [ev.source]: ev.level } };
+    case "INTEGRITY_CHECKED":
+      if (live.meeting && ev.flag.meetingId !== live.meeting.id) return live;
+      return { ...live, integrityFlags: upsertFlag(live.integrityFlags, ev.flag) };
     default:
       return live;
   }

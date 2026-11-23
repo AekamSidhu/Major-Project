@@ -32,6 +32,7 @@ _TOKEN = re.compile(r"(?u)\b\w\w+\b")  # scikit-learn's default token pattern
 WINDOW_FRAMES = 100
 FPS = 10.0
 HOP_FRAMES = 50
+EARLY_FRAMES = 30  # 3 seconds — fast early detection
 
 
 def level(probability: float, possible: float, high: float) -> str:
@@ -120,6 +121,69 @@ class ReadingResult:
                 "valid_fraction": self.valid_fraction}
 
 
+def _early_reading_score(frames: np.ndarray) -> float:
+    """Fast detector for short windows (3-5 s): triggers on a single horizontal sweep.
+
+    More sensitive than the full model — detects one line of reading.
+    Returns up to 0.4 for a single sweep, 0.6 for sweep+return, 0.8 for reversal.
+    """
+    valid = np.isfinite(frames).all(axis=1)
+    if valid.sum() < 15:
+        return 0.0
+    x = frames[valid, 0]
+
+    x_spread = float(np.nanmax(x) - np.nanmin(x))
+    if x_spread < 0.12:
+        return 0.0
+
+    dx = np.diff(x)
+
+    min_sweep_frames = 4
+    min_sweep_range = 0.04
+
+    best_range = 0.0
+    sweeps: list[int] = []
+    run_len = 0
+    run_dir = 0
+    run_start_x = x[0]
+    for i, d in enumerate(dx):
+        if abs(d) > 0.0005:
+            new_dir = 1 if d > 0 else -1
+            if new_dir == run_dir:
+                run_len += 1
+            else:
+                sr = abs(x[i] - run_start_x)
+                if run_len >= min_sweep_frames and sr >= min_sweep_range:
+                    sweeps.append(run_dir)
+                    best_range = max(best_range, sr)
+                run_dir = new_dir
+                run_len = 1
+                run_start_x = x[i]
+        else:
+            sr = abs(x[i] - run_start_x)
+            if run_len >= min_sweep_frames and sr >= min_sweep_range:
+                sweeps.append(run_dir)
+                best_range = max(best_range, sr)
+            run_len = 0
+            run_dir = 0
+            if i + 1 < len(x):
+                run_start_x = x[i + 1]
+    sr = abs(x[-1] - run_start_x)
+    if run_len >= min_sweep_frames and sr >= min_sweep_range:
+        sweeps.append(run_dir)
+        best_range = max(best_range, sr)
+
+    if not sweeps:
+        return 0.0
+    range_bonus = min(best_range / 0.15, 1.0)
+    if len(sweeps) >= 2:
+        has_reversal = any(sweeps[i] != sweeps[i - 1] for i in range(1, len(sweeps)))
+        if has_reversal:
+            return min(0.5 + 0.3 * range_bonus, 0.8)
+        return min(0.4 + 0.2 * range_bonus, 0.6)
+    return min(0.2 + 0.2 * range_bonus, 0.4)
+
+
 class ReadingModel:
     def __init__(self, folder: Path = MODEL_DIR) -> None:
         import onnxruntime as ort
@@ -138,16 +202,32 @@ class ReadingModel:
             return np.zeros(0, dtype=np.float32)
         return self.session.run(None, {"window": to_input(windows)})[0].astype(np.float32)
 
+    def assess_early(self, frames: np.ndarray, min_valid: float = 0.6) -> ReadingResult | None:
+        """Fast early detection on short gaze (3+ seconds). More sensitive."""
+        frames = np.asarray(frames, dtype=np.float32)
+        if len(frames) < EARLY_FRAMES:
+            return None
+        window = frames[-EARLY_FRAMES:]
+        vf = float(np.isfinite(window).all(axis=1).mean())
+        if vf < min_valid:
+            return None
+        prob = _early_reading_score(window)
+        if prob <= 0:
+            return None
+        return ReadingResult(prob, level(prob, self.window_possible, self.window_high),
+                             [prob], vf)
+
     def assess(self, frames: np.ndarray, min_valid: float = 0.6) -> ReadingResult | None:
         """Score a gaze series already on the 10 fps grid, `(frames, 2)` with NaN gaps.
 
         Cut into 10 s windows every 5 s (the last window ends at the last
         frame); windows with less than `min_valid` tracked frames are skipped.
         The answer's score is the mean of the top half of its window scores.
+        Falls back to early detection for series shorter than 10 s.
         """
         frames = np.asarray(frames, dtype=np.float32)
         if len(frames) < WINDOW_FRAMES:
-            return None
+            return self.assess_early(frames, min_valid)
         starts = list(range(0, len(frames) - WINDOW_FRAMES + 1, HOP_FRAMES))
         if starts[-1] != len(frames) - WINDOW_FRAMES:
             starts.append(len(frames) - WINDOW_FRAMES)

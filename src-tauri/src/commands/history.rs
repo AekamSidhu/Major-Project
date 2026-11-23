@@ -17,19 +17,19 @@ pub async fn list_meetings(
     let db = state.db.clone();
     let mut items =
         blocking(move || db.list_meetings(limit, offset).map_err(CoreError::from)).await?;
-    if offset == 0 {
-        if let Some(current) = state.engine.unpersisted_meeting() {
-            items.insert(0, current);
-        }
+    if offset == 0
+        && let Some(current) = state.engine.unpersisted_meeting()
+    {
+        items.insert(0, current);
     }
     Ok(items)
 }
 
 async fn load(state: &AppStateRef<'_>, meeting_id: &str) -> CmdResult<MeetingRecord> {
-    if let Some(r) = state.engine.current_record(meeting_id) {
-        if !r.meeting.persisted {
-            return Ok(r);
-        }
+    if let Some(r) = state.engine.current_record(meeting_id)
+        && !r.meeting.persisted
+    {
+        return Ok(r);
     }
     let db = state.db.clone();
     let id = meeting_id.to_string();
@@ -109,7 +109,7 @@ pub async fn export_meeting(
 ) -> CmdResult<ExportResult> {
     check_id(&request.meeting_id, "meeting")?;
     let parts = request.parts;
-    if !(parts.summary || parts.transcript || parts.questions || parts.followups) {
+    if !any_part(&parts) {
         return Err(CoreError::InvalidInput(
             "Choose at least one part to export.".into(),
         ));
@@ -191,9 +191,30 @@ pub async fn regenerate_summary(
     state.engine.summarize_record(record).await
 }
 
+/// At least one part of the meeting is selected for export.
+fn any_part(parts: &openmeet_core::ipc::ExportParts) -> bool {
+    parts.summary || parts.transcript || parts.questions || parts.followups || parts.integrity
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_integrity_only_export_is_allowed() {
+        let none = openmeet_core::ipc::ExportParts {
+            summary: false,
+            transcript: false,
+            questions: false,
+            followups: false,
+            integrity: false,
+        };
+        assert!(!any_part(&none));
+        assert!(any_part(&openmeet_core::ipc::ExportParts {
+            integrity: true,
+            ..none
+        }));
+    }
 
     #[test]
     fn file_stems() {

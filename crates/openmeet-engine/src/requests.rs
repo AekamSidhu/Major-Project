@@ -79,18 +79,17 @@ impl RequestManager {
             started: Instant::now(),
         };
         let mut slots = self.slots.lock();
-        if slot != RequestSlot::Background {
-            if let Some(prev_id) = slots.current.insert(slot, ticket.id.clone()) {
-                if let Some(mut prev) = slots.entries.remove(&prev_id) {
-                    prev.ticket.cancel.cancel();
-                    if prev.machine.advance(AnswerState::Cancelled) {
-                        self.sink.emit(MeetingEvent::AnswerStateChanged {
-                            request_id: prev_id.clone(),
-                            state: AnswerState::Cancelled,
-                            error: None,
-                        });
-                    }
-                }
+        if slot != RequestSlot::Background
+            && let Some(prev_id) = slots.current.insert(slot, ticket.id.clone())
+            && let Some(mut prev) = slots.entries.remove(&prev_id)
+        {
+            prev.ticket.cancel.cancel();
+            if prev.machine.advance(AnswerState::Cancelled) {
+                self.sink.emit(MeetingEvent::AnswerStateChanged {
+                    request_id: prev_id.clone(),
+                    state: AnswerState::Cancelled,
+                    error: None,
+                });
             }
         }
         slots.entries.insert(

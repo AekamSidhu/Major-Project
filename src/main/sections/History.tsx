@@ -11,6 +11,7 @@ import { useMain } from "../store";
 import { Badge, Banner, Button, ConfirmDialog, EmptyState, PageHeader, Spinner, Tabs } from "../ui";
 import {
   FollowupsTab,
+  IntegrityTab,
   QaTab,
   ScreenTab,
   SummaryTab,
@@ -27,7 +28,7 @@ import {
 } from "./history/helpers";
 import { useHistoryNav } from "./history/historyNav";
 
-type DetailTab = "summary" | "transcript" | "qa" | "followups" | "topics" | "screen";
+type DetailTab = "summary" | "transcript" | "qa" | "followups" | "integrity" | "topics" | "screen";
 
 function MeetingList() {
   const page = useHistoryNav((s) => s.page);
@@ -191,6 +192,14 @@ function MeetingDetail({ meetingId }: { meetingId: string }) {
     { value: "transcript", label: `Transcript (${record.segments.length})` },
     { value: "qa", label: `Questions & answers (${record.questions.length})` },
     { value: "followups", label: `Follow-ups (${followupCount})` },
+    ...(record.integrityFlags.length > 0
+      ? [
+          {
+            value: "integrity" as const,
+            label: `Answer integrity (${record.integrityFlags.length})`,
+          },
+        ]
+      : []),
     { value: "topics", label: "Topics & claims" },
     { value: "screen", label: `Screen (${record.observations.length})` },
   ];
@@ -224,6 +233,7 @@ function MeetingDetail({ meetingId }: { meetingId: string }) {
       {tab === "transcript" && <TranscriptTab record={record} />}
       {tab === "qa" && <QaTab record={record} />}
       {tab === "followups" && <FollowupsTab record={record} />}
+      {tab === "integrity" && <IntegrityTab record={record} />}
       {tab === "topics" && <TopicsTab record={record} />}
       {tab === "screen" && <ScreenTab record={record} />}
       {exporting && (

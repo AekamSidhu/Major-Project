@@ -254,7 +254,9 @@ pub fn decode_wav_pcm16(bytes: &[u8]) -> Result<(Vec<f32>, u32), String> {
                 return Err("missing or unsupported fmt chunk".to_string());
             }
             let samples: Vec<f32> = body
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|b| i16_to_f32(i16::from_le_bytes([b[0], b[1]])))
                 .collect();
             return Ok((downmix_to_mono(&samples, channels), rate));

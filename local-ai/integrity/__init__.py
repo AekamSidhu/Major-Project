@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from .gaze import FaceTracker, GazeMonitor, Region, Tracker, decode_image
-from .models import FPS, WINDOW_FRAMES, EchoModel, ReadingModel
+from .models import EARLY_FRAMES, FPS, WINDOW_FRAMES, EchoModel, ReadingModel
 
 LOG = logging.getLogger("openmeet.local_ai.integrity")
 PAGE = Path(__file__).resolve().parent / "page.html"
@@ -113,7 +113,11 @@ def add_routes(
         out: dict[str, Any] = {"echo_ready": echo_model.ready(), "reading_ready": reading_model.ready(),
                                "echo_error": echo_model.error, "reading_error": reading_model.error, "gaze": monitor.status()}
         if out["reading_ready"]:
-            live = reading_model.get().assess(monitor.series(out["gaze"]["now"] - WINDOW_FRAMES / FPS, out["gaze"]["now"]))
+            model = reading_model.get()
+            now = out["gaze"]["now"]
+            live = model.assess(monitor.series(now - WINDOW_FRAMES / FPS, now))
+            if live is None:
+                live = model.assess_early(monitor.series(now - EARLY_FRAMES / FPS, now))
             out["live_reading"] = live.as_dict() if live else None
             trace = monitor.series(out["gaze"]["now"] - 30.0, out["gaze"]["now"])
             out["trace_x"] = [None if v != v else round(float(v), 4) for v in trace[:, 0]]

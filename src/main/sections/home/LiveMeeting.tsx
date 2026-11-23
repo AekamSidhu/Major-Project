@@ -12,6 +12,7 @@ import type {
 } from "@/bindings";
 import { categoryLabel, formatOffset } from "@/lib/format";
 import { api, errorMessage } from "@/lib/ipc";
+import { IntegrityFlagView } from "@/lib/IntegrityFlagView";
 import { useMain, type LiveState } from "@/main/store";
 import { Badge, Banner, Button, StatusDot, Toggle, cx } from "@/main/ui";
 import { InlineError, LevelMeter, LinkButton } from "./controls";
@@ -583,6 +584,31 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
               </ul>
             )}
           </Card>
+
+          {mode === "interviewer" &&
+            (settings.integrity.enabled || live.integrityFlags.length > 0) && (
+              <Card
+                title="Answer integrity"
+                count={live.integrityFlags.length}
+                bodyClassName="max-h-96 overflow-y-auto divide-y divide-border"
+                actions={
+                  <LinkButton onClick={() => setSection("settings/integrity")}>Settings</LinkButton>
+                }
+              >
+                {live.integrityFlags.length === 0 ? (
+                  <p className="px-5 py-4 text-[0.82rem] text-muted">
+                    Each candidate answer is checked when they pause. Flags are private to you — a
+                    reason to ask a follow-up, never a verdict.
+                  </p>
+                ) : (
+                  live.integrityFlags.map((f) => (
+                    <div key={f.id} className="px-5 py-3">
+                      <IntegrityFlagView flag={f} compact />
+                    </div>
+                  ))
+                )}
+              </Card>
+            )}
 
           <Card title="Topics">
             <Topics topics={live.topics} next={live.suggestedNextTopic} />

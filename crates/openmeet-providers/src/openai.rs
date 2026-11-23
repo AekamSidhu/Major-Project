@@ -16,6 +16,7 @@
 //! the adapter adjusts that parameter, retries, and remembers the adjustment
 //! for later requests.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -28,7 +29,7 @@ use openmeet_core::providers::{
     Transcriber, TranscriptionOutput, TranscriptionRequest,
 };
 use openmeet_core::settings::ReasoningEffort;
-use openmeet_core::types::ProviderInfo;
+use openmeet_core::types::{ProviderInfo, WordTiming};
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::multipart::{Form, Part};
 use reqwest::{Method, RequestBuilder, Response};
@@ -366,6 +367,7 @@ struct ChatParams {
     temperature: Option<f32>,
     reasoning_effort: Option<&'static str>,
     stream_options: bool,
+    seed: Option<u64>,
 }
 
 /// Parameter adjustments learned from rejected requests.
@@ -377,6 +379,7 @@ struct ChatQuirks {
     token_field: Option<TokenField>,
     no_stream_options: bool,
     max_tokens_limit: Option<u32>,
+    no_seed: bool,
 }
 
 /// Streaming chat completions against OpenAI or an OpenAI-compatible server.
@@ -481,6 +484,7 @@ impl OpenAiLlm {
             temperature,
             reasoning_effort,
             stream_options: !quirks.no_stream_options,
+            seed: request.seed.filter(|_| !quirks.no_seed),
         }
     }
 
@@ -491,38 +495,36 @@ impl OpenAiLlm {
         let mut quirks = self.quirks();
         let mentions_tokens =
             message.contains("max_tokens") || message.contains("max_completion_tokens");
-        if mentions_tokens {
-            if let Some(limit) = parse_token_limit(message).filter(|l| *l < params.max_tokens) {
-                next.max_tokens = limit.max(1);
-                quirks.max_tokens_limit = Some(next.max_tokens);
-                return Some(next);
-            }
+        if mentions_tokens
+            && let Some(limit) = parse_token_limit(message).filter(|l| *l < params.max_tokens)
+        {
+            next.max_tokens = limit.max(1);
+            quirks.max_tokens_limit = Some(next.max_tokens);
+            return Some(next);
         }
         if params.temperature.is_some() && message.contains("temperature") {
             next.temperature = None;
             quirks.no_temperature = true;
             return Some(next);
         }
-        if let Some(effort) = params.reasoning_effort {
-            if message.contains("reasoning_effort")
+        if let Some(effort) = params.reasoning_effort
+            && (message.contains("reasoning_effort")
                 || message.contains("reasoning effort")
-                || message.contains("reasoning.effort")
-            {
-                if effort == "minimal" {
-                    let replacement = if message.contains("'none'") || message.contains("\"none\"")
-                    {
-                        "none"
-                    } else {
-                        "low"
-                    };
-                    next.reasoning_effort = Some(replacement);
-                    quirks.minimal_effort_replacement = Some(replacement);
+                || message.contains("reasoning.effort"))
+        {
+            if effort == "minimal" {
+                let replacement = if message.contains("'none'") || message.contains("\"none\"") {
+                    "none"
                 } else {
-                    next.reasoning_effort = None;
-                    quirks.omit_effort = true;
-                }
-                return Some(next);
+                    "low"
+                };
+                next.reasoning_effort = Some(replacement);
+                quirks.minimal_effort_replacement = Some(replacement);
+            } else {
+                next.reasoning_effort = None;
+                quirks.omit_effort = true;
             }
+            return Some(next);
         }
         if params.token_field == TokenField::MaxTokens
             && message.contains("max_tokens")
@@ -553,6 +555,11 @@ impl OpenAiLlm {
         if params.stream_options && message.contains("stream_options") {
             next.stream_options = false;
             quirks.no_stream_options = true;
+            return Some(next);
+        }
+        if params.seed.is_some() && message.contains("seed") {
+            next.seed = None;
+            quirks.no_seed = true;
             return Some(next);
         }
         None
@@ -645,6 +652,9 @@ fn chat_body(model: &str, request: &LlmRequest, params: &ChatParams) -> Value {
     }
     if let Some(effort) = params.reasoning_effort {
         body.insert("reasoning_effort".into(), json!(effort));
+    }
+    if let Some(seed) = params.seed {
+        body.insert("seed".into(), json!(seed));
     }
     Value::Object(body)
 }
@@ -957,19 +967,20 @@ impl LlmProvider for OpenAiLlm {
             if cancel.is_cancelled() {
                 return Err(ProviderError::Cancelled);
             }
-            if matches!(failure.status.as_u16(), 400 | 422) && attempt < MAX_ATTEMPTS {
-                if let Some(next) = self.downgrade(&params, &failure.message_lower()) {
-                    tracing::debug!(
-                        provider,
-                        request_id = %request.request_id,
-                        status = failure.status.as_u16(),
-                        attempt,
-                        "request rejected; retrying with adjusted parameters"
-                    );
-                    params = next;
-                    attempt += 1;
-                    continue;
-                }
+            if matches!(failure.status.as_u16(), 400 | 422)
+                && attempt < MAX_ATTEMPTS
+                && let Some(next) = self.downgrade(&params, &failure.message_lower())
+            {
+                tracing::debug!(
+                    provider,
+                    request_id = %request.request_id,
+                    status = failure.status.as_u16(),
+                    attempt,
+                    "request rejected; retrying with adjusted parameters"
+                );
+                params = next;
+                attempt += 1;
+                continue;
             }
             let error = failure.into_error();
             log_failure(provider, &request.request_id, &error);
@@ -1009,9 +1020,53 @@ fn log_failure(provider: &'static str, request_id: &str, error: &ProviderError) 
 // ---------------------------------------------------------------------------
 
 /// Utterance transcription through `POST /v1/audio/transcriptions`.
+///
+/// When a request asks for word timestamps (answer-integrity delivery
+/// signal), the form carries `response_format=verbose_json` and
+/// `timestamp_granularities[]=word`. Servers that reject that (HTTP 400/422)
+/// get the plain request again and are not asked for words again; responses
+/// without `words` simply yield none. Without word timestamps the request is
+/// exactly the plain `response_format=json` form.
 pub struct OpenAiTranscriber {
     base: Base,
     model: String,
+    /// Cleared once the server rejected a word-timestamp request.
+    words_supported: AtomicBool,
+}
+
+/// Whether the transcription model can return word timestamps. On the OpenAI
+/// API only `whisper-1` supports `verbose_json`; other servers are tried and
+/// remembered when they refuse.
+pub fn transcription_supports_words(flavor: OpenAiFlavor, model: &str) -> bool {
+    match flavor {
+        OpenAiFlavor::OpenAi => base_model(model) == "whisper-1",
+        OpenAiFlavor::Compatible | OpenAiFlavor::LocalAi => true,
+    }
+}
+
+/// Parses the `words` array of a `verbose_json` transcription (seconds) into
+/// millisecond timings relative to the clip; malformed entries are skipped.
+/// `None` when there are no usable words.
+pub fn parse_transcription_words(value: &Value) -> Option<Vec<WordTiming>> {
+    let words: Vec<WordTiming> = value
+        .get("words")?
+        .as_array()?
+        .iter()
+        .filter_map(|w| {
+            let word = w.get("word")?.as_str()?;
+            let start = w.get("start")?.as_f64().filter(|t| t.is_finite())?;
+            let end = w.get("end")?.as_f64().filter(|t| t.is_finite())?;
+            if word.trim().is_empty() || start < 0.0 || end < start {
+                return None;
+            }
+            Some(WordTiming {
+                word: word.to_string(),
+                start_ms: (start * 1000.0).round() as i64,
+                end_ms: (end * 1000.0).round() as i64,
+            })
+        })
+        .collect();
+    (!words.is_empty()).then_some(words)
 }
 
 impl OpenAiTranscriber {
@@ -1031,12 +1086,61 @@ impl OpenAiTranscriber {
         if flavor == OpenAiFlavor::LocalAi {
             base.display_name = LOCAL_AI_TRANSCRIPTION_NAME;
         }
-        Ok(OpenAiTranscriber { base, model })
+        let words_supported = AtomicBool::new(transcription_supports_words(flavor, &model));
+        Ok(OpenAiTranscriber {
+            base,
+            model,
+            words_supported,
+        })
     }
 
     /// Configured model.
     pub fn model(&self) -> &str {
         &self.model
+    }
+
+    /// Whether word timestamps are still requested when asked for.
+    pub fn word_timestamps_supported(&self) -> bool {
+        self.words_supported.load(Ordering::Relaxed)
+    }
+
+    /// The multipart form; `words` adds the word-timestamp fields.
+    fn form(
+        &self,
+        wav: Vec<u8>,
+        request: &TranscriptionRequest,
+        words: bool,
+    ) -> Result<Form, ProviderError> {
+        let file = Part::bytes(wav)
+            .file_name("audio.wav")
+            .mime_str("audio/wav")
+            .map_err(|_| ProviderError::Other("could not build the audio upload".to_string()))?;
+        let mut form = Form::new()
+            .part("file", file)
+            .text("model", self.model.clone());
+        form = if words {
+            form.text("response_format", "verbose_json")
+                .text("timestamp_granularities[]", "word")
+        } else {
+            form.text("response_format", "json")
+        };
+        if let Some(language) = request
+            .language
+            .as_deref()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.eq_ignore_ascii_case("auto"))
+        {
+            form = form.text("language", language.to_ascii_lowercase());
+        }
+        if let Some(prompt) = request
+            .prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
+            form = form.text("prompt", tail_chars(prompt, MAX_TRANSCRIPTION_PROMPT_CHARS));
+        }
+        Ok(form)
     }
 }
 
@@ -1074,30 +1178,7 @@ impl Transcriber for OpenAiTranscriber {
         }
         let wav = encode_wav_pcm16(&clip.samples, rate);
         let wav_bytes = wav.len();
-        let file = Part::bytes(wav)
-            .file_name("audio.wav")
-            .mime_str("audio/wav")
-            .map_err(|_| ProviderError::Other("could not build the audio upload".to_string()))?;
-        let mut form = Form::new()
-            .part("file", file)
-            .text("model", self.model.clone())
-            .text("response_format", "json");
-        if let Some(language) = request
-            .language
-            .as_deref()
-            .map(str::trim)
-            .filter(|l| !l.is_empty() && !l.eq_ignore_ascii_case("auto"))
-        {
-            form = form.text("language", language.to_ascii_lowercase());
-        }
-        if let Some(prompt) = request
-            .prompt
-            .as_deref()
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-        {
-            form = form.text("prompt", tail_chars(prompt, MAX_TRANSCRIPTION_PROMPT_CHARS));
-        }
+        let mut words = request.word_timestamps && self.word_timestamps_supported();
         let started = Instant::now();
         tracing::debug!(
             provider,
@@ -1105,24 +1186,40 @@ impl Transcriber for OpenAiTranscriber {
             utterance_id = %clip.utterance_id,
             audio_ms = clip.duration_ms(),
             wav_bytes,
+            words,
             "sending transcription request"
         );
-        let builder = self
-            .base
-            .request(Method::POST, "/audio/transcriptions")?
-            .header(ACCEPT, "application/json")
-            .multipart(form);
         let deadline = self.base.timeouts.request;
-        let response = send(builder, &cancel, deadline, &self.base.host)
-            .await
-            .inspect_err(|e| log_failure(provider, &clip.utterance_id, e))?;
-        if !response.status().is_success() {
-            let error = HttpFailure::read(response, &cancel, self.base.secret(), &self.base.host)
+        let response = loop {
+            let builder = self
+                .base
+                .request(Method::POST, "/audio/transcriptions")?
+                .header(ACCEPT, "application/json")
+                .multipart(self.form(wav.clone(), &request, words)?);
+            let response = send(builder, &cancel, deadline, &self.base.host)
                 .await
-                .into_error();
+                .inspect_err(|e| log_failure(provider, &clip.utterance_id, e))?;
+            if response.status().is_success() {
+                break response;
+            }
+            let failure =
+                HttpFailure::read(response, &cancel, self.base.secret(), &self.base.host).await;
+            if words && matches!(failure.status.as_u16(), 400 | 422) {
+                // The server does not accept word timestamps: ask plainly
+                // from now on.
+                self.words_supported.store(false, Ordering::Relaxed);
+                words = false;
+                tracing::info!(
+                    provider,
+                    status = failure.status.as_u16(),
+                    "word timestamps rejected; transcribing without them"
+                );
+                continue;
+            }
+            let error = failure.into_error();
             log_failure(provider, &clip.utterance_id, &error);
             return Err(error);
-        }
+        };
         let remaining = deadline
             .saturating_sub(started.elapsed())
             .max(Duration::from_secs(1));
@@ -1153,17 +1250,24 @@ impl Transcriber for OpenAiTranscriber {
             .and_then(Value::as_f64)
             .filter(|c| c.is_finite())
             .map(|c| c.clamp(0.0, 1.0) as f32);
+        let words = if words {
+            parse_transcription_words(&value)
+        } else {
+            None
+        };
         tracing::debug!(
             provider,
             utterance_id = %clip.utterance_id,
             elapsed_ms = started.elapsed().as_millis() as u64,
             chars = text.chars().count(),
+            words = words.as_ref().map_or(0, Vec::len),
             "transcription completed"
         );
         Ok(TranscriptionOutput {
             text,
             confidence,
             language,
+            words,
         })
     }
 
@@ -1320,7 +1424,9 @@ fn decode_embedding(value: &Value) -> Option<Vec<f32>> {
             return None;
         }
         bytes
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect()
     };
@@ -1329,12 +1435,12 @@ fn decode_embedding(value: &Value) -> Option<Vec<f32>> {
 
 /// Checks that every vector has the same dimension.
 pub(crate) fn check_dimensions(vectors: &[Vec<f32>]) -> Result<(), ProviderError> {
-    if let Some(first) = vectors.first() {
-        if vectors.iter().any(|v| v.len() != first.len()) {
-            return Err(ProviderError::InvalidResponse(
-                "embeddings have inconsistent dimensions".to_string(),
-            ));
-        }
+    if let Some(first) = vectors.first()
+        && vectors.iter().any(|v| v.len() != first.len())
+    {
+        return Err(ProviderError::InvalidResponse(
+            "embeddings have inconsistent dimensions".to_string(),
+        ));
     }
     Ok(())
 }
@@ -1543,6 +1649,22 @@ mod tests {
         assert_eq!(body["max_completion_tokens"], 1000);
         assert!(body.get("max_tokens").is_none());
         assert!(body.get("reasoning_effort").is_none());
+        assert!(body.get("seed").is_none());
+    }
+
+    #[test]
+    fn seed_is_sent_and_dropped_when_rejected() {
+        let l = llm(OpenAiFlavor::Compatible, "http://127.0.0.1:1234", "local");
+        let mut r = request(false);
+        r.seed = Some(1);
+        let params = l.params_for(&r);
+        assert_eq!(chat_body("local", &r, &params)["seed"], 1);
+        let next = l
+            .downgrade(&params, "unrecognized request argument supplied: seed")
+            .unwrap();
+        assert!(chat_body("local", &r, &next).get("seed").is_none());
+        // Remembered for later requests.
+        assert_eq!(l.params_for(&r).seed, None);
     }
 
     #[test]

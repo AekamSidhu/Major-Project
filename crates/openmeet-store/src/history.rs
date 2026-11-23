@@ -32,6 +32,7 @@ const DELETE_MEETINGS_STARTED_BEFORE: &str = "DELETE FROM meetings WHERE started
 /// explicitly (instead of relying on the cascade alone) also removes rows
 /// orphaned while foreign keys were not enforced, e.g. by external tools.
 const DELETE_MEETING_CHILDREN: &str = "
+    DELETE FROM integrity_flags;
     DELETE FROM embeddings;
     DELETE FROM meeting_summaries;
     DELETE FROM action_items;
@@ -81,6 +82,7 @@ const LAST_ACTIVITY: &str = "
             UNION ALL SELECT MAX(observed_at) FROM screen_observations WHERE meeting_id = ?1
             UNION ALL SELECT MAX(created_at) FROM action_items WHERE meeting_id = ?1
             UNION ALL SELECT MAX(last_mentioned_at) FROM topics WHERE meeting_id = ?1
+            UNION ALL SELECT MAX(checked_at) FROM integrity_flags WHERE meeting_id = ?1
         ))";
 
 const COMPLETE_MEETING: &str =

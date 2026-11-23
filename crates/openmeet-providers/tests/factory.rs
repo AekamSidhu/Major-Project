@@ -716,6 +716,7 @@ async fn local_ai_transcription_and_embeddings_end_to_end() {
                 clip,
                 language: s.transcription.language.clone(),
                 prompt: None,
+                word_timestamps: false,
             },
             CancellationToken::new(),
         )

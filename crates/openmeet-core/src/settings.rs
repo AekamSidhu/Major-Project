@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::ipc::{Point, ScreenSourceSpec};
+use crate::ipc::{Point, Rect, ScreenSourceSpec};
 use crate::types::{AnswerStyle, Mode, ResponseLength, UserProfile};
 
 pub const SETTINGS_VERSION: u32 = 1;
@@ -30,6 +30,7 @@ pub struct Settings {
     pub shortcuts: ShortcutSettings,
     pub general: GeneralSettings,
     pub profile: UserProfile,
+    pub integrity: IntegritySettings,
 }
 
 impl Default for Settings {
@@ -47,6 +48,7 @@ impl Default for Settings {
             shortcuts: ShortcutSettings::default(),
             general: GeneralSettings::default(),
             profile: UserProfile::default(),
+            integrity: IntegritySettings::default(),
         }
     }
 }
@@ -756,6 +758,65 @@ impl Default for GeneralSettings {
 }
 
 // ---------------------------------------------------------------------------
+// Answer integrity
+// ---------------------------------------------------------------------------
+
+/// Smallest candidate-video region the sidecar accepts (pixels, exclusive).
+pub const INTEGRITY_REGION_MIN: u32 = 17;
+/// Largest candidate-video region the sidecar accepts (pixels).
+pub const INTEGRITY_REGION_MAX: u32 = 8192;
+
+/// Interviewer mode: the opt-in answer-integrity check (spec/integrity).
+/// Off by default; when on, each finished candidate answer is checked in the
+/// background and the result is shown privately to the interviewer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct IntegritySettings {
+    pub enabled: bool,
+    /// Does the transcript read like AI-written text (local AI sidecar).
+    pub ai_text: bool,
+    /// Closeness to the configured LLM's own answers to the question.
+    pub echo_similarity: bool,
+    /// Answer timing against the candidate's own baseline.
+    pub delivery: bool,
+    /// Eye movements while answering (needs `candidate_region`).
+    pub reading: bool,
+    /// The candidate's video tile in absolute screen coordinates (physical
+    /// pixels of the virtual desktop), captured by the local AI sidecar for
+    /// gaze. `None` = not set (the reading signal is unavailable).
+    pub candidate_region: Option<Rect>,
+}
+
+impl Default for IntegritySettings {
+    fn default() -> Self {
+        IntegritySettings {
+            enabled: false,
+            ai_text: true,
+            echo_similarity: true,
+            delivery: true,
+            reading: true,
+            candidate_region: None,
+        }
+    }
+}
+
+impl IntegritySettings {
+    /// Whether `signal` should be computed (the check is on and the signal
+    /// is enabled).
+    pub fn signal_enabled(&self, signal: crate::integrity::IntegritySignalName) -> bool {
+        use crate::integrity::IntegritySignalName as N;
+        self.enabled
+            && match signal {
+                N::AiText => self.ai_text,
+                N::EchoSimilarity => self.echo_similarity,
+                N::Delivery => self.delivery,
+                N::Reading => self.reading,
+            }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -858,6 +919,11 @@ impl Settings {
         s.profile.role_context = s.profile.role_context.chars().take(10_000).collect();
         s.profile.planned_topics = s.profile.planned_topics.chars().take(4_000).collect();
         s.profile.custom_instructions = s.profile.custom_instructions.chars().take(4_000).collect();
+
+        if let Some(r) = s.integrity.candidate_region.as_mut() {
+            r.width = r.width.clamp(INTEGRITY_REGION_MIN, INTEGRITY_REGION_MAX);
+            r.height = r.height.clamp(INTEGRITY_REGION_MIN, INTEGRITY_REGION_MAX);
+        }
         s
     }
 
@@ -871,10 +937,10 @@ impl Settings {
             ("Transcription base URL", &self.transcription.base_url),
         ];
         for (label, url) in urls {
-            if let Some(u) = url {
-                if let Err(e) = validate_base_url(u) {
-                    errors.push(format!("{label}: {e}"));
-                }
+            if let Some(u) = url
+                && let Err(e) = validate_base_url(u)
+            {
+                errors.push(format!("{label}: {e}"));
             }
         }
         if self.ai.llm.model.trim().is_empty() {
@@ -989,6 +1055,27 @@ mod tests {
         assert_eq!(RetentionPolicy::Forever.max_age_ms(), None);
         assert!(!RetentionPolicy::None.persists());
         assert_eq!(RetentionPolicy::OneDay.max_age_ms(), Some(86_400_000));
+    }
+
+    #[test]
+    fn integrity_is_off_by_default_and_regions_are_clamped() {
+        use crate::integrity::IntegritySignalName;
+        let s = Settings::default();
+        assert!(!s.integrity.enabled);
+        assert!(s.integrity.candidate_region.is_none());
+        assert!(!s.integrity.signal_enabled(IntegritySignalName::AiText));
+        let mut s: Settings = serde_json::from_str(
+            r#"{"integrity":{"enabled":true,"reading":false,"candidateRegion":{"x":-1920,"y":10,"width":4,"height":99999}}}"#,
+        )
+        .unwrap();
+        assert!(s.integrity.signal_enabled(IntegritySignalName::Delivery));
+        assert!(!s.integrity.signal_enabled(IntegritySignalName::Reading));
+        s = s.sanitized();
+        let r = s.integrity.candidate_region.unwrap();
+        assert_eq!(
+            (r.x, r.width, r.height),
+            (-1920, INTEGRITY_REGION_MIN, INTEGRITY_REGION_MAX)
+        );
     }
 
     #[test]

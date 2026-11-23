@@ -220,11 +220,12 @@ impl FollowupStreamParser {
         // the overlay can show the first follow-up as early as possible.
         if self.pending.is_empty() {
             let t = self.line.trim();
-            if t.starts_with('{') && t.ends_with('}') {
-                if let Some(Value::Object(obj)) = parse_lenient(t) {
-                    self.line.clear();
-                    out.extend(item_from_object(&obj));
-                }
+            if t.starts_with('{')
+                && t.ends_with('}')
+                && let Some(Value::Object(obj)) = parse_lenient(t)
+            {
+                self.line.clear();
+                out.extend(item_from_object(&obj));
             }
         }
         out

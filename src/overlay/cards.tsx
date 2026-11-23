@@ -3,8 +3,10 @@
 // topic tracker.
 
 import { useMemo, useState } from "react";
-import type { AnswerStyle, FollowUpQuestion, Refinement, Topic } from "@/bindings";
+import type { AnswerStyle, FollowUpQuestion, IntegrityFlag, Refinement, Topic } from "@/bindings";
 import { answerToPlainText, parseAnswer, type ParsedAnswer } from "@/lib/answer";
+import { IntegrityFlagView } from "@/lib/IntegrityFlagView";
+import { answerRangeLabel, flagSummary, isElevated } from "@/lib/integrity";
 import { categoryLabel } from "@/lib/format";
 import {
   chooseStyle,
@@ -17,7 +19,7 @@ import {
   retry,
   setPinned,
 } from "./actions";
-import { CheckIcon, CopyIcon, PinIcon, RefreshIcon } from "./icons";
+import { CheckIcon, CloseIcon, CopyIcon, PinIcon, RefreshIcon } from "./icons";
 import {
   isRunning,
   isThinking,
@@ -511,5 +513,49 @@ export function ListeningActions({ mode }: { mode: "candidate" | "interviewer" }
         </ActionButton>
       )}
     </div>
+  );
+}
+
+/**
+ * The latest answer-integrity check (interviewer mode). A raised flag shows
+ * its evidence; a quiet result is one line that can be expanded. Private to
+ * the interviewer; a reason to ask a follow-up, never a verdict.
+ */
+export function IntegrityCard({ flag, onDismiss }: { flag: IntegrityFlag; onDismiss: () => void }) {
+  const raised = isElevated(flag.level);
+  const [open, setOpen] = useState(false);
+  return (
+    <section
+      aria-label="Answer integrity"
+      className={cx(
+        "om-fade-in rounded-lg border px-2.5 py-2",
+        raised
+          ? "border-[color-mix(in_srgb,var(--om-warn)_45%,transparent)] bg-[color-mix(in_srgb,var(--om-warn)_6%,transparent)]"
+          : "border-border",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <SectionLabel className="mb-0">Answer check</SectionLabel>
+        <IconButton label="Hide this check" onClick={onDismiss}>
+          <CloseIcon />
+        </IconButton>
+      </div>
+      {raised || open ? (
+        <div className="mt-1">
+          <IntegrityFlagView flag={flag} compact={raised} />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-0.5 flex w-full items-baseline justify-between gap-2 text-left text-[0.8rem] text-fg-soft hover:text-fg"
+        >
+          <span>
+            {flagSummary(flag)} · {answerRangeLabel(flag)}
+          </span>
+          <span className="shrink-0 text-[0.72rem] text-accent">Details</span>
+        </button>
+      )}
+    </section>
   );
 }

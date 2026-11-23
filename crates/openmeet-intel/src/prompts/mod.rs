@@ -22,6 +22,7 @@ pub mod ask;
 pub mod candidate_answer;
 pub mod candidate_clarification;
 pub mod context_compression;
+pub mod integrity_reference;
 pub mod interviewer_followup;
 pub mod meeting_summary;
 pub mod question_detection;

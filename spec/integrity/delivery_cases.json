@@ -1,0 +1,489 @@
+{
+  "spec_version": 1,
+  "tolerance": 1e-06,
+  "constants": {
+    "pause_min_s": 0.3,
+    "min_speaking_s": 1.0,
+    "min_span_s": 5.0,
+    "min_words": 10,
+    "baseline_answers": 3,
+    "mad_to_sd": 1.4826,
+    "fillers": [
+      "ah",
+      "er",
+      "erm",
+      "hmm",
+      "mm",
+      "uh",
+      "uhm",
+      "um",
+      "umm"
+    ],
+    "filler_bigrams": [
+      "i mean",
+      "you know"
+    ],
+    "weights": {
+      "latency_s": 1.0,
+      "rate_wpm": 0.5,
+      "pause_per_min": -0.5,
+      "filler_per_100w": -0.5
+    },
+    "floors": {
+      "latency_s": 0.5,
+      "rate_wpm": 15.0,
+      "pause_per_min": 3.0,
+      "filler_per_100w": 1.0
+    }
+  },
+  "single_answers": [
+    {
+      "name": "word timestamps, one filler bigram and two fillers",
+      "question_end": 10.0,
+      "utterances": [
+        {
+          "start": 11.2,
+          "end": 14.6,
+          "text": "um so I mean we cached the results in redis",
+          "words": [
+            {
+              "word": " um",
+              "start": 11.2,
+              "end": 11.45
+            },
+            {
+              "word": " so",
+              "start": 11.55,
+              "end": 11.8
+            },
+            {
+              "word": " I",
+              "start": 11.9,
+              "end": 12.15
+            },
+            {
+              "word": " mean",
+              "start": 12.25,
+              "end": 12.5
+            },
+            {
+              "word": " we",
+              "start": 12.6,
+              "end": 12.85
+            },
+            {
+              "word": " cached",
+              "start": 12.95,
+              "end": 13.2
+            },
+            {
+              "word": " the",
+              "start": 13.3,
+              "end": 13.55
+            },
+            {
+              "word": " results",
+              "start": 13.65,
+              "end": 13.9
+            },
+            {
+              "word": " in",
+              "start": 14.0,
+              "end": 14.25
+            },
+            {
+              "word": " redis",
+              "start": 14.35,
+              "end": 14.6
+            }
+          ]
+        },
+        {
+          "start": 16.0,
+          "end": 19.75,
+          "text": "and uh invalidated them when the source row changed you know",
+          "words": [
+            {
+              "word": " and",
+              "start": 16.0,
+              "end": 16.25
+            },
+            {
+              "word": " uh",
+              "start": 16.35,
+              "end": 16.6
+            },
+            {
+              "word": " invalidated",
+              "start": 16.7,
+              "end": 16.95
+            },
+            {
+              "word": " them",
+              "start": 17.05,
+              "end": 17.3
+            },
+            {
+              "word": " when",
+              "start": 17.4,
+              "end": 17.65
+            },
+            {
+              "word": " the",
+              "start": 17.75,
+              "end": 18.0
+            },
+            {
+              "word": " source",
+              "start": 18.1,
+              "end": 18.35
+            },
+            {
+              "word": " row",
+              "start": 18.45,
+              "end": 18.7
+            },
+            {
+              "word": " changed",
+              "start": 18.8,
+              "end": 19.05
+            },
+            {
+              "word": " you",
+              "start": 19.15,
+              "end": 19.4
+            },
+            {
+              "word": " know",
+              "start": 19.5,
+              "end": 19.75
+            }
+          ]
+        }
+      ],
+      "expected_features": {
+        "granularity": "word",
+        "word_count": 21,
+        "speaking_s": 7.15,
+        "span_s": 8.55,
+        "latency_s": 1.1999999999999993,
+        "rate_wpm": 176.2237762237762,
+        "pause_per_min": 7.017543859649122,
+        "mean_pause_s": 1.4000000000000004,
+        "filler_per_100w": 19.047619047619047
+      }
+    },
+    {
+      "name": "utterance timings only",
+      "question_end": 3.0,
+      "utterances": [
+        {
+          "start": 5.5,
+          "end": 9.6,
+          "text": "the service keeps a write ahead log so a crash loses nothing"
+        },
+        {
+          "start": 10.4,
+          "end": 13.1,
+          "text": "then a background job compacts it every hour"
+        },
+        {
+          "start": 15.0,
+          "end": 17.35,
+          "text": "and we alert if it falls behind"
+        }
+      ],
+      "expected_features": {
+        "granularity": "utterance",
+        "word_count": 27,
+        "speaking_s": 9.15,
+        "span_s": 11.850000000000001,
+        "latency_s": 2.5,
+        "rate_wpm": 177.04918032786884,
+        "pause_per_min": 10.126582278481012,
+        "mean_pause_s": 1.3500000000000005,
+        "filler_per_100w": 0.0
+      }
+    },
+    {
+      "name": "question end unknown",
+      "question_end": null,
+      "utterances": [
+        {
+          "start": 0.0,
+          "end": 4.45,
+          "text": "I would start by measuring where the time actually goes before changing anything"
+        }
+      ],
+      "expected_features": {
+        "granularity": "utterance",
+        "word_count": 13,
+        "speaking_s": 4.45,
+        "span_s": 4.45,
+        "latency_s": null,
+        "rate_wpm": 175.2808988764045,
+        "pause_per_min": null,
+        "mean_pause_s": 0.0,
+        "filler_per_100w": 0.0
+      }
+    },
+    {
+      "name": "too short",
+      "question_end": 1.0,
+      "utterances": [
+        {
+          "start": 1.5,
+          "end": 2.1,
+          "text": "yes exactly"
+        }
+      ],
+      "expected_features": {
+        "granularity": "utterance",
+        "word_count": 2,
+        "speaking_s": 0.6000000000000001,
+        "span_s": 0.6000000000000001,
+        "latency_s": 0.5,
+        "rate_wpm": null,
+        "pause_per_min": null,
+        "mean_pause_s": 0.0,
+        "filler_per_100w": 0.0
+      }
+    },
+    {
+      "name": "no speech",
+      "question_end": 1.0,
+      "utterances": [],
+      "expected_features": null
+    }
+  ],
+  "session": {
+    "name": "session with baseline",
+    "answers": [
+      {
+        "question_end": 0.0,
+        "utterances": [
+          {
+            "start": 0.9,
+            "end": 9.13,
+            "text": "well um I think so we tried a few things and uh it mostly worked out fine in the end"
+          }
+        ]
+      },
+      {
+        "question_end": 20.0,
+        "utterances": [
+          {
+            "start": 21.1,
+            "end": 30.55,
+            "text": "hmm let me think well um I think so we tried a few things and uh it mostly worked out fine in the end"
+          }
+        ]
+      },
+      {
+        "question_end": 45.0,
+        "utterances": [
+          {
+            "start": 45.7,
+            "end": 45.95,
+            "text": "ok"
+          }
+        ]
+      },
+      {
+        "question_end": 60.0,
+        "utterances": [
+          {
+            "start": 60.8,
+            "end": 70.5,
+            "text": "well um I think so we tried a few things and uh it mostly worked out fine in the end you know"
+          },
+          {
+            "start": 70.9,
+            "end": 73.4,
+            "text": "uh yeah that is about it"
+          }
+        ]
+      },
+      {
+        "question_end": 90.0,
+        "utterances": [
+          {
+            "start": 91.0,
+            "end": 101.09,
+            "text": "so um the first project well um I think so we tried a few things and uh it mostly worked out fine in the end"
+          }
+        ]
+      },
+      {
+        "question_end": 120.0,
+        "utterances": [
+          {
+            "start": 124.6,
+            "end": 131.57,
+            "text": "consistent hashing distributes keys across nodes so that adding or removing a node only remaps a small fraction of the keys which keeps rebalancing cheap"
+          }
+        ]
+      },
+      {
+        "question_end": 160.0,
+        "utterances": [
+          {
+            "start": 161.0,
+            "end": 167.7,
+            "text": "uh honestly I do not remember the exact number but um it was around two seconds"
+          }
+        ]
+      }
+    ],
+    "expected": [
+      {
+        "features": {
+          "granularity": "utterance",
+          "word_count": 20,
+          "speaking_s": 8.23,
+          "span_s": 8.23,
+          "latency_s": 0.9,
+          "rate_wpm": 145.80801944106923,
+          "pause_per_min": 0.0,
+          "mean_pause_s": 0.0,
+          "filler_per_100w": 10.0
+        },
+        "score": {
+          "level": "baseline",
+          "index": null,
+          "z": {},
+          "calibrated": false
+        }
+      },
+      {
+        "features": {
+          "granularity": "utterance",
+          "word_count": 24,
+          "speaking_s": 9.45,
+          "span_s": 9.45,
+          "latency_s": 1.1000000000000014,
+          "rate_wpm": 152.3809523809524,
+          "pause_per_min": 0.0,
+          "mean_pause_s": 0.0,
+          "filler_per_100w": 12.5
+        },
+        "score": {
+          "level": "baseline",
+          "index": null,
+          "z": {},
+          "calibrated": false
+        }
+      },
+      {
+        "features": {
+          "granularity": "utterance",
+          "word_count": 1,
+          "speaking_s": 0.25,
+          "span_s": 0.25,
+          "latency_s": 0.7000000000000028,
+          "rate_wpm": null,
+          "pause_per_min": null,
+          "mean_pause_s": 0.0,
+          "filler_per_100w": 0.0
+        },
+        "score": {
+          "level": "too_short",
+          "index": null,
+          "z": {},
+          "calibrated": false
+        }
+      },
+      {
+        "features": {
+          "granularity": "utterance",
+          "word_count": 28,
+          "speaking_s": 12.200000000000003,
+          "span_s": 12.600000000000009,
+          "latency_s": 0.7999999999999972,
+          "rate_wpm": 137.70491803278685,
+          "pause_per_min": 4.761904761904759,
+          "mean_pause_s": 0.4000000000000057,
+          "filler_per_100w": 14.285714285714286
+        },
+        "score": {
+          "level": "baseline",
+          "index": null,
+          "z": {},
+          "calibrated": false
+        }
+      },
+      {
+        "features": {
+          "granularity": "utterance",
+          "word_count": 25,
+          "speaking_s": 10.090000000000003,
+          "span_s": 10.090000000000003,
+          "latency_s": 1.0,
+          "rate_wpm": 148.66204162537161,
+          "pause_per_min": 0.0,
+          "mean_pause_s": 0.0,
+          "filler_per_100w": 12.0
+        },
+        "score": {
+          "level": "low",
+          "index": 0.15582511165472104,
+          "z": {
+            "latency_s": 0.19999999999999996,
+            "rate_wpm": 0.19026814562015867,
+            "pause_per_min": 0.0,
+            "filler_per_100w": -0.18885741265344658
+          },
+          "calibrated": false
+        }
+      },
+      {
+        "features": {
+          "granularity": "utterance",
+          "word_count": 25,
+          "speaking_s": 6.969999999999999,
+          "span_s": 6.969999999999999,
+          "latency_s": 4.599999999999994,
+          "rate_wpm": 215.20803443328555,
+          "pause_per_min": 0.0,
+          "mean_pause_s": 0.0,
+          "filler_per_100w": 0.0
+        },
+        "score": {
+          "level": "high",
+          "index": 4.829620596496779,
+          "z": {
+            "latency_s": 7.399999999999989,
+            "rate_wpm": 4.626667666147754,
+            "pause_per_min": 0.0,
+            "filler_per_100w": -4.721435316336165
+          },
+          "calibrated": false
+        }
+      },
+      {
+        "features": {
+          "granularity": "utterance",
+          "word_count": 16,
+          "speaking_s": 6.699999999999989,
+          "span_s": 6.699999999999989,
+          "latency_s": 1.0,
+          "rate_wpm": 143.28358208955248,
+          "pause_per_min": 0.0,
+          "mean_pause_s": 0.0,
+          "filler_per_100w": 12.5
+        },
+        "score": {
+          "level": "low",
+          "index": 0.04634083531310995,
+          "z": {
+            "latency_s": 0.19999999999999996,
+            "rate_wpm": -0.16829582343445015,
+            "pause_per_min": 0.0,
+            "filler_per_100w": 0.0
+          },
+          "calibrated": false
+        }
+      }
+    ]
+  }
+}

@@ -24,6 +24,7 @@ import type {
   ExportRequest,
   ExportResult,
   GenerateAnswerRequest,
+  IntegrityServiceView,
   LocalAiStatus,
   Meeting,
   MeetingAppInfo,
@@ -37,6 +38,7 @@ import type {
   PrivacyRule,
   PrivacyRuleType,
   ProviderTestResult,
+  Rect,
   Refinement,
   ScreenSourceInfo,
   ScreenSourceSpec,
@@ -93,6 +95,12 @@ export const api = {
   getLocalAiStatus: () => invoke<LocalAiStatus>("get_local_ai_status"),
   startLocalAi: () => invoke<LocalAiStatus>("start_local_ai"),
   stopLocalAi: () => invoke<LocalAiStatus>("stop_local_ai"),
+
+  // Answer integrity (interviewer mode) -----------------------------------------
+  /** Whether Local AI can run the answer-integrity check (works while the check is off). */
+  getIntegrityStatus: () => invoke<IntegrityServiceView>("get_integrity_status"),
+  /** PNG data URL of an absolute screen region, as the sidecar will capture it. */
+  previewIntegrityRegion: (region: Rect) => invoke<string>("preview_integrity_region", { region }),
 
   // Audio & screen -----------------------------------------------------------
   listAudioDevices: () => invoke<AudioDevices>("list_audio_devices"),
