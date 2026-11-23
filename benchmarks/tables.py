@@ -125,7 +125,7 @@ def held_out() -> None:
     ritw = load(TRAIN / "gaze-detection" / "results" / "ritw_10s.json")
     echo = load(TRAIN / "echo-detection" / "results" / "echo_similarity.json")
     delivery = load(TRAIN / "echo-detection" / "results" / "delivery_spice.json")
-    model = load(benchlib.LOCAL_AI / "integrity" / "models" / "echo_tfidf.json")
+    ai = load(R / "ai_text_v1_vs_v2.json")
     print("### Detection rate and false flags: held-out results already measured\n")
     print("| Signal | Test data (held out) | ROC-AUC | Detection rate | False-flag rate | Source |")
     print("|---|---|---|---|---|---|")
@@ -141,10 +141,13 @@ def held_out() -> None:
         a = ritw["test"]["average"]["eye_tracker"]["window"]["balanced"]
         print(f"| Reading, real life (a model trained on RitW, **not** the shipped one) | Reading in the Wild, 17 unseen people | "
               f"{a['roc_auc']:.3f} | {pct(a['recall'])} | {pct(a['false_positive_rate'])} | `training/gaze-detection/results/ritw_10s.json` |")
-    if model:
-        t = model["test_questions"]
-        print(f"| AI-written text | HC3, all test questions ({t['n_ai']:,} ChatGPT + {t['n_human']:,} human answers) | {t['roc_auc']:.3f} | "
-              f"{pct(t['recall'])} at `high` | {pct(t['false_positive_rate'])} at `high` | `local-ai/integrity/models/echo_tfidf.json` |")
+    if ai:
+        m = ai["models"]["v2"]
+        n, h = m["at_high"]["of_ai"], m["at_high"]["of_human"]
+        print(f"| AI-written text (v2, shipped) | HC3, all test questions ({n:,} ChatGPT + {h:,} human answers) | {m['roc_auc']:.3f} | "
+              f"{pct(m['at_possible']['detection_rate'])} / {pct(m['at_high']['detection_rate'])} | "
+              f"{pct(m['at_possible']['false_flag_rate'])} / {pct(m['at_high']['false_flag_rate'])} | "
+              f"`benchmarks/results/ai_text_v1_vs_v2.json` |")
     if echo:
         t = echo["test"]
         print(f"| Echo similarity | HC3, 500 test questions (100 per source) | {t['roc_auc']:.3f} | {pct(t['at_possible']['recall'])} / "
@@ -157,6 +160,56 @@ def held_out() -> None:
               f"{pct(s['levels']['spontaneous']['possible_or_high'])} / {pct(s['levels']['spontaneous']['high'])} of spontaneous | "
               f"`training/echo-detection/results/delivery_spice.json` |")
     print("\nA / B = at `possible` / at `high`.\n")
+
+
+def ai_text() -> None:
+    res = load(R / "ai_text_v1_vs_v2.json")
+    if not res:
+        return
+    v1, v2 = res["models"]["v1"], res["models"]["v2"]
+    d = res["data"]
+    print("### AI-written text model: v1 against v2 (HC3 test questions, the same split)\n")
+    print("| Model | ROC-AUC | Balanced accuracy at `high` | Detected at `possible` | False flags at `possible` | Detected at `high` | False flags at `high` |")
+    print("|---|---|---|---|---|---|---|")
+    for name, m in (("v1 (commit 0836f1e, HC3 only)", v1), ("v2 (shipped; HC3 + interview Q&A)", v2)):
+        p_, h_ = m["at_possible"], m["at_high"]
+        print(f"| {name} | {m['roc_auc']:.4f} | {pct(h_['balanced_accuracy'])} | {pct(p_['detection_rate'])} | "
+              f"{pct(p_['false_flag_rate'])} | {pct(h_['detection_rate'])} | {pct(h_['false_flag_rate'])} |")
+    print(f"\nThresholds (the sidecar's: `possible` is the lower of the two stored thresholds, `high` the higher): "
+          f"v1 {v1['possible']:.4f} / {v1['high']:.4f}; v2 {v2['possible']:.4f} / {v2['high']:.4f}. "
+          f"{d['test_answers']:,} answers ({d['chatgpt_answers']:,} ChatGPT, {d['human_answers']:,} human) to "
+          f"{d['test_questions']:,} test questions.\n")
+    print("By HC3 source (ROC-AUC within the source; detection and false flags at `high`):\n")
+    print("| Source | ChatGPT / human | v1 AUC | v2 AUC | v1 detected / false flags | v2 detected / false flags |")
+    print("|---|---|---|---|---|---|")
+    for src, row in res["by_source"].items():
+        a, b = row["v1"], row["v2"]
+        print(f"| {src} | {row['chatgpt_answers']:,} / {row['human_answers']:,} | {a['roc_auc']:.3f} | {b['roc_auc']:.3f} | "
+              f"{pct(a['at_high']['detection_rate'])} / {pct(a['at_high']['false_flag_rate'])} | "
+              f"{pct(b['at_high']['detection_rate'])} / {pct(b['at_high']['false_flag_rate'])} |")
+    fv1, fv2 = load(R / "fusion_hc3_v1.json"), load(R / "fusion_hc3.json")
+    if fv1 and fv2:
+        print("\nIn the fused flag (HC3 sample of 1,411 answers, two references; see section 3):\n")
+        print("| Configuration | v1 detected / false flags at `possible` | v2 detected / false flags at `possible` | "
+              "v1 detected / false flags at `high` | v2 detected / false flags at `high` |")
+        print("|---|---|---|---|---|")
+        for name in ("ai_text alone", "fused (ai_text + echo)"):
+            a, b = fv1["configs"][name], fv2["configs"][name]
+            print(f"| {name} | {pct(a['at_possible']['detection_rate'])} / {pct(a['at_possible']['false_flag_rate'])} | "
+                  f"{pct(b['at_possible']['detection_rate'])} / {pct(b['at_possible']['false_flag_rate'])} | "
+                  f"{pct(a['at_high']['detection_rate'])} / {pct(a['at_high']['false_flag_rate'])} | "
+                  f"{pct(b['at_high']['detection_rate'])} / {pct(b['at_high']['false_flag_rate'])} |")
+    print("\nStored test metrics in each model file (`balanced` level, written by its training script), against the recomputed ones:\n")
+    print("| File | Stored balanced accuracy | Recomputed | Stored recall | Recomputed | Stored false-positive rate | Recomputed |")
+    print("|---|---|---|---|---|---|---|")
+    for name, m in (("v1", v1), ("v2", v2)):
+        st = res["stored_test_metrics"][name]
+        st = st.get("balanced", st) if st else None
+        if st:
+            print(f"| {name} | {pct(st['balanced_accuracy'], 2)} | {pct(m['at_high']['balanced_accuracy'], 2)} | "
+                  f"{pct(st['recall'], 2)} | {pct(m['at_high']['detection_rate'], 2)} | "
+                  f"{pct(st['false_positive_rate'], 2)} | {pct(m['at_high']['false_flag_rate'], 2)} |")
+    print("\n" + env_line(res) + "\n")
 
 
 def fusion() -> None:
@@ -307,7 +360,7 @@ def room() -> None:
     print("\n" + env_line(res) + "\n")
 
 
-SECTIONS = {"asr": asr, "held_out": held_out, "fusion": fusion, "sidecar": sidecar, "followups": followups,
+SECTIONS = {"asr": asr, "held_out": held_out, "ai_text": ai_text, "fusion": fusion, "sidecar": sidecar, "followups": followups,
             "engine": engine, "room": room}
 MARK = re.compile(r"(<!-- tables:(\w+) -->\n)(.*?)(<!-- /tables -->)", re.S)
 
