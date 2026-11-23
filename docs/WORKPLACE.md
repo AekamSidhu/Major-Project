@@ -20,9 +20,11 @@ During the meeting, the main window shows the **Board**:
   are vague: no owner, no due date, unclear scope ("look into it"), or
   tentative ("probably", "for now").
 
-When someone asks **you** a question, OpenMeet suggests an answer in the
-overlay, worded for a colleague and grounded in the transcript and your notes.
-Questions asked by you are tracked on the board but do not get suggestions.
+When someone asks **you** a question (second-person, such as "Can you share
+the plan?", not a question to the room or to a named colleague), OpenMeet
+suggests an answer in the overlay, worded for a colleague and grounded in the
+transcript and your notes. Every question on the board also has a "Suggest
+answer in overlay" button in the main window.
 
 **Catch me up** streams a summary of the last five minutes into the overlay:
 what was said, the decisions and action items in that window, and the open
@@ -30,10 +32,10 @@ questions still waiting for you.
 
 When the meeting ends, the **minutes** are written: an overview, decisions,
 action items with owner and due date, open questions, and a draft follow-up
-message you can copy. The minutes are stored with the meeting and appear in
-History (Summary tab) and in Markdown, text and JSON export. Without an AI
-provider, or if the model's answer cannot be used, basic minutes are built from
-the board without a model.
+message you can copy. The minutes are stored with the meeting and shown in
+History (Summary tab); the Markdown export includes them. Without an AI
+provider, or if the model's output cannot be used, basic minutes are built
+from the recorded meeting without a model.
 
 ## How to use it
 
@@ -56,10 +58,9 @@ devices.
   delete-all cover workplace meetings like any other meeting.
 - Answer-integrity checks never run in workplace mode. Speakers are labelled
   "You" and "Others". No interview scoring or hiring language is produced.
-- Vagueness detection and the board are rule-based and can miss or over-flag
-  phrasing; the clarifying questions are suggestions for you to use or ignore.
-- Action items and decisions come from what is said. Items said by someone
-  else are attributed only when the speaker is named.
+- Decisions, action items, questions and vagueness are found with rules, so
+  they can miss or over-flag phrasing. The clarifying questions are suggestions
+  for you to use or ignore.
 - Voice commands do not switch modes or ask for a catch-up. Use the mode switch,
   the shortcut or the Catch me up button.
 - Follow-up question suggestions (the interviewer feature) are not offered in
