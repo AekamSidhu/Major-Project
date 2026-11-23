@@ -67,7 +67,14 @@ $pyArgs = @("room_server.py", "--followups", $Followups, "--transcription", $Tra
 if ($Tunnel) { $pyArgs += "--tunnel" }
 
 $env:PYTHONUNBUFFERED = "1"
-$server = Start-Process python -ArgumentList $pyArgs `
+# The room needs the sidecar's packages: use local-ai\.venv (made by scripts\setup-local-ai.ps1),
+# not whatever `python` is first on PATH (often a newer Python without them).
+$python = Join-Path $root "local-ai\.venv\Scripts\python.exe"
+if (-not (Test-Path $python)) {
+    Write-Host "local-ai\.venv not found: run scripts\setup-local-ai.ps1 first (falling back to python on PATH)." -ForegroundColor Yellow
+    $python = "python"
+}
+$server = Start-Process $python -ArgumentList $pyArgs `
     -WorkingDirectory (Join-Path $root "local-ai") -NoNewWindow -PassThru
 
 Write-Host "Starting the Room (loading models$(if ($Tunnel) { ' and tunnel' }))..."
