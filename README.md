@@ -44,19 +44,32 @@ question, never a verdict.
 
 | Model | The question it answers | Trained on | Method | Result on unseen data |
 |---|---|---|---|---|
-| **Reading detector** | From 10 s of eye movements, is the person reading? | GazeBase (322 people), degraded to webcam quality; Reading in the Wild (81 people, real life) | Small 1-D CNN on the gaze trace (10 samples per second) | **98.8%** balanced accuracy on 64 unseen GazeBase people; **83.0%** on real-world reading |
-| **Gaze model** | Where are the eyes looking, from a webcam face image? | MPIIFaceGaze (37,667 webcam images, 15 people) | ResNet-18 transfer learning from a gaze-trained network | **4.54°** average error, against 7.18° for the MediaPipe method used today |
-| **AI-written answer detector** | Does this answer's transcript read like AI-written text? | HC3 (human vs ChatGPT answers) | TF-IDF word features with logistic regression | **97.9%** balanced accuracy on unseen questions (AUC 0.998) |
+| **Reading detector** (the shipped network) | From 10 s of eye movements, is the person reading? | GazeBase (322 people), degraded to webcam quality | Small 1-D CNN on the gaze trace (10 samples per second), three seeds averaged | **98.8%** balanced accuracy on 64 unseen GazeBase people with webcam-quality noise. Not yet scored on real-world reading with this network |
+| **Reading detector, real-world model** (not shipped) | Same question, for everyday reading | Reading in the Wild (81 people wearing eye-tracking glasses) | The same kind of CNN, trained and tested on its own people | **83.0%** balanced accuracy per 10 s window with eye-tracker input; 79.1% with webcam-style noise |
+| **Gaze model** (not yet in the app) | Where are the eyes looking, from a webcam face image? | MPIIFaceGaze (37,667 webcam images, 15 people) | ResNet-18 transfer learning from a gaze-trained network | **4.54°** average error, against 7.18° for the MediaPipe method used today |
+| **AI-written answer detector** (v2, shipped) | Does this answer's transcript read like AI-written text? | HC3 (human vs ChatGPT answers) plus 54 interview-style question and answer pairs | TF-IDF word features with logistic regression | **98.0%** balanced accuracy on unseen HC3 questions (AUC 0.998); at its `high` level it catches 97.8% of AI answers and flags 1.8% of human ones |
+
+Two more integrity signals are not trained models. **Echo similarity** compares
+an answer with two answers that Llama 3.2 writes to the same question
+(embeddings and cosine similarity); its thresholds were measured on HC3 public
+data (ROC-AUC 0.876) and are marked calibrated for that data. **Delivery**
+compares the timing of an answer with the candidate's first three answers; its
+weights and thresholds are set by hand and it is **uncalibrated**. The early
+reading detector, which scores 3 to 10 seconds of gaze, is hand-tuned and
+uncalibrated as well. It counts at most as *possible*. No signal has been
+calibrated on real interviews yet.
 
 **New to machine learning?** Read the beginner's guide,
 [docs/MODELS.md](docs/MODELS.md). It explains what each model does, the data
 and features behind it, how it was trained and tested, the results and their
-limits, with a glossary of the terms used.
+limits, with a glossary of the terms used. All measured numbers, with how they
+were measured, are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
-The training code lives on the `feature/gaze-detection` and
-`feature/echo-detection` branches. The models run inside the local AI sidecar
-(`local-ai/integrity`, branch `feature/integrity-check`) and the browser
-interview room (`local-ai/room`, branch `feature/interview-room`).
+Where the code is: the training code is in `training/gaze-detection` and
+`training/echo-detection`. The models run inside the local AI sidecar
+(`local-ai/integrity`), and the browser interview room is in `local-ai/room`.
+The shared definitions, thresholds and test fixtures of the integrity check are
+in [`spec/integrity/`](spec/integrity/README.md).
 
 ---
 
@@ -90,6 +103,25 @@ interview room (`local-ai/room`, branch `feature/interview-room`).
 * Interviewer tools: claim extraction, gap detection, topic tracking with a
   suggested next area, semantic duplicate detection for follow-ups.
 * Optional voice commands ("OpenMeet, give me a follow-up").
+
+**Interviews and team meetings**
+* **Answer-integrity check** (interviewer mode, off by default): after each
+  candidate answer, four signals (AI-written text, similarity to an LLM's
+  answer, delivery timing, eye movements that look like reading) are combined
+  into one flag, shown privately with its evidence. It is a reason to ask a
+  follow-up question, never a verdict. See
+  [docs/INTEGRITY.md](docs/INTEGRITY.md).
+* **OpenMeet Room**: a one-to-one interview room in the browser, hosted from the
+  interviewer's own computer (`local-ai/room`). The candidate only opens a link.
+  Transcription, the integrity signals and follow-up questions run on the
+  interviewer's computer by default. Access from other networks uses an
+  optional Cloudflare tunnel, which is off unless it is started. See
+  [local-ai/room/README.md](local-ai/room/README.md).
+* **Workplace mode** (stand-ups, reviews, planning, 1:1s): a live board of
+  decisions, action items with owner and due date, and open questions; a
+  "Catch me up" summary; and minutes with a follow-up message when the meeting
+  ends. Nobody is interviewed or scored. See
+  [docs/WORKPLACE.md](docs/WORKPLACE.md).
 
 **Privacy & control**
 * Nothing is captured until you start a meeting; screen context is off unless
@@ -199,6 +231,13 @@ accuracy, detection rates and false flags: [docs/BENCHMARKS.md](docs/BENCHMARKS.
 Mix and match freely. Details, defaults and model rules:
 [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
+The interview room (`local-ai/room`) is local by default. Two options send data
+online and must be asked for: `--transcription groq` sends the candidate's audio
+to Groq for transcription, and `--followups online` sends the interviewer's
+questions and the text of answers to Google Gemini. `start-room.ps1 -Cloud`
+turns both on, together with the tunnel. The room says what goes online before
+it starts. See [local-ai/room/README.md](local-ai/room/README.md).
+
 ## Local mode
 
 With the local providers above, OpenMeet runs entirely on your machine:
@@ -216,6 +255,10 @@ configuration. When a cloud provider is configured, the UI labels it as
 * Audio is never written to disk; screenshots only if you explicitly enable it.
 * Retention: do not retain / 1 / 7 (default) / 30 days / until deleted;
   one-click delete-all.
+* The interview room makes two kinds of network request of its own: the browsers
+  ask Google's public STUN server for a route for the video call, and with
+  `--tunnel` the server downloads `cloudflared` once from GitHub. No media passes
+  through STUN.
 
 Read [PRIVACY.md](PRIVACY.md) for exactly what is processed, sent and stored.
 
@@ -240,20 +283,52 @@ logs, dependency auditing in CI. Report vulnerabilities privately — see
 
 ## Roadmap
 
-**Phase 1** — Desktop overlay · audio · transcription · candidate mode ·
-interviewer mode *(this release)*
+**Done (in `main`)**
+* Desktop overlay, audio, transcription, candidate, interviewer and workplace
+  modes.
+* Screen context, local OCR, local Whisper, Ollama and embeddings, and hybrid
+  retrieval, with cloud providers as opt-in options.
+* The answer-integrity check in the desktop app and in the interview room
+  (`docs/INTEGRITY.md`, `spec/integrity/`).
+* The OpenMeet Room, with its optional tunnel and opt-in Groq and Gemini.
+* Benchmarks (`docs/BENCHMARKS.md`) and diagrams (`diagrams/`).
 
-**Phase 2** — Screen context · local models · better retrieval *(screen
-context, OCR, local Whisper/LLM/embeddings and hybrid retrieval ship today;
-next: on-device vision models out of the box, cross-meeting retrieval)*
+**Open pull requests, not in `main` yet**
+* #16: the room keeps the interviewer's question while its transcript is slow.
+* #17: diagrams for workplace mode.
 
-**Phase 3** — Multi-monitor polish · advanced interviewer workflows (question
-banks, structured interview plans, rubric-free note templates) · meeting
-knowledge base
+**Next**
+* Calibrate the integrity thresholds on our own labelled interviews; the
+  collection kit is in `training/data-collection`. Until then, every signal is
+  a reason to ask a question, not a measurement.
+* Delivery signal: measure it with Whisper's word timings on public data
+  (`training/echo-detection`), and check the early reading detector.
+* Score the shipped reading network on real-world reading.
+* Screen context: on-device vision models out of the box.
 
-**Phase 4** — Plugin ecosystem (transcription, LLM, vision, knowledge-source
-and export providers built on the existing provider traits) · provider
-marketplace · advanced local inference (streaming on-device ASR, diarization)
+**Later**
+* Advanced interviewer workflows (question banks, structured interview plans,
+  note templates) and a meeting knowledge base; cross-meeting retrieval.
+* Plugin ecosystem (transcription, LLM, vision, knowledge-source and export
+  providers built on the existing provider traits), provider marketplace,
+  advanced local inference (streaming on-device ASR, diarization).
+
+## Documentation
+
+* [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data flow,
+  database, failure modes. [docs/INTERNALS.md](docs/INTERNALS.md): the
+  contracts between the Rust crates. [docs/FRONTEND.md](docs/FRONTEND.md): the
+  React windows, events and commands.
+* [docs/INTEGRITY.md](docs/INTEGRITY.md): the answer-integrity check in the app.
+  [local-ai/room/README.md](local-ai/room/README.md): the OpenMeet Room.
+* [docs/WORKPLACE.md](docs/WORKPLACE.md): workplace mode.
+* [docs/MODELS.md](docs/MODELS.md): a beginner's guide to the trained models.
+  [docs/BENCHMARKS.md](docs/BENCHMARKS.md): measured latency, transcription
+  accuracy, detection rates and false flags.
+* [docs/RUNNING.md](docs/RUNNING.md): running OpenMeet step by step.
+* [docs/PROVIDERS.md](docs/PROVIDERS.md), [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+* [diagrams/](diagrams/README.md): data flow, UML, ER, flowcharts and C4 views.
+* [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing
 
