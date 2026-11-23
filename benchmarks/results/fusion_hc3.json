@@ -1,7 +1,7 @@
 {
  "what": "the spec's fused integrity flag (ai_text + echo similarity) on HC3 test questions",
  "environment": {
-  "date": "2026-11-19T17:39:52+05:30",
+  "date": "2026-11-23T18:38:53+05:30",
   "cpu": "13th Gen Intel(R) Core(TM) i9-13900H",
   "logical_cpus": 20,
   "ram_gb": 15.7,
@@ -15,9 +15,13 @@
    "pandas": "3.1.1",
    "scikit-learn": "1.9.1"
   },
-  "repo_commit": "e2efbaa"
+  "repo_commit": "f312f96"
  },
  "data": "HC3 all.jsonl (CC BY-SA 4.0); train_content.py's question split; calibrate_similarity.py's test sample",
+ "ai_text_model": {
+  "file": "echo_tfidf.json",
+  "name": "OpenMeet AI-answer detector v2: TF-IDF (1-2 word grams, 60000 terms) + logistic regression"
+ },
  "protocol": {
   "questions": 500,
   "per_source": 100,
@@ -27,8 +31,8 @@
   "embedding_model": "BAAI/bge-small-en-v1.5",
   "thresholds": {
    "ai_text": {
-    "possible": 0.24939103216004502,
-    "high": 0.4444321836061315
+    "possible": 0.24664457862510017,
+    "high": 0.4623592607033633
    },
    "echo_similarity": {
     "possible": 0.8712,
@@ -47,32 +51,32 @@
    "chatgpt_answers": 724,
    "human_answers": 687,
    "at_possible": {
-    "detection_rate": 0.9848066298342542,
+    "detection_rate": 0.9875690607734806,
     "detection_95ci": [
-     0.973,
-     0.9915
+     0.9765,
+     0.9934
     ],
-    "false_flag_rate": 0.12954876273653565,
+    "false_flag_rate": 0.1324599708879185,
     "false_flag_95ci": [
-     0.1065,
-     0.1567
+     0.1091,
+     0.1599
     ],
-    "detected": 713,
-    "false_flags": 89
+    "detected": 715,
+    "false_flags": 91
    },
    "at_high": {
-    "detection_rate": 0.9737569060773481,
+    "detection_rate": 0.9779005524861878,
     "detection_95ci": [
-     0.9594,
-     0.9831
+     0.9644,
+     0.9864
     ],
-    "false_flag_rate": 0.06404657933042213,
+    "false_flag_rate": 0.06841339155749636,
     "false_flag_95ci": [
-     0.0481,
-     0.0849
+     0.0518,
+     0.0898
     ],
-    "detected": 705,
-    "false_flags": 44
+    "detected": 708,
+    "false_flags": 47
    }
   },
   "echo similarity alone": {
@@ -125,36 +129,36 @@
     "false_flags": 172
    },
    "at_high": {
-    "detection_rate": 0.7983425414364641,
+    "detection_rate": 0.7997237569060773,
     "detection_95ci": [
-     0.7676,
-     0.826
+     0.769,
+     0.8273
     ],
-    "false_flag_rate": 0.043668122270742356,
+    "false_flag_rate": 0.046579330422125184,
     "false_flag_95ci": [
-     0.0308,
-     0.0617
+     0.0332,
+     0.065
     ],
-    "detected": 578,
-    "false_flags": 30
+    "detected": 579,
+    "false_flags": 32
    }
   },
   "fused, ai_text only available": {
    "chatgpt_answers": 724,
    "human_answers": 687,
    "at_possible": {
-    "detection_rate": 0.9848066298342542,
+    "detection_rate": 0.9875690607734806,
     "detection_95ci": [
-     0.973,
-     0.9915
+     0.9765,
+     0.9934
     ],
-    "false_flag_rate": 0.12954876273653565,
+    "false_flag_rate": 0.1324599708879185,
     "false_flag_95ci": [
-     0.1065,
-     0.1567
+     0.1091,
+     0.1599
     ],
-    "detected": 713,
-    "false_flags": 89
+    "detected": 715,
+    "false_flags": 91
    },
    "at_high": {
     "detection_rate": 0.0,
@@ -253,18 +257,18 @@
     "false_flags": 161
    },
    "at_high": {
-    "detection_rate": 0.7237569060773481,
+    "detection_rate": 0.7251381215469613,
     "detection_95ci": [
-     0.6901,
-     0.7551
+     0.6915,
+     0.7564
     ],
-    "false_flag_rate": 0.034934497816593885,
+    "false_flag_rate": 0.03784570596797671,
     "false_flag_95ci": [
-     0.0236,
-     0.0515
+     0.026,
+     0.0549
     ],
-    "detected": 524,
-    "false_flags": 24
+    "detected": 525,
+    "false_flags": 26
    }
   }
  },
@@ -288,17 +292,17 @@
      "false_flags": 6
     },
     "at_high": {
-     "detection_rate": 0.991869918699187,
+     "detection_rate": 1.0,
      "detection_95ci": [
-      0.9554,
-      0.9986
+      0.9697,
+      1.0
      ],
      "false_flag_rate": 0.01,
      "false_flag_95ci": [
       0.0018,
       0.0545
      ],
-     "detected": 122,
+     "detected": 123,
      "false_flags": 1
     }
    },
@@ -505,13 +509,13 @@
       0.9644,
       1.0
      ],
-     "false_flag_rate": 0.02,
+     "false_flag_rate": 0.01,
      "false_flag_95ci": [
-      0.0055,
-      0.07
+      0.0018,
+      0.0545
      ],
      "detected": 104,
-     "false_flags": 2
+     "false_flags": 1
     },
     "at_high": {
      "detection_rate": 1.0,
@@ -569,13 +573,13 @@
       0.9644,
       1.0
      ],
-     "false_flag_rate": 0.14,
+     "false_flag_rate": 0.13,
      "false_flag_95ci": [
-      0.0853,
-      0.2214
+      0.0776,
+      0.2098
      ],
      "detected": 104,
-     "false_flags": 14
+     "false_flags": 13
     },
     "at_high": {
      "detection_rate": 0.8269230769230769,
@@ -601,13 +605,13 @@
       0.9644,
       1.0
      ],
-     "false_flag_rate": 0.02,
+     "false_flag_rate": 0.01,
      "false_flag_95ci": [
-      0.0055,
-      0.07
+      0.0018,
+      0.0545
      ],
      "detected": 104,
-     "false_flags": 2
+     "false_flags": 1
     },
     "at_high": {
      "detection_rate": 0.0,
@@ -697,13 +701,13 @@
       0.9644,
       1.0
      ],
-     "false_flag_rate": 0.14,
+     "false_flag_rate": 0.13,
      "false_flag_95ci": [
-      0.0853,
-      0.2214
+      0.0776,
+      0.2098
      ],
      "detected": 104,
-     "false_flags": 14
+     "false_flags": 13
     },
     "at_high": {
      "detection_rate": 0.7403846153846154,
@@ -726,32 +730,32 @@
     "chatgpt_answers": 297,
     "human_answers": 100,
     "at_possible": {
-     "detection_rate": 0.9730639730639731,
+     "detection_rate": 0.9797979797979798,
      "detection_95ci": [
-      0.9478,
-      0.9863
+      0.9566,
+      0.9907
      ],
-     "false_flag_rate": 0.32,
+     "false_flag_rate": 0.34,
      "false_flag_95ci": [
-      0.2367,
-      0.4166
+      0.2546,
+      0.4372
      ],
-     "detected": 289,
-     "false_flags": 32
+     "detected": 291,
+     "false_flags": 34
     },
     "at_high": {
-     "detection_rate": 0.9528619528619529,
+     "detection_rate": 0.9595959595959596,
      "detection_95ci": [
-      0.9224,
-      0.9717
+      0.9307,
+      0.9767
      ],
-     "false_flag_rate": 0.15,
+     "false_flag_rate": 0.16,
      "false_flag_95ci": [
-      0.0931,
-      0.2328
+      0.101,
+      0.2442
      ],
-     "detected": 283,
-     "false_flags": 15
+     "detected": 285,
+     "false_flags": 16
     }
    },
    "echo similarity alone": {
@@ -795,45 +799,45 @@
       0.9812,
       0.9994
      ],
-     "false_flag_rate": 0.52,
+     "false_flag_rate": 0.54,
      "false_flag_95ci": [
-      0.4232,
-      0.6154
+      0.4426,
+      0.6344
      ],
      "detected": 296,
-     "false_flags": 52
+     "false_flags": 54
     },
     "at_high": {
-     "detection_rate": 0.8282828282828283,
+     "detection_rate": 0.8316498316498316,
      "detection_95ci": [
-      0.7813,
-      0.8669
+      0.7849,
+      0.8699
      ],
-     "false_flag_rate": 0.08,
+     "false_flag_rate": 0.07,
      "false_flag_95ci": [
-      0.0411,
-      0.15
+      0.0343,
+      0.1375
      ],
-     "detected": 246,
-     "false_flags": 8
+     "detected": 247,
+     "false_flags": 7
     }
    },
    "fused, ai_text only available": {
     "chatgpt_answers": 297,
     "human_answers": 100,
     "at_possible": {
-     "detection_rate": 0.9730639730639731,
+     "detection_rate": 0.9797979797979798,
      "detection_95ci": [
-      0.9478,
-      0.9863
+      0.9566,
+      0.9907
      ],
-     "false_flag_rate": 0.32,
+     "false_flag_rate": 0.34,
      "false_flag_95ci": [
-      0.2367,
-      0.4166
+      0.2546,
+      0.4372
      ],
-     "detected": 289,
-     "false_flags": 32
+     "detected": 291,
+     "false_flags": 34
     },
     "at_high": {
      "detection_rate": 0.0,
@@ -923,26 +927,26 @@
       0.9812,
       0.9994
      ],
-     "false_flag_rate": 0.47,
+     "false_flag_rate": 0.49,
      "false_flag_95ci": [
-      0.3751,
-      0.5671
+      0.3942,
+      0.5865
      ],
      "detected": 296,
-     "false_flags": 47
+     "false_flags": 49
     },
     "at_high": {
-     "detection_rate": 0.7710437710437711,
+     "detection_rate": 0.7744107744107744,
      "detection_95ci": [
-      0.72,
-      0.8152
+      0.7235,
+      0.8183
      ],
      "false_flag_rate": 0.03,
      "false_flag_95ci": [
       0.0103,
       0.0845
      ],
-     "detected": 229,
+     "detected": 230,
      "false_flags": 3
     }
    }
@@ -957,13 +961,13 @@
       0.9155,
       0.9897
      ],
-     "false_flag_rate": 0.027874564459930314,
+     "false_flag_rate": 0.024390243902439025,
      "false_flag_95ci": [
-      0.0142,
-      0.054
+      0.0119,
+      0.0495
      ],
      "detected": 97,
-     "false_flags": 8
+     "false_flags": 7
     },
     "at_high": {
      "detection_rate": 0.96,
@@ -1021,13 +1025,13 @@
       0.93,
       0.9945
      ],
-     "false_flag_rate": 0.05226480836236934,
+     "false_flag_rate": 0.04878048780487805,
      "false_flag_95ci": [
-      0.0319,
-      0.0844
+      0.0293,
+      0.0802
      ],
      "detected": 98,
-     "false_flags": 15
+     "false_flags": 14
     },
     "at_high": {
      "detection_rate": 0.51,
@@ -1053,13 +1057,13 @@
       0.9155,
       0.9897
      ],
-     "false_flag_rate": 0.027874564459930314,
+     "false_flag_rate": 0.024390243902439025,
      "false_flag_95ci": [
-      0.0142,
-      0.054
+      0.0119,
+      0.0495
      ],
      "detected": 97,
-     "false_flags": 8
+     "false_flags": 7
     },
     "at_high": {
      "detection_rate": 0.0,
@@ -1149,13 +1153,13 @@
       0.93,
       0.9945
      ],
-     "false_flag_rate": 0.03484320557491289,
+     "false_flag_rate": 0.0313588850174216,
      "false_flag_95ci": [
-      0.019,
-      0.0629
+      0.0166,
+      0.0585
      ],
      "detected": 98,
-     "false_flags": 10
+     "false_flags": 9
     },
     "at_high": {
      "detection_rate": 0.33,
@@ -1183,13 +1187,13 @@
       0.963,
       1.0
      ],
-     "false_flag_rate": 0.41,
+     "false_flag_rate": 0.43,
      "false_flag_95ci": [
-      0.3187,
-      0.508
+      0.3373,
+      0.5278
      ],
      "detected": 100,
-     "false_flags": 41
+     "false_flags": 43
     },
     "at_high": {
      "detection_rate": 1.0,
@@ -1197,13 +1201,13 @@
       0.963,
       1.0
      ],
-     "false_flag_rate": 0.26,
+     "false_flag_rate": 0.28,
      "false_flag_95ci": [
-      0.184,
-      0.3537
+      0.2014,
+      0.3749
      ],
      "detected": 100,
-     "false_flags": 26
+     "false_flags": 28
     }
    },
    "echo similarity alone": {
@@ -1261,13 +1265,13 @@
       0.85,
       0.9589
      ],
-     "false_flag_rate": 0.22,
+     "false_flag_rate": 0.25,
      "false_flag_95ci": [
-      0.15,
-      0.3107
+      0.1755,
+      0.343
      ],
      "detected": 92,
-     "false_flags": 22
+     "false_flags": 25
     }
    },
    "fused, ai_text only available": {
@@ -1279,13 +1283,13 @@
       0.963,
       1.0
      ],
-     "false_flag_rate": 0.41,
+     "false_flag_rate": 0.43,
      "false_flag_95ci": [
-      0.3187,
-      0.508
+      0.3373,
+      0.5278
      ],
      "detected": 100,
-     "false_flags": 41
+     "false_flags": 43
     },
     "at_high": {
      "detection_rate": 0.0,
@@ -1389,31 +1393,31 @@
       0.8256,
       0.9448
      ],
-     "false_flag_rate": 0.21,
+     "false_flag_rate": 0.23,
      "false_flag_95ci": [
-      0.1417,
-      0.2998
+      0.1584,
+      0.3215
      ],
      "detected": 90,
-     "false_flags": 21
+     "false_flags": 23
     }
    }
   }
  },
  "roc_auc": {
-  "ai_text": 0.9929652504684471,
+  "ai_text": 0.9932205843325533,
   "echo similarity (2 references)": 0.8761007503196699,
   "echo similarity (1 reference)": 0.8591039590822458
  },
  "false_flags_by_cause": {
-  "possible: ai_text low, echo possible": 60,
+  "possible: ai_text low, echo possible": 59,
   "possible: ai_text possible, echo low": 23,
-  "possible: ai_text low, echo high": 23,
+  "possible: ai_text low, echo high": 22,
   "possible: ai_text high, echo low": 21,
+  "high: ai_text high, echo high": 17,
   "possible: ai_text possible, echo possible": 15,
-  "high: ai_text high, echo high": 15,
-  "high: ai_text high, echo possible": 8,
-  "high: ai_text possible, echo high": 7
+  "high: ai_text high, echo possible": 9,
+  "high: ai_text possible, echo high": 6
  },
- "seconds": 116
+ "seconds": 183
 }

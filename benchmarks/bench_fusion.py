@@ -59,13 +59,13 @@ def load_calibration():
     return module
 
 
-def load_echo_model():
-    """The sidecar's EchoModel (local-ai/integrity/models.py) without importing the sidecar's web packages."""
+def load_echo_model(path: Path):
+    """The sidecar's EchoModel (local-ai/integrity/models.py) on a model file, without importing the sidecar's web packages."""
     if "om_integrity" not in sys.modules:
         package = types.ModuleType("om_integrity")
         package.__path__ = [str(benchlib.LOCAL_AI / "integrity")]
         sys.modules["om_integrity"] = package
-    return importlib.import_module("om_integrity.models").EchoModel()
+    return importlib.import_module("om_integrity.models").EchoModel(path)
 
 
 def level(value: float, possible: float, high: float) -> str:
@@ -150,6 +150,8 @@ def main() -> None:
     ap.add_argument("--data", type=Path, required=True, help="HC3 all.jsonl")
     ap.add_argument("--cache", type=Path, required=True, help="calibrate_similarity.py's cache folder (reference answers, fastembed)")
     ap.add_argument("--per-source", type=int, default=100)
+    ap.add_argument("--ai-model", type=Path, default=benchlib.LOCAL_AI / "integrity" / "models" / "echo_tfidf.json",
+                    help="AI-text model file (default: the sidecar's shipped one; v1 is commit 0836f1e's)")
     ap.add_argument("--out", type=Path, default=benchlib.RESULTS / "fusion_hc3.json")
     a = ap.parse_args()
 
@@ -172,7 +174,7 @@ def main() -> None:
     embed = cal.fastembed_embedder(echo_th["embedding_model"], a.cache / "fastembed")
     scored, _ = cal.score_answers(table, picked, references, cache, no_generation, embed, log=lambda m: print(m, flush=True))
 
-    echo_model = load_echo_model()
+    echo_model = load_echo_model(a.ai_model)
     text_by_index = table[table["qid"].isin(picked)]["text"].tolist()
     assert len(text_by_index) == len(scored)
     rows = []
@@ -187,6 +189,7 @@ def main() -> None:
         "what": "the spec's fused integrity flag (ai_text + echo similarity) on HC3 test questions",
         "environment": benchlib.environment(["fastembed", "onnxruntime", "numpy", "pandas", "scikit-learn"]),
         "data": "HC3 all.jsonl (CC BY-SA 4.0); train_content.py's question split; calibrate_similarity.py's test sample",
+        "ai_text_model": {"file": a.ai_model.name, "name": echo_model.name},
         "protocol": {"questions": len(picked), "per_source": a.per_source, "seed": cal.SEED + 12, "references": references,
                      "reference_model": model, "embedding_model": echo_th["embedding_model"],
                      "thresholds": {"ai_text": {"possible": echo_model.possible, "high": echo_model.high},
