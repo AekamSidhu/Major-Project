@@ -28,6 +28,8 @@ with its evidence, and the human decides.
 | `delivery` | Does the answer's timing look read rather than spoken freely, compared with this speaker's own baseline? | the caller, from transcript timings | no |
 | `reading` | Do the eyes move like reading lines of text during the answer? | sidecar `POST /v1/integrity/reading` (1-D CNN on gaze) | yes (public data) |
 
+The `reading` signal is uncalibrated for answers shorter than 10 s: the sidecar scores 3 to 10 s of gaze with a hand-tuned early detector (`early: true`, `calibrated: false`), and it counts at most as `possible`.
+
 Levels: `low`, `possible`, `high`, plus the not-scored levels `too_short`,
 `baseline`, `no_gaze` and `unavailable`.
 

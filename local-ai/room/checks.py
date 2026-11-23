@@ -116,8 +116,12 @@ def signal_list(answer: dict[str, Any], baseline: dict[str, Any] | None = None) 
         out.append({"name": "reading", "level": "no_gaze", "calibrated": th["reading"]["calibrated"],
                     "evidence": "not enough gaze (needs 10 s with the face in view)"})
     else:
-        out.append({"name": "reading", "level": reading["level"], "calibrated": th["reading"]["calibrated"],
-                    "evidence": f"{_pct(reading['reading_probability'])} reading-like eye movement"})
+        # An early reading (3-10 s of gaze) is uncalibrated: it counts at most as "possible".
+        calibrated = th["reading"]["calibrated"] and bool(reading.get("calibrated", True))
+        evidence = f"{_pct(reading['reading_probability'])} reading-like eye movement"
+        if reading.get("early"):
+            evidence += " (short answer: early detector, uncalibrated)"
+        out.append({"name": "reading", "level": reading["level"], "calibrated": calibrated, "evidence": evidence})
     return out
 
 
