@@ -66,11 +66,30 @@ MAX_SEGMENT_BYTES = 8 * 1024 * 1024
 SPEAKERS = ("interviewer", "candidate")
 MIN_CONFIDENCE = 0.45
 OFFLINE_TERMS = "Nothing goes to an online service and nothing is recorded;"
-ONLINE_TERMS = ("Nothing is recorded. To suggest follow-up questions and to write the comparison answers, the "
-                "interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini, "
-                "with emails, phone numbers and your name removed;")
 STUDY_TERMS_OFFLINE = "Nothing goes to an online service, and nothing is recorded unless you join the study below;"
-STUDY_TERMS_ONLINE = ONLINE_TERMS.replace("Nothing is recorded.", "Nothing is recorded unless you join the study below.")
+GROQ_TERMS = "Your speech (audio) is sent to Groq, an online service, to be transcribed."
+
+
+def consent_terms(*, groq: bool, online: bool, study: bool) -> str:
+    """The sentence on the join page that says what leaves the interviewer's computer.
+
+    `groq`: the candidate's audio goes to Groq for transcription; `online`: the text of the
+    questions and answers goes to Google Gemini for follow-ups. Without either, the offline
+    sentence; without groq, the sentences used before cloud transcription existed."""
+    if not groq and not online:
+        return STUDY_TERMS_OFFLINE if study else OFFLINE_TERMS
+    record = "Nothing is recorded unless you join the study below." if study else "Nothing is recorded."
+    sentences = [GROQ_TERMS] if groq else []
+    sentences.append(record)
+    if online:
+        sentences.append("To suggest follow-up questions and to write the comparison answers, the "
+                         "interviewer's questions and the text of your answers (not audio or video) are sent to "
+                         "Google Gemini, with emails, phone numbers and your name removed;")
+    else:
+        sentences[-1] = sentences[-1].rstrip(".") + ";"
+    return " ".join(sentences)
+
+
 STUDY_SLOT = "<!--study-consent-->"
 # Whisper's stock lines for non-speech audio: dropped when the whole utterance is one of them.
 PHANTOMS = {"thanks for watching", "thank you for watching", "well see you in the next one",
@@ -213,9 +232,10 @@ class LabelRequest(BaseModel):
 def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: Any, reading_factory: Any,
                     port: int, scheme: str, whisper_model: str, followup_writer: Any = None,
                     similarity: Any = None, study: Any = None,
-                    tunnel_url: str | None = None) -> dict[str, Room]:
+                    tunnel_url: str | None = None, cloud_transcription: bool = False) -> dict[str, Room]:
     """`similarity`: a room.similarity.SimilarityChecker (None: echo similarity unavailable);
-    `study`: a room.study.StudyRecorder in study mode."""
+    `study`: a room.study.StudyRecorder in study mode; `cloud_transcription`: the candidate's
+    audio goes to a cloud service (Groq), which the join page states."""
     from .followups import FollowupWriter
 
     rooms: dict[str, Room] = {}
@@ -265,12 +285,11 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     def join_page(room_id: str) -> str:
         html = page("guest.html")
-        # The candidate agrees to what actually happens.
+        # The candidate agrees to what actually happens: audio to Groq, text to Gemini.
+        terms = consent_terms(groq=cloud_transcription, online=writer.online, study=study is not None)
+        html = html.replace(OFFLINE_TERMS, terms)
         if study is not None:
-            html = html.replace(OFFLINE_TERMS, STUDY_TERMS_ONLINE if writer.online else STUDY_TERMS_OFFLINE)
             html = html.replace(STUDY_SLOT, study.consent_html())
-        elif writer.online:
-            html = html.replace(OFFLINE_TERMS, ONLINE_TERMS)
         return html
 
     @app.post("/api/rooms", dependencies=[Depends(host_only)])

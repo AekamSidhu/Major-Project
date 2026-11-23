@@ -10,6 +10,7 @@ import wave
 import zlib
 from pathlib import Path
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -95,12 +96,12 @@ def references(mode: str = "local", answer: str = REFERENCE, sent: list | None =
 
 
 def make(text: str = "I built the cache layer myself", confidence: float = 0.9, reading: bool = True, model=unreachable,  # type: ignore[no-untyped-def]
-         mode: str = "local", transcriber=None, refs: ReferenceWriter | None = None, study_dir=None):
+         mode: str = "local", transcriber=None, refs: ReferenceWriter | None = None, study_dir=None, cloud: bool = False):
     clock = Clock()
     app = room_server.create_room_app(8443, "https", "base.en", transcriber=transcriber or ScriptedTranscriber(text, confidence),
                                       tracker_factory=lambda: SawtoothTracker(clock, reading), clock=clock,
                                       followup_writer=writer(model, mode), reference_writer=refs or references(mode),
-                                      embedder=BagOfWords(), study_dir=study_dir)
+                                      embedder=BagOfWords(), study_dir=study_dir, cloud_transcription=cloud)
     return app, clock
 
 
@@ -690,3 +691,137 @@ def test_a_cloudflared_on_the_path_is_preferred(tmp_path, monkeypatch):  # type:
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin" / tunnel._exe_name()).write_bytes(b"cached")
     assert tunnel.find_cloudflared(tmp_path) == Path("/usr/local/bin/cloudflared")
+
+
+# --- the join page says what leaves the interviewer's computer ---
+
+GROQ_LINE = "Your speech (audio) is sent to Groq, an online service, to be transcribed."
+GEMINI_LINE = "the interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini"
+
+
+@pytest.mark.parametrize("cloud,mode,study", [
+    (False, "local", False), (True, "local", False), (False, "online", False), (True, "online", False),
+    (False, "local", True), (True, "local", True), (False, "online", True), (True, "online", True),
+])
+def test_join_notice_names_each_service_that_gets_the_candidates_data(cloud, mode, study, tmp_path):  # type: ignore[no-untyped-def]
+    app, _ = make(mode=mode, cloud=cloud, study_dir=tmp_path / "study" if study else None)
+    text = TestClient(app, client=REMOTE).get("/join/abc123").text
+    assert (GROQ_LINE in text) == cloud
+    assert (GEMINI_LINE in text) == (mode == "online")
+    assert ("Google Gemini" in text) == (mode == "online")
+    assert ("Groq" in text) == cloud
+    assert ("Nothing goes to an online service" in text) == (not cloud and mode == "local")
+    assert ("recorded unless you join the study below" in text.lower()) == study
+    assert ("<!--study-consent-->" in text) == (not study)  # the study consent is filled only in study mode
+    if cloud and not study:
+        assert GROQ_LINE + " Nothing is recorded" in text
+    if cloud and mode == "online" and not study:
+        assert GROQ_LINE + " Nothing is recorded. To suggest follow-up questions" in text
+    if cloud and mode == "local" and not study:
+        assert GROQ_LINE + " Nothing is recorded; the interviewer keeps" in text
+
+
+def test_consent_terms_wording_is_unchanged_without_cloud_transcription():
+    from room import OFFLINE_TERMS, STUDY_TERMS_OFFLINE, consent_terms
+
+    assert consent_terms(groq=False, online=False, study=False) == OFFLINE_TERMS
+    assert consent_terms(groq=False, online=False, study=True) == STUDY_TERMS_OFFLINE
+    assert consent_terms(groq=False, online=True, study=False) == (
+        "Nothing is recorded. To suggest follow-up questions and to write the comparison answers, the "
+        "interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini, "
+        "with emails, phone numbers and your name removed;")
+    assert consent_terms(groq=True, online=False, study=False) == GROQ_LINE + " Nothing is recorded;"
+    assert consent_terms(groq=True, online=False, study=True) == GROQ_LINE + " Nothing is recorded unless you join the study below;"
+
+
+# --- Groq transcription: the HTTP call is mocked, no network and no key ---
+
+class FakeResponse:
+    def __init__(self, status: int, body: dict | None = None, text: str = "") -> None:
+        self.status_code, self._body, self.text = status, body or {}, text
+
+    def json(self) -> dict:
+        return self._body
+
+
+def groq_body(words: bool = True) -> dict:  # type: ignore[type-arg]
+    body: dict = {"text": " Hello there ", "language": "en", "duration": 1.0}
+    if words:
+        body["words"] = [{"word": " Hello", "start": 0.1, "end": 0.4}, {"word": "there", "start": 0.5, "end": 0.9}]
+    return body
+
+
+def test_groq_request_carries_the_audio_the_key_and_the_word_request(monkeypatch):  # type: ignore[no-untyped-def]
+    import httpx
+
+    sent: dict = {}
+
+    def fake_post(url, headers=None, files=None, timeout=None):  # type: ignore[no-untyped-def]
+        sent.update(url=url, headers=headers, files=files)
+        return FakeResponse(200, groq_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    result = server.GroqTranscriber("gsk_test_key").transcribe(np.zeros(16000, dtype=np.float32), "small.en", "en", None,
+                                                              word_timestamps=True)
+    assert sent["url"] == server.GroqTranscriber.ENDPOINT
+    assert sent["headers"] == {"Authorization": "Bearer gsk_test_key"}
+    assert sent["files"]["model"] == (None, "whisper-large-v3")
+    assert sent["files"]["response_format"] == (None, "verbose_json")
+    assert sent["files"]["timestamp_granularities[]"] == (None, "word")
+    _, wav, content_type = sent["files"]["file"]
+    assert wav[:4] == b"RIFF" and content_type == "audio/wav"
+    assert result.text == "Hello there"
+    assert [w["word"] for w in result.words] == ["Hello", "there"]
+
+
+def test_groq_without_word_timestamps_asks_for_none(monkeypatch):  # type: ignore[no-untyped-def]
+    import httpx
+
+    sent: dict = {}
+
+    def fake_post(url, headers=None, files=None, timeout=None):  # type: ignore[no-untyped-def]
+        sent["files"] = files
+        return FakeResponse(200, groq_body(words=False))
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    result = server.GroqTranscriber("gsk_test_key").transcribe(np.zeros(16000, dtype=np.float32), "small.en", "en", None)
+    assert "timestamp_granularities[]" not in sent["files"]
+    assert result.words is None and result.text == "Hello there"
+
+
+def test_groq_errors_are_reported_without_the_key(monkeypatch):  # type: ignore[no-untyped-def]
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: FakeResponse(401, text="invalid api key"))
+    with pytest.raises(RuntimeError, match="Groq API error 401") as error:
+        server.GroqTranscriber("gsk_test_key").transcribe(np.zeros(16000, dtype=np.float32), "small.en", "en", None)
+    assert "gsk_test_key" not in str(error.value)
+
+
+def test_groq_needs_a_key():
+    with pytest.raises(RuntimeError, match="OPENMEET_GROQ_API_KEY"):
+        server.GroqTranscriber("")
+
+
+class NoWordsTranscriber:
+    """A transcriber whose answers carry no word timings (the room must still work)."""
+
+    def transcribe(self, audio, model, language, prompt):  # type: ignore[no-untyped-def]
+        return server.TranscriptionResult(text="I cached the results.", language="en", duration=len(audio) / 16000,
+                                          confidence=0.9)
+
+    def loaded_model(self) -> str | None:
+        return None
+
+
+def test_room_works_without_word_timestamps_and_delivery_uses_utterance_timing():
+    app, _ = make(transcriber=NoWordsTranscriber())
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = local.post("/api/rooms").json()["room"]
+    question = local.post(f"/api/rooms/{room}/transcribe?speaker=interviewer&start=0&end=2", content=wav_bytes(1.0)).json()
+    assert question["text"] == "I cached the results."
+    local.post(f"/api/rooms/{room}/transcribe?speaker=candidate&start=3&end=5", content=wav_bytes(1.0))
+    answer = local.post(f"/api/rooms/{room}/answers", json={"start": 3, "end": 5, "text": "I cached the results.",
+                                                            "question": "How did you speed it up?"})
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["delivery"]["features"]["granularity"] == "utterance"

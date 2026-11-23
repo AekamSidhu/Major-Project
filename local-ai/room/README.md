@@ -29,25 +29,52 @@ pip install -r requirements.txt -r requirements-integrity.txt
 For AI follow-up questions on this computer, install [Ollama](https://ollama.com)
 and download the model once: `ollama pull llama3.2`.
 
-For the online mode, put a Google Gemini key in `~/.openmeet/room.env`
-(outside the repository; never commit it):
+For the online options, put the keys in `~/.openmeet/room.env` (outside the
+repository; never commit it):
 
 ```
-OPENMEET_GEMINI_API_KEY=your-key
+OPENMEET_GEMINI_API_KEY=your-key       # --followups online (Google Gemini)
+OPENMEET_GROQ_API_KEY=your-key         # --transcription groq (Groq cloud Whisper)
 ```
 
 ## Run it
 
+Local is the default: transcription and follow-ups run on this computer, and the
+link works on this Wi-Fi only (add `--tunnel` for other networks).
+
 ```bash
-python room_server.py                      # follow-ups from Llama 3.2 on this computer
-python room_server.py --followups online   # follow-ups from Gemini; the candidate is told
-python room_server.py --followups rules    # no AI model, simple rules (no echo similarity)
+python room_server.py                      # local Whisper, follow-ups from Llama 3.2 (Ollama) on this computer
+python room_server.py --followups local    # follow-ups from Llama 3.2 on this computer (Ollama)
+python room_server.py --followups online   # follow-ups from Gemini: questions and answer text go to Google
+python room_server.py --transcription groq # the candidate's audio goes to Groq for transcription
+python room_server.py --tunnel             # also a public link: anyone with it can reach the join page
 python room_server.py --study D:/study     # study mode, see "Study mode" below
-python room_server.py --tunnel             # also a public link for candidates on other networks
 ```
 
-The first start downloads the Whisper speech model (`small.en`, about 480 MB);
-the first answer downloads the embedding model (about 70 MB).
+`--transcription` is `local` (faster-whisper on this computer, `--whisper-model`,
+default `small.en`, about 480 MB on the first start) or `groq` (Groq's hosted
+`whisper-large-v3`, which needs `OPENMEET_GROQ_API_KEY`). `--followups` is
+`rules`, `local` or `online`. The room prints what goes online at startup.
+
+On Windows, `start-room.ps1` is local by default and takes the same choices as
+switches: `-Followups local|online|rules`, `-Transcription local|groq`,
+`-Tunnel`. `-Cloud` turns on the demo setup in one go: `-Tunnel -Transcription
+groq -Followups online`. Whatever goes online is printed before the room starts.
+`-NoTunnel` is accepted and does nothing (the tunnel is off unless asked for).
+
+The join page tells the candidate exactly what leaves this computer: with
+groq, "Your speech (audio) is sent to Groq, an online service, to be
+transcribed"; with online follow-ups, the questions and the text of the answers
+(not audio or video) go to Google Gemini. Without either, it says that nothing
+goes to an online service. The wording is built by `consent_terms()` in
+`room/__init__.py`, and a test checks each combination.
+
+The embedding model (about 70 MB) is downloaded on the first answer.
+
+If the transcriber returns no word timings (the Groq response without them, or
+a backend without timings), the room still works: delivery is measured from
+utterance timing instead of word timing, and the answer's delivery features
+say `granularity: utterance`.
 
 1. Open **https://localhost:8443** on the interviewer's computer and accept
    the certificate warning once (the server made the certificate itself).
@@ -182,8 +209,9 @@ says that the questions go to Gemini too.
 The candidate sees a notice of what is analysed (transcription with word
 timings, reading gaze, AI-written text and comparison with an AI model's
 answers, pace and pauses against their first answers) and must agree before
-joining; in online mode it says that the questions and answer text go to
-Google Gemini. No score or flag ever reaches the candidate's page or
+joining. The notice also says which services get data: with `--transcription
+groq` the candidate's audio goes to Groq; in online mode the questions and
+answer text go to Google Gemini. No score or flag ever reaches the candidate's page or
 socket. Audio segments and frames are processed and dropped; transcripts
 and scores stay in memory until the server stops (study mode, with the
 candidate's separate consent, is the exception).

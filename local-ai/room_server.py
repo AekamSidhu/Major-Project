@@ -13,8 +13,11 @@ quick tunnel (cloudflared, downloaded once and checked against a pinned
 SHA-256) that publishes this room's join page to the internet. It is off by
 default, because anyone with an invite link can then reach the join page.
 
-Transcription (faster-whisper) and the integrity signals run here; see
-room/__init__.py for what each side can reach.
+Transcription runs here (faster-whisper, the default) or, with
+`--transcription groq`, on Groq's cloud API, which then receives the candidate's
+audio (needs OPENMEET_GROQ_API_KEY). The integrity signals run here; see
+room/__init__.py for what each side can reach and what the join page tells
+the candidate.
 
 Follow-up questions (room/followups.py, a LangChain chain with guardrails)
 and the reference answers for the echo-similarity signal (room/similarity.py)
@@ -82,7 +85,7 @@ def self_signed_cert(folder: Path) -> tuple[Path, Path]:
 def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None,  # type: ignore[no-untyped-def]
                     followup_writer=None, followups: str | None = None, reference_writer=None, embedder=None,
                     embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None,
-                    tunnel_url: str | None = None) -> FastAPI:
+                    tunnel_url: str | None = None, cloud_transcription: bool = False) -> FastAPI:
     from room.followups import FollowupWriter
     from room.similarity import ReferenceWriter, SimilarityChecker
     from room.study import StudyRecorder
@@ -121,6 +124,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         similarity=similarity,
         study=study,
         tunnel_url=tunnel_url,
+        cloud_transcription=cloud_transcription,
     )
     return app
 
@@ -179,7 +183,8 @@ def main() -> None:
 
     try:
         app = create_room_app(args.port, scheme, args.whisper_model, transcriber=transcriber,
-                              followups=args.followups, study_dir=args.study, tunnel_url=tunnel_url)
+                              followups=args.followups, study_dir=args.study, tunnel_url=tunnel_url,
+                              cloud_transcription=args.transcription == "groq")
     except ValueError as error:  # a study folder inside the repository
         parser.error(str(error))
     host = args.host or ("127.0.0.1" if args.no_https else "0.0.0.0")
