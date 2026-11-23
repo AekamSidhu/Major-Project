@@ -15,7 +15,9 @@ turn every part of it off or delete it.
   in a Python virtual environment on your machine), a local LLM through
   [Ollama](https://ollama.com), local OCR (Windows) and local embeddings.
 * **No telemetry, no analytics, no crash reporting, no update pings.** OpenMeet
-  makes no network requests except to the AI providers *you* configure.
+  makes no network requests except to the AI providers *you* configure. The
+  optional interview room has its own connections (see
+  [OpenMeet Room](#interview-room-openmeet-room)).
 * Data only leaves your device if you configure a cloud provider. The Privacy
   page always shows which components are local and which are remote, and only
   says "No meeting data leaves this device." when that is actually true.
@@ -37,6 +39,7 @@ turn every part of it off or delete it.
 | Text you type into *Ask OpenMeet* | When you submit it | — |
 | Your profile notes (background, role, planned topics, instructions) | Only what you type into Settings → Profile | Empty |
 | The candidate's video region (screen pixels of the meeting window) | Only in interviewer meetings with the answer-integrity check **and** its Reading signal on and a region set; captured by the local AI sidecar at 10 frames per second and turned into gaze points | **Off** |
+| Speech and video in the OpenMeet Room (interview room, `local-ai/room`) | Only while a room call is running with a candidate who joined; audio segments are transcribed and dropped, video frames become gaze points and are dropped. See [OpenMeet Room](#interview-room-openmeet-room) | Only when you start the room |
 
 OpenMeet does **not**: record keystrokes, inject code into meeting apps, read
 other applications' memory, capture audio or screen outside a meeting, or use
@@ -61,6 +64,8 @@ Screen (opt-in) ────────────▶ OCR / Vision  ──▶ 
 | Context engine, question detection, topic tracking, storage | Always local | — |
 | Answer-integrity check (opt-in): AI-written text, reading/gaze | Local AI sidecar | A sidecar on another machine (remote, blocked in local-only mode) |
 | Answer-integrity check: reference answers, answer embeddings | The configured LLM and embedder when they are local | The configured LLM / embedder when they are cloud |
+| Interview room: transcription | Local Whisper in the room (`small.en`, default) | Groq, with `--transcription groq` (the candidate's audio) |
+| Interview room: follow-up questions and reference answers | Llama 3.2 through Ollama on this computer (default), or the rules | Google Gemini, with `--followups online` (text only, see below) |
 
 A provider is classified as **local** only if its endpoint is on this machine
 (`localhost`, `127.0.0.0/8`, `::1`). An Ollama or LM Studio server on another
@@ -90,6 +95,12 @@ HTTPS, with your API key:
   The echo signal only runs with the local embedding model named in
   `spec/integrity/thresholds.json`, so in practice only the question can reach
   a cloud LLM. The Privacy page lists these parts with their location.
+* **Interview room, with its online options switched on**: with
+  `--transcription groq`, the candidate's audio segments (in short pieces) go to
+  Groq. With `--followups online`, the interviewer's questions and the text of
+  the answers go to Google Gemini, with names, emails and phone numbers removed
+  first. No audio or video goes to Gemini. The join page tells the candidate
+  which of these are on.
 
 Each provider's own privacy policy and data-retention terms apply to what it
 receives. Check them before using a cloud provider with confidential meetings.
@@ -127,6 +138,11 @@ Stored per meeting (subject to the retention policy):
   range, the question text, the level of each signal and its evidence lines
   (for example "AI-written text score 0.91 (high)"). No video frames and no
   gaze samples.
+* workplace meetings: decisions and action items (with the owner and the due
+  date as said in the meeting, such as "by Friday"), and the meeting minutes
+  (overview, decisions, action items, open questions, a draft follow-up
+  message). Open questions and clarifying questions exist only in memory during
+  the meeting and are not saved.
 
 Also stored: your settings (including profile notes) and screen privacy rules.
 
@@ -177,6 +193,8 @@ You never have to hunt through settings to stop processing:
 | Disable audio processing | Start a meeting with microphone and system audio off (manual *Ask OpenMeet* still works), or Settings → Transcription & audio |
 | Disable cloud processing | Privacy → **Local-only mode** |
 | Disable the answer-integrity check | Settings → Answer integrity (off by default; each signal can be turned off on its own). Pause and emergency stop also stop its video-region capture |
+| Keep the interview room off the internet | Start it without `--tunnel` (or `start-room.ps1` without `-Tunnel`). The tunnel is off by default; `-Cloud` turns it on |
+| Keep the interview room's online options off | Leave out `--transcription groq` and `--followups online` (the defaults) |
 | Switch providers | Settings → AI providers / Transcription |
 
 The main window always shows whether a meeting is capturing ("Meeting in
@@ -221,7 +239,8 @@ security, proctoring, DRM or anti-cheat software.
 
 An opt-in check, **off by default**, for interviewers: after each candidate
 answer OpenMeet computes four signals and shows a private flag with its
-evidence in the overlay. A flag is a reason to ask a follow-up question,
+evidence in the overlay. It runs only in interviewer meetings; candidate and
+workplace meetings never run it. A flag is a reason to ask a follow-up question,
 **never a verdict**; OpenMeet does not score, rank or decide about anyone.
 Details: [docs/INTEGRITY.md](docs/INTEGRITY.md).
 
@@ -243,6 +262,40 @@ Details: [docs/INTEGRITY.md](docs/INTEGRITY.md).
 * **Tell the candidate.** Analysing a candidate's answers and eye movements
   may require their consent and may be regulated where you are. The settings
   page reminds you of this; following the rules is your responsibility.
+
+## Interview room (OpenMeet Room)
+
+The room (`local-ai/room`, started with `room_server.py` or `start-room.ps1`) is
+a browser interview room hosted on the interviewer's computer. Its details are
+in [local-ai/room/README.md](local-ai/room/README.md).
+
+* **Where the call goes.** Video and audio travel directly between the two
+  browsers (WebRTC). The room server carries only the signalling. The browsers
+  ask Google's public STUN server (`stun.l.google.com`) for a route; no media
+  passes through it.
+* **Local by default.** Transcription (Whisper `small.en`), the answer-integrity
+  signals and follow-up questions (Llama 3.2 through Ollama, or simple rules) run
+  on the interviewer's computer. The link works on the local Wi-Fi.
+* **Online only when asked.** `--transcription groq` sends the candidate's audio
+  to Groq. `--followups online` sends the interviewer's questions and the text of
+  the answers to Google Gemini, with names, emails and phone numbers removed;
+  reference answers are requested from the interviewer's question alone. The
+  room says what goes online before it starts, and the join page tells the
+  candidate.
+* **Tunnel, off by default.** `--tunnel` publishes the join page through a
+  Cloudflare quick tunnel, and anyone with the invite link can reach that page.
+  The host page, the interviewer's API and the answer-integrity API answer only
+  the interviewer's computer and refuse requests that come through the tunnel.
+  The first tunnel start downloads `cloudflared` (a pinned release, checked
+  against its SHA-256) into the sidecar's model folder, `local-ai/.models`.
+* **What is kept.** Audio segments are transcribed and dropped, and video frames
+  become gaze points and are dropped. Transcripts, scores and gaze points stay in
+  memory until the server stops, and the interviewer can download a Markdown
+  report. Nothing about the meeting is written to disk, except in study mode.
+* **Study mode** (`--study DIR`, off unless started). After the candidate ticks a
+  separate consent box, each answer's transcript, word timings, gaze series and
+  scores are saved under an anonymous session id in a folder outside the
+  repository. No audio, no video and no names are saved.
 
 ## 8. Logs
 
