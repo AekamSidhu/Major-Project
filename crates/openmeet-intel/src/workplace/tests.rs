@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)] // table-driven cases
+
 use super::*;
 use crate::claims::{extract_action_items, extract_claims};
 use crate::detect::{DetectionInput, detect};
@@ -98,10 +100,22 @@ fn task_phrases_drop_who_and_when() {
             "Pair with Sam on it and have a fix ready",
         ),
         ("So we need to update the runbook.", "Update the runbook"),
-        ("I'll draft the announcement by end of day.", "Draft the announcement"),
-        ("Alex, can you file a ticket for the timeout?", "File a ticket for the timeout"),
-        ("Action item: Sam to benchmark the new cache in two weeks.", "Benchmark the new cache"),
-        ("Someone should check the alert thresholds.", "Check the alert thresholds"),
+        (
+            "I'll draft the announcement by end of day.",
+            "Draft the announcement",
+        ),
+        (
+            "Alex, can you file a ticket for the timeout?",
+            "File a ticket for the timeout",
+        ),
+        (
+            "Action item: Sam to benchmark the new cache in two weeks.",
+            "Benchmark the new cache",
+        ),
+        (
+            "Someone should check the alert thresholds.",
+            "Check the alert thresholds",
+        ),
         ("Please send the deck.", "Send the deck"),
         ("Update the roadmap", "Update the roadmap"),
     ] {
@@ -114,12 +128,37 @@ fn action_item_vagueness_table() {
     use VagueIssue::*;
     let cases: &[(&str, Option<&str>, Option<&str>, &[VagueIssue])] = &[
         ("Update the runbook", Some("Priya"), Some("by Friday"), &[]),
-        ("We need to update the runbook.", None, None, &[NoOwner, NoDueDate]),
+        (
+            "We need to update the runbook.",
+            None,
+            None,
+            &[NoOwner, NoDueDate],
+        ),
         ("I'll update the runbook.", Some("You"), None, &[NoDueDate]),
-        ("Someone should look into it.", None, Some("by Friday"), &[UnclearScope, NoOwner]),
-        ("I'll take care of that.", Some("You"), Some("tomorrow"), &[UnclearScope]),
-        ("Priya will fix the login timeout by Thursday.", Some("Priya"), Some("by Thursday"), &[]),
-        ("Let's follow up.", None, None, &[UnclearScope, NoOwner, NoDueDate]),
+        (
+            "Someone should look into it.",
+            None,
+            Some("by Friday"),
+            &[UnclearScope, NoOwner],
+        ),
+        (
+            "I'll take care of that.",
+            Some("You"),
+            Some("tomorrow"),
+            &[UnclearScope],
+        ),
+        (
+            "Priya will fix the login timeout by Thursday.",
+            Some("Priya"),
+            Some("by Thursday"),
+            &[],
+        ),
+        (
+            "Let's follow up.",
+            None,
+            None,
+            &[UnclearScope, NoOwner, NoDueDate],
+        ),
     ];
     for (text, owner, due, expected) in cases {
         assert_eq!(
@@ -137,12 +176,19 @@ fn decision_vagueness_table() {
         ("Let's go with the token refresh fix this sprint.", &[]),
         ("Okay, let's go with that.", &[UnclearScope]),
         ("We agreed on it.", &[UnclearScope]),
-        ("Let's go with dropping the legacy CSV export for now.", &[Tentative]),
+        (
+            "Let's go with dropping the legacy CSV export for now.",
+            &[Tentative],
+        ),
         ("I think we agreed to freeze the schema.", &[Tentative]),
         ("We decided to move billing to Kafka.", &[]),
     ];
     for (text, expected) in cases {
-        assert_eq!(decision_issues(&decision(text)), expected.to_vec(), "{text}");
+        assert_eq!(
+            decision_issues(&decision(text)),
+            expected.to_vec(),
+            "{text}"
+        );
     }
 }
 
@@ -150,17 +196,79 @@ fn decision_vagueness_table() {
 fn clarifying_questions_table() {
     use VagueIssue::*;
     use WorkItemKind::*;
-    let cases: &[(WorkItemKind, &str, Option<&str>, &[VagueIssue], Option<&str>)] = &[
-        (ActionItem, "Update the runbook", None, &[NoOwner, NoDueDate], Some("Who will take “Update the runbook”, and by when?")),
-        (ActionItem, "Update the runbook", None, &[NoOwner], Some("Who will own “Update the runbook”?")),
-        (ActionItem, "Update the runbook", Some("Priya"), &[NoDueDate], Some("Priya, by when can you have “Update the runbook” done?")),
-        (ActionItem, "Update the runbook", Some("You"), &[NoDueDate], Some("By when should “Update the runbook” be done?")),
-        (ActionItem, "Look into it", None, &[UnclearScope, NoOwner, NoDueDate], Some("What exactly does “Look into it” involve, and who will take it?")),
-        (ActionItem, "Take care of that", Some("You"), &[UnclearScope], Some("What exactly does “Take care of that” involve — what does done look like?")),
+    let cases: &[(
+        WorkItemKind,
+        &str,
+        Option<&str>,
+        &[VagueIssue],
+        Option<&str>,
+    )] = &[
+        (
+            ActionItem,
+            "Update the runbook",
+            None,
+            &[NoOwner, NoDueDate],
+            Some("Who will take “Update the runbook”, and by when?"),
+        ),
+        (
+            ActionItem,
+            "Update the runbook",
+            None,
+            &[NoOwner],
+            Some("Who will own “Update the runbook”?"),
+        ),
+        (
+            ActionItem,
+            "Update the runbook",
+            Some("Priya"),
+            &[NoDueDate],
+            Some("Priya, by when can you have “Update the runbook” done?"),
+        ),
+        (
+            ActionItem,
+            "Update the runbook",
+            Some("You"),
+            &[NoDueDate],
+            Some("By when should “Update the runbook” be done?"),
+        ),
+        (
+            ActionItem,
+            "Look into it",
+            None,
+            &[UnclearScope, NoOwner, NoDueDate],
+            Some("What exactly does “Look into it” involve, and who will take it?"),
+        ),
+        (
+            ActionItem,
+            "Take care of that",
+            Some("You"),
+            &[UnclearScope],
+            Some("What exactly does “Take care of that” involve — what does done look like?"),
+        ),
         (ActionItem, "Update the runbook", Some("Priya"), &[], None),
-        (Decision, "Okay, let's go with that.", None, &[UnclearScope], Some("What exactly did we decide in “Okay, let's go with that”? Worth saying it in one line for the notes.")),
-        (Decision, "Let's go with dropping the CSV export for now.", None, &[Tentative], Some("Is “Let's go with dropping the CSV export for now” decided, or still open?")),
-        (Decision, "We decided to move billing to Kafka.", None, &[], None),
+        (
+            Decision,
+            "Okay, let's go with that.",
+            None,
+            &[UnclearScope],
+            Some(
+                "What exactly did we decide in “Okay, let's go with that”? Worth saying it in one line for the notes.",
+            ),
+        ),
+        (
+            Decision,
+            "Let's go with dropping the CSV export for now.",
+            None,
+            &[Tentative],
+            Some("Is “Let's go with dropping the CSV export for now” decided, or still open?"),
+        ),
+        (
+            Decision,
+            "We decided to move billing to Kafka.",
+            None,
+            &[],
+            None,
+        ),
     ];
     for (kind, text, owner, issues, expected) in cases {
         assert_eq!(
@@ -175,9 +283,21 @@ fn clarifying_questions_table() {
 fn decisions_and_action_items_are_tracked_with_owners_and_dates() {
     use SpeakerRole::{Remote, User};
     let (t, _) = run(&[
-        (Remote, 5, "Let's go with the token refresh fix this sprint."),
-        (Remote, 12, "Priya will pair with Sam on it and have a fix ready by Thursday."),
-        (Remote, 20, "Next, the onboarding docs are out of date, so we need to update the runbook."),
+        (
+            Remote,
+            5,
+            "Let's go with the token refresh fix this sprint.",
+        ),
+        (
+            Remote,
+            12,
+            "Priya will pair with Sam on it and have a fix ready by Thursday.",
+        ),
+        (
+            Remote,
+            20,
+            "Next, the onboarding docs are out of date, so we need to update the runbook.",
+        ),
     ]);
     let b = t.board();
     assert_eq!(b.decisions.len(), 1);
@@ -191,7 +311,10 @@ fn decisions_and_action_items_are_tracked_with_owners_and_dates() {
     let c = &b.clarifications[0];
     assert_eq!(c.target_kind, WorkItemKind::ActionItem);
     assert_eq!(c.target_id, b.action_items[1].id);
-    assert_eq!(c.question, "Who will take “Update the runbook”, and by when?");
+    assert_eq!(
+        c.question,
+        "Who will take “Update the runbook”, and by when?"
+    );
     let _ = User;
 }
 
@@ -201,7 +324,11 @@ fn owners_and_dates_fill_in_from_later_replies() {
     // An explicit restatement merges into the earlier item.
     let (t, updates) = run(&[
         (Remote, 20, "So we need to update the runbook."),
-        (User, 30, "I can take the runbook update, I'll have it done by Friday."),
+        (
+            User,
+            30,
+            "I can take the runbook update, I'll have it done by Friday.",
+        ),
     ]);
     let b = t.board();
     assert_eq!(b.action_items.len(), 1, "{:?}", b.action_items);
@@ -243,11 +370,23 @@ fn owners_and_dates_fill_in_from_later_replies() {
 fn questions_are_answered_deferred_or_left_open() {
     use SpeakerRole::{Remote, User};
     let (t, updates) = run(&[
-        (Remote, 40, "Can you give us a quick update on the billing export?"),
-        (User, 48, "Sure. The batch rewrite is done and staging tests passed yesterday."),
+        (
+            Remote,
+            40,
+            "Can you give us a quick update on the billing export?",
+        ),
+        (
+            User,
+            48,
+            "Sure. The batch rewrite is done and staging tests passed yesterday.",
+        ),
         (Remote, 60, "Do we have a date for the production cutover?"),
         (User, 66, "Not yet, I'll check with the data team."),
-        (Remote, 80, "Should we also move the reporting service to the new cluster this sprint?"),
+        (
+            Remote,
+            80,
+            "Should we also move the reporting service to the new cluster this sprint?",
+        ),
         (Remote, 84, "Let's park that until next planning."),
         (Remote, 100, "Is the staging environment back up?"),
         (Remote, 103, "Yes, staging came back up this morning."),
@@ -257,7 +396,13 @@ fn questions_are_answered_deferred_or_left_open() {
     // Answered by the user's reply; it was asked of the user.
     assert!(qs[0].addressed_to_you);
     assert!(qs[0].answered);
-    assert!(qs[0].answer.as_deref().unwrap().starts_with("Sure. The batch rewrite"));
+    assert!(
+        qs[0]
+            .answer
+            .as_deref()
+            .unwrap()
+            .starts_with("Sure. The batch rewrite")
+    );
     assert_eq!(updates[1].answered, vec![qs[0].id.clone()]);
     // "Not yet" defers it: still open.
     assert!(!qs[1].answered && qs[1].deferred);
@@ -396,13 +541,19 @@ fn record() -> MeetingRecord {
 fn extractive_minutes_have_decisions_owners_dates_and_open_questions() {
     let s = extractive_minutes(&record());
     assert_eq!(s.generated_by, "extractive");
-    assert_eq!(s.decisions, vec!["Let's go with the token refresh fix this sprint."]);
+    assert_eq!(
+        s.decisions,
+        vec!["Let's go with the token refresh fix this sprint."]
+    );
     assert_eq!(s.open_questions, vec!["Do we have a date for the cutover?"]);
     assert_eq!(s.questions_asked.len(), 2);
     assert!(s.interviewer.is_none());
     let w = s.workplace.as_ref().expect("minutes");
     assert_eq!(w.action_items.len(), 2);
-    assert_eq!(w.action_items[0].task, "Pair with Sam on it and have a fix ready");
+    assert_eq!(
+        w.action_items[0].task,
+        "Pair with Sam on it and have a fix ready"
+    );
     assert_eq!(w.action_items[0].owner.as_deref(), Some("Priya"));
     assert_eq!(w.action_items[0].due.as_deref(), Some("by Thursday"));
     assert_eq!(
@@ -416,7 +567,10 @@ fn extractive_minutes_have_decisions_owners_dates_and_open_questions() {
         s.follow_up_suggestions,
         vec!["Who will take “Update the runbook”, and by when?"]
     );
-    assert!(s.overview.contains("1 decision, 2 action items and 1 open question"));
+    assert!(
+        s.overview
+            .contains("1 decision, 2 action items and 1 open question")
+    );
     assert!(s.overview.contains("(30 min)"));
     // Follow-up message draft.
     let m = &w.follow_up_message;
@@ -451,8 +605,14 @@ fn minutes_without_anything_recorded_say_so() {
     r.questions.clear();
     let s = extractive_minutes(&r);
     let w = s.workplace.unwrap();
-    assert!(w.follow_up_message.contains("No decisions or action items were recorded."));
-    assert!(s.overview.contains("0 decisions, 0 action items and 0 open questions"));
+    assert!(
+        w.follow_up_message
+            .contains("No decisions or action items were recorded.")
+    );
+    assert!(
+        s.overview
+            .contains("0 decisions, 0 action items and 0 open questions")
+    );
 }
 
 #[test]
@@ -495,7 +655,10 @@ fn catch_up_without_a_model_lists_what_happened_recently() {
     };
     let text = extractive_catch_up(&lines, &board, 5, 300_000, 1_000);
     let s = crate::prompts::candidate_answer::parse(&text);
-    assert_eq!(s.answer, "In the last 5 minutes: 2 lines of discussion (Others, You).");
+    assert_eq!(
+        s.answer,
+        "In the last 5 minutes: 2 lines of discussion (Others, You)."
+    );
     assert_eq!(
         s.key_points,
         vec![

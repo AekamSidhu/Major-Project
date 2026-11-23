@@ -225,17 +225,67 @@ fn workplace_questions_need_the_users_answer_only_when_addressed_to_them() {
             true,
             true,
         ),
-        (SpeakerRole::Remote, "What do you think about moving the release?", true, true),
-        (SpeakerRole::Remote, "Walk us through the new dashboard", true, true),
-        (SpeakerRole::Remote, "Does anyone know when the cutover is?", true, false),
-        (SpeakerRole::Remote, "Should we move the reporting service this sprint?", true, false),
-        (SpeakerRole::Remote, "Priya, can you take the runbook update?", true, false),
-        (SpeakerRole::Remote, "Hey Sam, what's the status of the login fix?", true, false),
-        (SpeakerRole::Remote, "Okay, can you share the doc after the call?", true, true),
-        (SpeakerRole::Remote, "Team, can you update your tickets before Friday?", true, true),
-        (SpeakerRole::Remote, "It was slow, you know, but it works now.", false, false),
+        (
+            SpeakerRole::Remote,
+            "What do you think about moving the release?",
+            true,
+            true,
+        ),
+        (
+            SpeakerRole::Remote,
+            "Walk us through the new dashboard",
+            true,
+            true,
+        ),
+        (
+            SpeakerRole::Remote,
+            "Does anyone know when the cutover is?",
+            true,
+            false,
+        ),
+        (
+            SpeakerRole::Remote,
+            "Should we move the reporting service this sprint?",
+            true,
+            false,
+        ),
+        (
+            SpeakerRole::Remote,
+            "Priya, can you take the runbook update?",
+            true,
+            false,
+        ),
+        (
+            SpeakerRole::Remote,
+            "Hey Sam, what's the status of the login fix?",
+            true,
+            false,
+        ),
+        (
+            SpeakerRole::Remote,
+            "Okay, can you share the doc after the call?",
+            true,
+            true,
+        ),
+        (
+            SpeakerRole::Remote,
+            "Team, can you update your tickets before Friday?",
+            true,
+            true,
+        ),
+        (
+            SpeakerRole::Remote,
+            "It was slow, you know, but it works now.",
+            false,
+            false,
+        ),
         (SpeakerRole::Unknown, "Can you send the notes?", true, true),
-        (SpeakerRole::User, "Can you send me the numbers?", true, false),
+        (
+            SpeakerRole::User,
+            "Can you send me the numbers?",
+            true,
+            false,
+        ),
         (SpeakerRole::User, "When is the cutover?", true, false),
     ];
     for (role, text, is_q, needs) in cases {
@@ -243,9 +293,20 @@ fn workplace_questions_need_the_users_answer_only_when_addressed_to_them() {
         assert_eq!(r.is_question, *is_q, "{text}: {r:?}");
         assert_eq!(r.requires_response, *needs, "{text}: {r:?}");
     }
-    let unknown = run(Mode::Workplace, SpeakerRole::Unknown, "Can you send the notes?");
-    let remote = run(Mode::Workplace, SpeakerRole::Remote, "Can you send the notes?");
-    assert!(unknown.confidence < remote.confidence, "unknown speakers are discounted");
+    let unknown = run(
+        Mode::Workplace,
+        SpeakerRole::Unknown,
+        "Can you send the notes?",
+    );
+    let remote = run(
+        Mode::Workplace,
+        SpeakerRole::Remote,
+        "Can you send the notes?",
+    );
+    assert!(
+        unknown.confidence < remote.confidence,
+        "unknown speakers are discounted"
+    );
 }
 
 #[test]

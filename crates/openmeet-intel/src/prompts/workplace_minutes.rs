@@ -305,7 +305,10 @@ fn opt_text(v: Option<&Value>) -> Option<String> {
 }
 
 fn action_items(obj: &Map<String, Value>) -> Vec<MinutesActionItem> {
-    let Some(v) = get(obj, &["actionItems", "action_items", "actions", "nextSteps"]) else {
+    let Some(v) = get(
+        obj,
+        &["actionItems", "action_items", "actions", "nextSteps"],
+    ) else {
         return Vec::new();
     };
     let mut out: Vec<MinutesActionItem> = Vec::new();
@@ -352,7 +355,12 @@ fn action_items(obj: &Map<String, Value>) -> Vec<MinutesActionItem> {
 /// Parses the model's JSON; `None` if unusable. `markdown` is left empty
 /// (render it with [`crate::workplace::render_minutes_markdown`]). A missing
 /// follow-up message is drafted from the parsed minutes.
-pub fn parse(text: &str, meeting_id: &str, title: &str, generated_by: &str) -> Option<MeetingSummary> {
+pub fn parse(
+    text: &str,
+    meeting_id: &str,
+    title: &str,
+    generated_by: &str,
+) -> Option<MeetingSummary> {
     let mut obj = first_json_object(text)?;
     if get(&obj, &["overview"]).is_none()
         && let Some(Value::Object(inner)) = get(&obj, &["minutes", "summary", "result"])
@@ -394,12 +402,12 @@ pub fn parse(text: &str, meeting_id: &str, title: &str, generated_by: &str) -> O
     if !has_content {
         return None;
     }
-    let message = match get(&obj, &["followUpMessage", "follow_up_message", "message", "email"]) {
+    let message = match get(
+        &obj,
+        &["followUpMessage", "follow_up_message", "message", "email"],
+    ) {
         Some(Value::String(s)) if !s.trim().is_empty() => {
-            let kept: Vec<&str> = s
-                .lines()
-                .filter(|l| !is_judgment(l))
-                .collect();
+            let kept: Vec<&str> = s.lines().filter(|l| !is_judgment(l)).collect();
             kept.join("\n").trim().to_string()
         }
         _ => String::new(),
@@ -516,16 +524,25 @@ mod tests {
 ```"#;
         let s = parse(json, "m1", "Sprint planning", "ollama/llama3.2").unwrap();
         assert_eq!(s.meeting_id, "m1");
-        assert_eq!(s.overview, "Sprint planning for the login fix and the docs.");
+        assert_eq!(
+            s.overview,
+            "Sprint planning for the login fix and the docs."
+        );
         assert_eq!(s.decisions, vec!["Ship the token refresh fix this sprint"]);
         assert_eq!(s.open_questions, vec!["Date for the production cutover"]);
-        assert_eq!(s.follow_up_suggestions, vec!["When will the runbook update be done?"]);
+        assert_eq!(
+            s.follow_up_suggestions,
+            vec!["When will the runbook update be done?"]
+        );
         let w = s.workplace.as_ref().unwrap();
         assert_eq!(w.action_items.len(), 4);
         assert_eq!(w.action_items[0].owner.as_deref(), Some("Priya"));
         assert_eq!(w.action_items[0].due.as_deref(), Some("by Thursday"));
         assert_eq!(w.action_items[1].due, None);
-        assert_eq!(w.action_items[2].owner, None, "\"null\" strings are no owner");
+        assert_eq!(
+            w.action_items[2].owner, None,
+            "\"null\" strings are no owner"
+        );
         assert_eq!(w.action_items[2].due, None);
         assert_eq!(w.action_items[3].task, "Book the retro room");
         assert_eq!(
@@ -546,7 +563,10 @@ mod tests {
         )
         .unwrap();
         let w = s.workplace.unwrap();
-        assert!(w.follow_up_message.contains("Thanks for joining Weekly sync."));
+        assert!(
+            w.follow_up_message
+                .contains("Thanks for joining Weekly sync.")
+        );
         assert!(w.follow_up_message.contains("- Keep the release date"));
         assert!(parse("no json here", "m", "t", "x").is_none());
         assert!(parse(r#"{"overview": ""}"#, "m", "t", "x").is_none());

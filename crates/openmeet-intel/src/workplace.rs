@@ -56,9 +56,8 @@ static TASK_LEAD_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("task lead pattern is valid")
 });
 /// A further lead right at the start ("Action item: Sam to …").
-static TASK_LEAD_START_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(r"^{TASK_LEADS}")).expect("task lead pattern is valid")
-});
+static TASK_LEAD_START_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(&format!(r"^{TASK_LEADS}")).expect("task lead pattern is valid"));
 
 /// The task of an action item without who says it or when it is due:
 /// "Priya will pair with Sam on it by Thursday." → "Pair with Sam on it".
@@ -102,17 +101,126 @@ pub fn task_phrase(text: &str) -> String {
 
 /// Words that say nothing about what is to be done.
 const SCOPE_FILLER: &[&str] = &[
-    "a", "an", "the", "it", "it's", "its", "that", "this", "those", "these", "them", "thing",
-    "things", "stuff", "something", "one", "some", "any", "look", "looking", "take", "taking",
-    "handle", "handling", "do", "doing", "done", "deal", "dealing", "sort", "sorting", "figure",
-    "figuring", "check", "checking", "follow", "following", "think", "thinking", "work",
-    "working", "care", "get", "getting", "make", "making", "have", "having", "go", "going",
-    "need", "want", "sure", "up", "out", "into", "onto", "on", "about", "with", "at", "to", "for",
-    "of", "in", "over", "by", "from", "around", "and", "or", "but", "i", "we", "you", "they",
-    "he", "she", "me", "us", "also", "just", "quickly", "please", "probably", "bit", "again",
-    "more", "later", "soon", "now", "then", "there", "here", "what", "so", "ok", "okay", "all",
-    "everything", "whatever", "same", "other", "rest", "can", "will", "should", "let's", "lets",
-    "see", "try", "start", "first", "next", "look", "a", "little", "yeah", "yes", "sure",
+    "a",
+    "an",
+    "the",
+    "it",
+    "it's",
+    "its",
+    "that",
+    "this",
+    "those",
+    "these",
+    "them",
+    "thing",
+    "things",
+    "stuff",
+    "something",
+    "one",
+    "some",
+    "any",
+    "look",
+    "looking",
+    "take",
+    "taking",
+    "handle",
+    "handling",
+    "do",
+    "doing",
+    "done",
+    "deal",
+    "dealing",
+    "sort",
+    "sorting",
+    "figure",
+    "figuring",
+    "check",
+    "checking",
+    "follow",
+    "following",
+    "think",
+    "thinking",
+    "work",
+    "working",
+    "care",
+    "get",
+    "getting",
+    "make",
+    "making",
+    "have",
+    "having",
+    "go",
+    "going",
+    "need",
+    "want",
+    "sure",
+    "up",
+    "out",
+    "into",
+    "onto",
+    "on",
+    "about",
+    "with",
+    "at",
+    "to",
+    "for",
+    "of",
+    "in",
+    "over",
+    "by",
+    "from",
+    "around",
+    "and",
+    "or",
+    "but",
+    "i",
+    "we",
+    "you",
+    "they",
+    "he",
+    "she",
+    "me",
+    "us",
+    "also",
+    "just",
+    "quickly",
+    "please",
+    "probably",
+    "bit",
+    "again",
+    "more",
+    "later",
+    "soon",
+    "now",
+    "then",
+    "there",
+    "here",
+    "what",
+    "so",
+    "ok",
+    "okay",
+    "all",
+    "everything",
+    "whatever",
+    "same",
+    "other",
+    "rest",
+    "can",
+    "will",
+    "should",
+    "let's",
+    "lets",
+    "see",
+    "try",
+    "start",
+    "first",
+    "next",
+    "look",
+    "a",
+    "little",
+    "yeah",
+    "yes",
+    "sure",
 ];
 
 fn has_scope(text: &str) -> bool {
@@ -403,7 +511,8 @@ impl WorkplaceTracker {
             // "I'll take it" / "Dana can take that by Friday": who (or when)
             // for an earlier item, not a new task.
             if !has_scope(&task_phrase(&item.text))
-                && let Some(t) = self.assignment_target(at, item.owner.is_some(), item.due.is_some())
+                && let Some(t) =
+                    self.assignment_target(at, item.owner.is_some(), item.due.is_some())
             {
                 let existing = &mut self.items[t].item;
                 if existing.owner.is_none() {
@@ -457,7 +566,11 @@ impl WorkplaceTracker {
 
     /// Resolves (or defers) the most recent open question this segment
     /// replies to. True when the board changed.
-    fn resolve_questions(&mut self, segment: &TranscriptSegment, update: &mut WorkplaceUpdate) -> bool {
+    fn resolve_questions(
+        &mut self,
+        segment: &TranscriptSegment,
+        update: &mut WorkplaceUpdate,
+    ) -> bool {
         let text = segment.text.trim();
         if word_count(text) < 2 {
             return false;
@@ -594,7 +707,11 @@ impl WorkplaceTracker {
     fn refresh_clarifications(&mut self) -> bool {
         let now = now_ms();
         let mut next: Vec<ClarifyingQuestion> = Vec::new();
-        let mut add = |target_id: &str, kind: WorkItemKind, text: String, owner: Option<&str>, issues: Vec<VagueIssue>| {
+        let mut add = |target_id: &str,
+                       kind: WorkItemKind,
+                       text: String,
+                       owner: Option<&str>,
+                       issues: Vec<VagueIssue>| {
             let Some(question) = clarifying_question(kind, &text, owner, &issues) else {
                 return;
             };
@@ -682,10 +799,18 @@ pub fn extractive_catch_up(
         format!("{minutes} minutes")
     };
     let mut points: Vec<String> = Vec::new();
-    for d in board.decisions.iter().filter(|d| d.created_at >= since_unix_ms) {
+    for d in board
+        .decisions
+        .iter()
+        .filter(|d| d.created_at >= since_unix_ms)
+    {
         points.push(format!("Decided: {}", d.text.trim()));
     }
-    for a in board.action_items.iter().filter(|a| a.created_at >= since_unix_ms) {
+    for a in board
+        .action_items
+        .iter()
+        .filter(|a| a.created_at >= since_unix_ms)
+    {
         points.push(format!("Action item: {}", action_item_line(a)));
     }
     for q in board.open_questions.iter().filter(|q| !q.answered) {
@@ -762,7 +887,11 @@ fn dedup_push(list: &mut Vec<String>, item: String, max: usize) {
 /// A plain-text follow-up message the user can copy and send to the
 /// attendees: decisions, action items with owners and due dates, open
 /// questions. Never signed with a name.
-pub fn follow_up_message(title: &str, summary: &MeetingSummary, items: &[MinutesActionItem]) -> String {
+pub fn follow_up_message(
+    title: &str,
+    summary: &MeetingSummary,
+    items: &[MinutesActionItem],
+) -> String {
     let title = title.trim();
     let mut out = String::from("Hi all,\n\n");
     out.push_str(&if title.is_empty() {
@@ -806,7 +935,11 @@ pub fn follow_up_message(title: &str, summary: &MeetingSummary, items: &[Minutes
 pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary {
     let m = &record.meeting;
     let mut decisions = Vec::new();
-    for c in record.claims.iter().filter(|c| c.kind == ClaimKind::Decision) {
+    for c in record
+        .claims
+        .iter()
+        .filter(|c| c.kind == ClaimKind::Decision)
+    {
         dedup_push(&mut decisions, c.text.clone(), 15);
     }
     let mut items: Vec<MinutesActionItem> = Vec::new();
@@ -836,7 +969,11 @@ pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary {
         .collect();
     let mut questions_asked = Vec::new();
     let mut open_questions = Vec::new();
-    for q in record.questions.iter().filter(|q| !superseded.contains(q.id.as_str())) {
+    for q in record
+        .questions
+        .iter()
+        .filter(|q| !superseded.contains(q.id.as_str()))
+    {
         dedup_push(&mut questions_asked, q.question.clone(), 25);
         if !answered.contains(q.id.as_str()) {
             dedup_push(&mut open_questions, q.question.clone(), 15);
@@ -853,8 +990,14 @@ pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary {
         dedup_push(&mut key_topics, t.name.clone(), 8);
     }
     let mut to_clarify = Vec::new();
-    for c in record.claims.iter().filter(|c| c.kind == ClaimKind::Decision) {
-        if let Some(q) = clarifying_question(WorkItemKind::Decision, &c.text, None, &decision_issues(c)) {
+    for c in record
+        .claims
+        .iter()
+        .filter(|c| c.kind == ClaimKind::Decision)
+    {
+        if let Some(q) =
+            clarifying_question(WorkItemKind::Decision, &c.text, None, &decision_issues(c))
+        {
             dedup_push(&mut to_clarify, q, 10);
         }
     }
@@ -889,7 +1032,12 @@ pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary {
     if !key_topics.is_empty() {
         overview.push_str(&format!(
             " Main topics: {}.",
-            key_topics.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
+            key_topics
+                .iter()
+                .take(4)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
     let mut summary = MeetingSummary {
@@ -973,7 +1121,10 @@ pub fn render_minutes_markdown(summary: &MeetingSummary, title: &str) -> String 
     } else if summary.generated_by == "extractive" {
         " without an AI model (extractive minutes)".to_string()
     } else {
-        format!(" by {}", crate::prompts::shared::one_line(&summary.generated_by))
+        format!(
+            " by {}",
+            crate::prompts::shared::one_line(&summary.generated_by)
+        )
     };
     if summary.generated_at > 0 {
         out.push_str(&format!(
@@ -1011,7 +1162,10 @@ pub(crate) fn action_item_lines(items: &[ActionItem]) -> Vec<String> {
 }
 
 /// Board lines for prompts: questions with their status.
-pub(crate) fn question_lines(questions: &[OpenQuestion], label: impl Fn(SpeakerRole) -> &'static str) -> Vec<String> {
+pub(crate) fn question_lines(
+    questions: &[OpenQuestion],
+    label: impl Fn(SpeakerRole) -> &'static str,
+) -> Vec<String> {
     questions
         .iter()
         .map(|q| {
@@ -1022,7 +1176,11 @@ pub(crate) fn question_lines(questions: &[OpenQuestion], label: impl Fn(SpeakerR
             } else {
                 "open"
             };
-            let to = if q.addressed_to_you { ", asked of You" } else { "" };
+            let to = if q.addressed_to_you {
+                ", asked of You"
+            } else {
+                ""
+            };
             format!(
                 "[{}] {} ({}{to}): {}",
                 clock(q.asked_at_ms),

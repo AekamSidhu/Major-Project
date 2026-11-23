@@ -419,24 +419,131 @@ const TASK_VERBS: &str = r"(?:take|handle|own|update|fix|write|draft|prepare|sen
 
 /// Capitalized words that are never a person's (or team's) name.
 const NOT_NAMES: &[&str] = &[
-    "I", "We", "You", "They", "He", "She", "It", "Let", "Let's", "Someone", "Somebody", "Everyone",
-    "Everybody", "Anyone", "Anybody", "Nobody", "This", "That", "These", "Those", "Then", "So",
-    "And", "But", "Also", "Okay", "OK", "Ok", "Yes", "No", "Yeah", "Sure", "Well", "Now", "Next",
-    "The", "Our", "My", "Your", "Their", "His", "Her", "There", "Here", "What", "Who", "When",
-    "Where", "Why", "How", "Which", "If", "Maybe", "Probably", "Today", "Tomorrow", "Tonight",
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "January",
-    "February", "March", "April", "May", "June", "July", "August", "September", "October",
-    "November", "December", "Great", "Cool", "Right", "Alright", "First", "Finally", "Please",
-    "Thanks", "Hi", "Hey", "Hello", "Actually", "Honestly", "Basically", "Just", "Again", "Once",
-    "After", "Before", "Until", "Since", "Because", "Or", "Nothing", "Everything", "Something",
-    "Team", "Folks", "Guys", "All", "One", "Each", "Every", "Both", "Either", "Neither", "Who's",
-    "Action", "Todo", "Step", "Item",
+    "I",
+    "We",
+    "You",
+    "They",
+    "He",
+    "She",
+    "It",
+    "Let",
+    "Let's",
+    "Someone",
+    "Somebody",
+    "Everyone",
+    "Everybody",
+    "Anyone",
+    "Anybody",
+    "Nobody",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "Then",
+    "So",
+    "And",
+    "But",
+    "Also",
+    "Okay",
+    "OK",
+    "Ok",
+    "Yes",
+    "No",
+    "Yeah",
+    "Sure",
+    "Well",
+    "Now",
+    "Next",
+    "The",
+    "Our",
+    "My",
+    "Your",
+    "Their",
+    "His",
+    "Her",
+    "There",
+    "Here",
+    "What",
+    "Who",
+    "When",
+    "Where",
+    "Why",
+    "How",
+    "Which",
+    "If",
+    "Maybe",
+    "Probably",
+    "Today",
+    "Tomorrow",
+    "Tonight",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "Great",
+    "Cool",
+    "Right",
+    "Alright",
+    "First",
+    "Finally",
+    "Please",
+    "Thanks",
+    "Hi",
+    "Hey",
+    "Hello",
+    "Actually",
+    "Honestly",
+    "Basically",
+    "Just",
+    "Again",
+    "Once",
+    "After",
+    "Before",
+    "Until",
+    "Since",
+    "Because",
+    "Or",
+    "Nothing",
+    "Everything",
+    "Something",
+    "Team",
+    "Folks",
+    "Guys",
+    "All",
+    "One",
+    "Each",
+    "Every",
+    "Both",
+    "Either",
+    "Neither",
+    "Who's",
+    "Action",
+    "Todo",
+    "Step",
+    "Item",
 ];
 
 fn is_name(word: &str) -> bool {
     let mut chars = word.chars();
     chars.next().is_some_and(char::is_uppercase)
-        && word.chars().all(|c| c.is_alphabetic() || c == '-' || c == '\'')
+        && word
+            .chars()
+            .all(|c| c.is_alphabetic() || c == '-' || c == '\'')
         && !NOT_NAMES.contains(&word)
 }
 
@@ -577,9 +684,7 @@ pub fn extract_action_items(segment: &TranscriptSegment, mode: Mode) -> Vec<Acti
             Some(owner_label(segment.speaker_role, true))
         } else if contains_any(&lower, REQUEST) {
             Some(request_owner())
-        } else if contains_any(&lower, TEAM_COMMIT) {
-            Some(None)
-        } else if workplace && named.is_some() {
+        } else if contains_any(&lower, TEAM_COMMIT) || (workplace && named.is_some()) {
             Some(None)
         } else if workplace && !question && WORKPLACE_SELF_RE.is_match(&lower) {
             Some(owner_label(segment.speaker_role, true))
@@ -748,24 +853,92 @@ mod tests {
     #[test]
     fn workplace_action_items_table() {
         // (speaker, sentence, expected owner, expected due); None = not an action item.
-        type Case = (SpeakerRole, &'static str, Option<(Option<&'static str>, Option<&'static str>)>);
+        type Case = (
+            SpeakerRole,
+            &'static str,
+            Option<(Option<&'static str>, Option<&'static str>)>,
+        );
         let cases: &[Case] = &[
-            (SpeakerRole::Remote, "Priya will pair with Sam on it and have a fix ready by Thursday.", Some((Some("Priya"), Some("by Thursday")))),
-            (SpeakerRole::Remote, "Priya and Sam will review the migration plan next week.", Some((Some("Priya and Sam"), Some("next week")))),
-            (SpeakerRole::Remote, "So we need to update the runbook.", Some((None, None))),
-            (SpeakerRole::Remote, "Someone should check the alert thresholds before the release.", Some((None, Some("before the release")))),
-            (SpeakerRole::User, "I'll draft the announcement by end of day.", Some((Some("You"), Some("by end of day")))),
-            (SpeakerRole::User, "I can take the runbook update.", Some((Some("You"), None))),
-            (SpeakerRole::Remote, "I'll look into the flaky test.", Some((Some("Other participant"), None))),
-            (SpeakerRole::Remote, "Alex, can you file a ticket for the timeout?", Some((Some("Alex"), None))),
-            (SpeakerRole::Remote, "Can you share the dashboard link after the call?", Some((Some("You"), None))),
-            (SpeakerRole::Remote, "Could someone send me the dashboard link?", Some((None, None))),
-            (SpeakerRole::Remote, "Let's assign the cleanup to Dana.", Some((Some("Dana"), None))),
-            (SpeakerRole::Remote, "Action item: Sam to benchmark the new cache in two weeks.", Some((Some("Sam"), Some("in two weeks")))),
-            (SpeakerRole::Remote, "Let's go with the token refresh fix this sprint.", None),
-            (SpeakerRole::Remote, "We shipped the export last week.", None),
-            (SpeakerRole::Remote, "Monday will be busy for everyone.", None),
-            (SpeakerRole::Remote, "Who can take the runbook update?", None),
+            (
+                SpeakerRole::Remote,
+                "Priya will pair with Sam on it and have a fix ready by Thursday.",
+                Some((Some("Priya"), Some("by Thursday"))),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Priya and Sam will review the migration plan next week.",
+                Some((Some("Priya and Sam"), Some("next week"))),
+            ),
+            (
+                SpeakerRole::Remote,
+                "So we need to update the runbook.",
+                Some((None, None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Someone should check the alert thresholds before the release.",
+                Some((None, Some("before the release"))),
+            ),
+            (
+                SpeakerRole::User,
+                "I'll draft the announcement by end of day.",
+                Some((Some("You"), Some("by end of day"))),
+            ),
+            (
+                SpeakerRole::User,
+                "I can take the runbook update.",
+                Some((Some("You"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "I'll look into the flaky test.",
+                Some((Some("Other participant"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Alex, can you file a ticket for the timeout?",
+                Some((Some("Alex"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Can you share the dashboard link after the call?",
+                Some((Some("You"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Could someone send me the dashboard link?",
+                Some((None, None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Let's assign the cleanup to Dana.",
+                Some((Some("Dana"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Action item: Sam to benchmark the new cache in two weeks.",
+                Some((Some("Sam"), Some("in two weeks"))),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Let's go with the token refresh fix this sprint.",
+                None,
+            ),
+            (
+                SpeakerRole::Remote,
+                "We shipped the export last week.",
+                None,
+            ),
+            (
+                SpeakerRole::Remote,
+                "Monday will be busy for everyone.",
+                None,
+            ),
+            (
+                SpeakerRole::Remote,
+                "Who can take the runbook update?",
+                None,
+            ),
             (SpeakerRole::User, "I think it went well overall.", None),
         ];
         for (role, text, expected) in cases {
