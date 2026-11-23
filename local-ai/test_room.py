@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import shutil
+import subprocess
 import struct
 import wave
 import zlib
@@ -842,3 +844,32 @@ def test_early_reading_counts_at_most_possible_in_the_flag():
     full_items = {s["name"]: s for s in checks.signal_list(answer(full))}
     assert full_items["reading"]["calibrated"] is True
     assert checks.flag(answer(full))["level"] == "high"
+
+
+ROOM_JS = Path(__file__).resolve().parent / "room" / "room.js"
+HOST_HTML = Path(__file__).resolve().parent / "room" / "host.html"
+
+
+def test_question_is_what_the_interviewer_began_before_the_candidate(tmp_path):  # type: ignore[no-untyped-def]
+    # The host page reads the question at close: a segment still being transcribed when the candidate
+    # starts (answer at 3.5 s) is kept, a murmur during the answer and the next question are not.
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    (tmp_path / "room.mjs").write_text(ROOM_JS.read_text(encoding="utf-8"), encoding="utf-8")
+    driver = tmp_path / "driver.mjs"
+    driver.write_text(
+        "import { questionAsked } from './room.mjs';\n"
+        "const heard = [{ start: 0.0, text: '', job: null }, { start: 3.0, text: '', job: null },\n"
+        "  { start: 6.0, text: '', job: null }, { start: 12.0, text: '', job: null }];\n"
+        "const asked = questionAsked(heard, 3.5);\n"
+        "heard[0].text = 'Why Postgres?';\n"      # transcribed after the candidate began: still the question
+        "heard[1].text = 'Is that so?';\n"        # began before the candidate, emitted after: still the question
+        "heard[2].text = 'Mm-hm.';\n"             # a murmur during the answer
+        "heard[3].text = 'Next question?';\n"     # the next question
+        "console.log(JSON.stringify({ n: asked.length, text: asked.map((r) => r.text).join(' ') }));\n",
+        encoding="utf-8")
+    run = subprocess.run([node, str(driver)], capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {"n": 2, "text": "Why Postgres? Is that so?"}
+    assert "questionAsked" in HOST_HTML.read_text(encoding="utf-8")

@@ -23,8 +23,9 @@ their inputs and how to run them are in [Reproduce](#reproduce). Read
 - **Live pipeline.** In the desktop engine's live run (12 spoken questions in
   real time), the first answer token appears a median 1.8 s after the speaker
   stops on the CPU and 0.7 s on the GPU; all 12 questions were detected
-  (section 2, with percentiles). In the room run, the question was not
-  transcribed back in 3 of its 8 turns, which is reported as a problem.
+  (section 2, with percentiles). In the first room run the question's text was
+  not back in time in 3 of its 8 turns; that was a timing race in the room's host
+  page, fixed and rerun (section 2).
 - **AI-written text.** The shipped model (v2) and the first model (v1) each
   catch 97.8% of ChatGPT answers at their `high` level on the HC3 test
   questions, and flag 1.8% (v2) and 2.0% (v1) of human answers (section 3).
@@ -125,7 +126,7 @@ Three views of the same pipeline:
 - **The sidecar's endpoints** one at a time: embeddings, the AI-written-text
   model, one video frame through the gaze tracker (MediaPipe) at 10 frames a
   second, and the reading network.
-- **The interview room** end to end: a scripted 8-answer interview played
+- **The interview room** end to end (the question is read when the answer closes, as the host page does now; `--question-at start` reproduces the first run's rule): a scripted 8-answer interview played
   against the room's HTTP API in real time, following the host page's own rules
   (speech cut into pieces by a Python copy of its segmenter, a video frame 10
   times a second, the answer closed when the interviewer speaks again, then echo
@@ -227,28 +228,28 @@ Dropped by the guardrails (local): none; rules output under the same guardrails:
 
 | Step (turns 1-7) | ms (median / p90 / p95) | n |
 |---|---|---|
-| answer closed -> its last transcripts back | 530 / 1,138 / 1,405 | 7 |
-| POST /answers (AI text, delivery, reading, flag) | 12 / 150 / 249 | 7 |
-| answer closed -> card shown | 542 / 1,284 / 1,652 | 7 |
-| card -> echo similarity filled in | 117 / 469 / 625 | 7 |
-| card -> follow-ups shown | 3,259 / 3,871 / 3,909 | 7 |
-| every transcription request (both speakers, all turns) | 1,808 / 2,669 / 2,896 | 25 |
-| every gaze frame | 22 / 32 / 34 | 2937 |
+| answer closed -> its last transcripts back | 2,175 / 4,246 / 4,549 | 7 |
+| POST /answers (AI text, delivery, reading, flag) | 49 / 261 / 388 | 7 |
+| answer closed -> card shown | 2,209 / 4,330 / 4,627 | 7 |
+| card -> echo similarity filled in | 7,687 / 10,354 / 11,166 | 7 |
+| card -> follow-ups shown | 4,834 / 6,990 / 8,081 | 7 |
+| every transcription request (both speakers, all turns) | 3,812 / 6,787 / 7,167 | 25 |
+| every gaze frame | 42 / 66 / 81 | 3041 |
 
-The question's text was back 1.90 s (median; max 2.87 s) after the interviewer stopped.
+The question's text was back 3.62 s (median; max 6.92 s) after the interviewer stopped.
 
 | Turn | Answer | Candidate starts after | Question known | Pieces (late) | Flag | AI text | Echo similarity | Delivery | Reading | Follow-ups |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | q02 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.609) | baseline | possible | 3 (ai) |
-| 2 | q03 (written) | 2.5 s | **no** | 2 (0) | possible | low (2%) | unavailable | baseline | possible | 1 (ai) |
-| 3 | q04 (written) | 2.5 s | yes | 1 (0) | possible | low (5%) | low (0.685) | baseline | possible | 3 (ai) |
-| 4 | q05 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.616) | low | possible | 3 (rules) |
-| 5 | q01 (llama3.2, read out) | 2.5 s | **no** | 3 (0) | high | high (96%) | unavailable | low | possible | 3 (ai) |
-| 6 | q07 (written) | 2.5 s | yes | 1 (0) | possible | low (12%) | low (0.733) | low | possible | 1 (ai) |
-| 7 | q06 (llama3.2, read out) | 2.5 s | yes | 4 (0) | high | high (82%) | high (0.958) | low | low | 1 (rules) |
-| 8 | q08 (written) | 0.8 s | **no** | 2 (0) | possible | low (15%) | unavailable | low | possible | 3 (ai) |
+| 1 | q02 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.613) | baseline | possible | 3 (ai) |
+| 2 | q03 (written) | 2.5 s | yes | 2 (0) | possible | low (2%) | low (0.768) | baseline | possible | 2 (ai) |
+| 3 | q04 (written) | 2.5 s | yes | 1 (0) | possible | low (5%) | low (0.686) | baseline | possible | 3 (rules) |
+| 4 | q05 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.621) | low | possible | 2 (rules) |
+| 5 | q01 (llama3.2, read out) | 2.5 s | yes | 3 (0) | high | high (96%) | possible (0.889) | low | possible | 1 (rules) |
+| 6 | q07 (written) | 2.5 s | yes | 1 (0) | possible | low (12%) | low (0.738) | low | possible | 1 (rules) |
+| 7 | q06 (llama3.2, read out) | 2.5 s | yes | 4 (0) | high | high (82%) | high (0.955) | low | low | 1 (rules) |
+| 8 | q08 (written) | 0.8 s | yes | 2 (0) | possible | low (15%) | low (0.758) | low | high | 1 (rules) |
 
-*Run 2026-11-23 18:53, commit 0a177e7; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastembed 0.9.1, onnxruntime 1.32.0, mediapipe 1.2.3, langchain-ollama 1.1.0, fastapi 0.163.1, uvicorn 0.54.0; Ollama 0.34.0.*
+*Run 2026-11-23 22:55, commit ca17a3d; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastembed 0.9.1, onnxruntime 1.32.0, mediapipe 1.2.3, langchain-ollama 1.1.0, fastapi 0.163.1, uvicorn 0.54.0; Ollama 0.34.0.*
 <!-- /tables -->
 
 ![Median and 90th percentile of each live stage](../benchmarks/results/pipeline_latency.png)
@@ -258,12 +259,22 @@ the room numbers come from the room's HTTP API and include its browser-side
 requests through the sidecar and Ollama. The latency to the first answer token
 is what the candidate sees first; the complete answer follows after it.
 
-In the room run, the question's text was not transcribed back in 3 of the 8
-turns (turns 2, 5 and 8 in the table: "Question known" is **no**). Those turns
-still produced answers, flags and follow-ups from the candidate's own speech
-and the video, but the room had no question text for them. The cause was not
-investigated. The room run is 8 answers, so this is a finding about this run,
-not a rate.
+In the first room run (commit 0a177e7) the question's text was not back in
+time for 3 of the 8 turns (2, 5 and 8). Those turns still produced answers,
+flags and follow-ups, but without the question text. The cause was the room's
+host page: it read the question when the candidate began speaking, and a
+question took about 1.8 s to transcribe on the CPU, so a slow one arrived after
+that point and was dropped. The host page now reads the question when the answer
+closes, taking the interviewer's segments that began before the candidate
+(`--question-at close`, the default). The table is a rerun with that rule, and in it the question's text was transcribed back in 8 of its 8 turns.
+That rerun was made while another job used the CPU (free RAM 3.3 GB; the median
+transcription request took 3.8 s, against 1.8 s in the first run), so its
+timings are not a clean comparison. Its cost is visible in the table: the card
+came 2.2 s (median) after the answer closed, against 0.54 s in the first run,
+because the card waits for the question's transcript; and the echo reference
+answers now start when the answer is posted, so echo similarity was filled in
+7.7 s (median) after the card, against 0.12 s. An rerun on an idle machine has not been made. The first run's table is in the git history. The room run is
+8 answers, so these are findings about these runs, not rates.
 
 ## 3. Detection rate and false flags
 
@@ -474,8 +485,9 @@ the rules engine; see section 2.
   reproduces the numbers committed with 79dbf40 exactly.
 - **The committed v2 model is not reproducible from the repository's script on
   this machine** (section 3).
-- **The room did not transcribe the question back in 3 of 8 turns** (section
-  2). The cause was not investigated.
+- **The room's host page read the question too early** (section 2): in the
+  first run the question was missing in 3 of 8 turns. It is fixed; the rerun was
+  made on a busy machine, so its timings are not a clean comparison.
 - **Ollama stopped responding during the live engine run** (the first attempt
   failed with connection refused). The Ollama server was restarted and the run
   repeated from the beginning; the reported numbers come from that complete

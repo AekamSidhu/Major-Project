@@ -24,16 +24,30 @@ export function showSelf(video, stream) {
 function fakeMedia() {
   const canvas = Object.assign(document.createElement("canvas"), { width: 640, height: 360 });
   const g = canvas.getContext("2d");
-  const label = location.pathname.startsWith("/host") ? "interviewer (test video)" : "candidate (test video)";
+  const label = location.pathname.startsWith("/host")
+    ? "interviewer (test video)"
+    : "candidate (test video)";
   (function draw(t) {
-    g.fillStyle = "#2a2f2d"; g.fillRect(0, 0, 640, 360);
-    g.fillStyle = "#7cc4ae"; g.beginPath(); g.arc(320 + 150 * Math.sin(t / 900), 180, 40, 0, 7); g.fill();
-    g.fillStyle = "#fff"; g.font = "20px sans-serif"; g.fillText(label, 20, 340);
+    g.fillStyle = "#2a2f2d";
+    g.fillRect(0, 0, 640, 360);
+    g.fillStyle = "#7cc4ae";
+    g.beginPath();
+    g.arc(320 + 150 * Math.sin(t / 900), 180, 40, 0, 7);
+    g.fill();
+    g.fillStyle = "#fff";
+    g.font = "20px sans-serif";
+    g.fillText(label, 20, 340);
     requestAnimationFrame(draw);
   })(0);
   const stream = canvas.captureStream(15);
-  const ctx = new AudioContext(), osc = ctx.createOscillator(), gain = ctx.createGain(), dest = ctx.createMediaStreamDestination();
-  osc.frequency.value = 220; gain.gain.value = 0.05; osc.connect(gain).connect(dest); osc.start();
+  const ctx = new AudioContext(),
+    osc = ctx.createOscillator(),
+    gain = ctx.createGain(),
+    dest = ctx.createMediaStreamDestination();
+  osc.frequency.value = 220;
+  gain.gain.value = 0.05;
+  osc.connect(gain).connect(dest);
+  osc.start();
   stream.addTrack(dest.stream.getAudioTracks()[0]);
   stream.isTest = true;
   return stream;
@@ -66,8 +80,22 @@ export async function handleSignal(pc, signal, m) {
   } else if (m.type === "answer") {
     await pc.setRemoteDescription(m.sdp);
   } else if (m.type === "ice" && m.candidate) {
-    try { await pc.addIceCandidate(m.candidate); } catch (e) { console.warn("ice", e); }
+    try {
+      await pc.addIceCandidate(m.candidate);
+    } catch (e) {
+      console.warn("ice", e);
+    }
   }
+}
+
+/**
+ * The interviewer's segments that make the question of an answer: those that began before the
+ * candidate did. Segments are timed by when they were spoken, not when their text came back, so a
+ * question still being transcribed when the candidate starts is kept; a murmur during the answer
+ * (begins after the candidate) is not. `heard` is [{start, text, job}] in the order sent.
+ */
+export function questionAsked(heard, answerStart) {
+  return heard.filter((r) => r.start < answerStart);
 }
 
 export function toggleTrack(stream, kind) {

@@ -158,7 +158,7 @@
   </aside>
 </main>
 <script type="module">
-import { getMedia, connect, makePeer, handleSignal, toggleTrack, showSelf } from "/room.js";
+import { getMedia, connect, makePeer, handleSignal, toggleTrack, showSelf, questionAsked } from "/room.js";
 const $ = (id) => document.getElementById(id);
 const pct = (p) => (p == null ? "–" : Math.round(p * 100) + "%");
 const LABEL = { low: "low", possible: "possible", high: "high", too_short: "too short", not_enough_gaze: "no gaze", no_gaze: "no gaze",
@@ -310,27 +310,30 @@ function wav(chunks) {
 }
 
 // ---- turns: an answer is the candidate's speech until the interviewer talks again ----
-let answer = null, question = [], firstLine = true, answerCount = 0;
+// The interviewer's segments since the last answer closed: {start, text, job}. A segment is often
+// still being transcribed when the candidate starts, so the question is only read at close.
+let answer = null, heard = [], firstLine = true, answerCount = 0;
 function onSpeechStart(speaker, t) {
   if (speaker === "candidate" && !answer) {
-    answer = { start: t, end: t, texts: [], pending: [], question: question.join(" ") };
+    answer = { start: t, end: t, texts: [], pending: [] };
     $("btnEndAnswer").disabled = false;
-    // The model writes its own answers to the question while the candidate talks (echo similarity).
-    if (answer.question) post(`/api/rooms/${room.room}/references`, { question: answer.question }).catch(() => {});
   }
   if (speaker === "interviewer" && answer && t > answer.end + 0.5) closeAnswer();
 }
 function emitSegment(speaker, start, end, chunks) {
   const target = speaker === "candidate" ? answer : null;
   if (target) target.end = Math.max(target.end, end);
+  const heardRec = speaker === "interviewer" ? { start, text: "", job: null } : null;
+  if (heardRec) heard.push(heardRec);
   const job = post(`/api/rooms/${room.room}/transcribe?speaker=${speaker}&start=${start}&end=${end}`, null, wav(chunks))
     .then((seg) => {
       setPill("pillAsr", "transcribing", "on");
       if (!seg.text) return;
       addLine(seg);
-      if (target) target.texts.push(seg.text); else if (speaker === "interviewer") question.push(seg.text);
+      if (target) target.texts.push(seg.text); else if (heardRec) heardRec.text = seg.text;
     })
     .catch((e) => setPill("pillAsr", "transcription unavailable", "bad"));
+  if (heardRec) heardRec.job = job;
   if (target) target.pending.push(job);
 }
 function addLine(seg) {
@@ -343,11 +346,14 @@ function addLine(seg) {
 }
 async function closeAnswer() {
   const a = answer; if (!a) return;
-  answer = null; question = []; $("btnEndAnswer").disabled = true;
-  await Promise.allSettled(a.pending);
+  answer = null; $("btnEndAnswer").disabled = true;
+  const asked = questionAsked(heard, a.start);  // what the interviewer said before the candidate began
+  heard = [];
+  await Promise.allSettled([...a.pending, ...asked.map((r) => r.job)]);
   const end = Math.max(a.end, a.start + 1);
   if (!a.texts.length && end - a.start < 5) return; // a cough or noise, not an answer
-  const body = { start: a.start, end, text: a.texts.join(" "), question: a.question };
+  const question = asked.map((r) => r.text).filter(Boolean).join(" ");
+  const body = { start: a.start, end, text: a.texts.join(" "), question };
   if (study) body.condition = $("condition").value;
   try { renderAnswer(await post(`/api/rooms/${room.room}/answers`, body)); }
   catch (e) { console.warn(e); }
