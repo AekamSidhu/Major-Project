@@ -2,11 +2,13 @@
 #   .\start-room.ps1                       # simple-rules follow-ups, LAN only (same Wi-Fi)
 #   .\start-room.ps1 -Followups local      # Ollama follow-ups, LAN only
 #   .\start-room.ps1 -Tunnel               # also a public Cloudflare link (off by default)
+#   .\start-room.ps1 -NoTunnel             # no-op, kept so old commands still work
 # With -Tunnel, anyone with the link can reach the room's join page.
 param(
     [ValidateSet("rules", "local", "online")] [string]$Followups = "rules",
     [int]$Port = 8443,
-    [switch]$Tunnel
+    [switch]$Tunnel,
+    [switch]$NoTunnel
 )
 
 $ErrorActionPreference = "Stop"
