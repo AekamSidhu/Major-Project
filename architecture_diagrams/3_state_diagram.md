@@ -1,5 +1,7 @@
 # State Machines
 
+> Older duplicate. The current, as-built diagrams are in [`diagrams/`](../diagrams/README.md); this file is kept for reference and may not match the code.
+
 OpenMeet has two explicit state machines, both validated on every
 transition. The overlay does not have a state machine of its own: its header
 status is derived from these two (`deriveStatus` in `src/overlay/state.ts`),

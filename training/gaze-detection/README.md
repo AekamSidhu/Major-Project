@@ -1,21 +1,21 @@
-# Gaze detection — `feature/gaze-detection`
+# Gaze detection (reading detector and gaze model)
 
-Work branch for building, training and evaluating the **reading-gaze** ("eye
-detection") signal of OpenMeet's answer-integrity check (cheating detection).
-The other signal, AI-echo answer analysis, is developed separately on
-`feature/echo-detection`. The two are combined only after both are merged.
+Training and evaluation code for the **reading-gaze** ("eye detection") signal
+of OpenMeet's answer-integrity check. The other signals, AI-written text and
+echo similarity, are in `training/echo-detection`. The shared definitions are in
+`spec/integrity/`.
 
-> Status: the code for Phases 0–2 is in place: the environment, the GazeBase
-> loader, webcam simulation, reading features, rule-based and learned
-> detectors, and the MediaPipe video pipeline, covered by 41 tests. The
-> **visual model is trained**: a transfer-learned gaze CNN with 4.54° error
-> on unseen people (MPIIFaceGaze, leave-one-person-out), against 7.18° for the
-> current MediaPipe approach. See
-> [Learned gaze model](#learned-gaze-model-transfer-learning). The reading
-> detector has not been run on GazeBase yet. Nothing from this branch is wired
-> into the app. The `IntegrityAnalyzer` and `GazeProvider` exist only in the
-> design diagrams (process 11.0 "Assess answer integrity" in the DFDs, steps
-> 11.5–11.6). See [Getting started](#getting-started).
+> Status (2026-11-23): the reading detector runs in the desktop app's
+> answer-integrity check, through the local AI sidecar (`local-ai/integrity`,
+> which ships the network `models/reading_network.json`, trained on GazeBase).
+> Its test result on 64 unseen GazeBase people is 98.8% window balanced
+> accuracy with webcam-quality noise. A separate network trained on Reading in
+> the Wild reaches 83.0% on that dataset; the shipped network has not been
+> scored there yet. The gaze model (a transfer-learned CNN, 4.54° error on
+> unseen people, against 7.18° for the MediaPipe method) is trained and
+> measured but not used in the app. The early reading score for answers of 3 to
+> 10 s is hand-tuned and uncalibrated. Open items are in
+> [PROGRESS.md](PROGRESS.md) and in the checklist below.
 
 ## What we're detecting
 
@@ -117,8 +117,8 @@ interviewer's screen**, exactly what OpenMeet would see.
 Vary glasses or no glasses, lighting, webcams, and tile size (gallery view
 versus speaker view).
 
-**One collection for both branches.** Each session records the candidate's
-audio as well, so the same recordings and labels feed the echo branch too.
+**One collection for both detectors.** Each session records the candidate's
+audio as well, so the same recordings and labels feed the echo detector too.
 Plan and run data collection together, once.
 
 **Data rules**
@@ -186,7 +186,7 @@ tile size.
 *Done when:* we have a ROC-AUC on the simulated traces and a chosen detector
 configuration.
 
-### Phase 3: Collect our own data (shared with the echo branch)
+### Phase 3: Collect our own data (shared with the echo detector)
 
 - Write the protocol, consent form and condition schedule. Randomise the
   condition order per participant.
@@ -229,7 +229,7 @@ no raw data).
 *Done when:* an engine test with a mock gaze provider covers the flow end to
 end, and a live test runs it with the real sidecar.
 
-### Phase 6: Fuse with the echo signal (joint, after both branches merge)
+### Phase 6: Fuse with the echo signal (joint, shared with the echo detector)
 
 Combine the reading and echo scores into one flag, re-tune the threshold on
 the shared recordings, and report how much each signal adds.
@@ -582,7 +582,7 @@ Free options: Google Colab or Kaggle Notebooks, or a university lab or HPC
 machine. In a Colab notebook:
 
 ```bash
-!git clone -b feature/gaze-detection https://github.com/AekamSidhu/Major-Project.git
+!git clone https://github.com/AekamSidhu/Major-Project.git
 %cd Major-Project/training/gaze-detection
 !pip install -q -r requirements-dev.txt
 !python -m pytest -q
@@ -614,7 +614,7 @@ laptop.
 - [x] Phase 0: environment, `.gitignore`, evaluation protocol written
 - [ ] Phase 1: gaze-quality report and minimum tile size. Partly done on MPIIFaceGaze stills: the learned gaze model (4.54° LOPO) vs MediaPipe (7.18°), with error vs face size down to 32 px and JPEG. Still to do: real video (EVE), frame rate, and face normalisation from MediaPipe head pose
 - [x] Phase 2: reading detector measured on GazeBase test people (98.8% window balanced accuracy at nominal webcam quality, 85.5% in the hardest condition), two outside datasets and Reading in the Wild (83.0% at 10 s); see "Reading detector"
-- [ ] Phase 3: own dataset collected (with the echo branch)
+- [ ] Phase 3: own dataset collected (shared with `training/echo-detection`)
 - [ ] Phase 4: evaluation, threshold and false-positive rate, robustness and bias checks
-- [ ] Phase 5: integrated into the app behind a setting
-- [ ] Phase 6: fused with the echo signal
+- [~] Phase 5: the reading detector is in the app's integrity check (behind its setting, through the sidecar); the gaze model is not in the app
+- [~] Phase 6: fused with the echo signal in the app and in the room (spec fusion); calibration on our own data is still open

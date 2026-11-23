@@ -1,5 +1,7 @@
 # Data Flow Diagrams
 
+> Older duplicate. The current, as-built diagrams are in [`diagrams/`](../diagrams/README.md); this file is kept for reference and may not match the code.
+
 The DFDs live in [`diagrams/dfd/`](../diagrams/dfd/) as Graphviz sources
 (`.dot`) with rendered PNGs. They are the only DFD set: Level 0 is the
 context diagram, Level 1 splits OpenMeet into eleven numbered processes, and

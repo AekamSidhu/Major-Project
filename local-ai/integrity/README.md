@@ -46,7 +46,7 @@ signal counts at most as `possible`; one signal alone never makes it
 
 | Signal | What | Trained or calibrated on | Held-out result |
 |---|---|---|---|
-| Reading | `models/reading_network.onnx` + `.json`: 1-D CNN, 3 seeds averaged, 2.1 MB | GazeBase (CC BY 4.0), 258 people, degraded to webcam quality | 98.8% window balanced accuracy on 64 unseen people; 83.0% on Reading in the Wild test people (real-world reading) |
+| Reading | `models/reading_network.onnx` + `.json`: 1-D CNN, 3 seeds averaged, 2.1 MB | GazeBase (CC BY 4.0), 258 people, degraded to webcam quality | 98.8% window balanced accuracy on 64 unseen people; 83.0% on Reading in the Wild test people, measured with a separate network trained on that dataset (the shipped one has not been scored there) |
 | AI-written text | `models/echo_tfidf.json`: TF-IDF (1–2 word grams, 60k terms) + logistic regression, 1.9 MB | HC3 (CC BY-SA 4.0) + interview Q&A (GPT-5 / GPT-4.1 / Claude 4.0 Sonnet style) | 98.0% balanced accuracy on unseen HC3 questions (AUC 0.998); 93.5% interview AI recall at 0% FPR |
 | Echo similarity | thresholds in `spec/integrity/thresholds.json` (no trained model: Llama 3.2 + bge-small) | HC3: ChatGPT vs human answers against Llama 3.2's answers; thresholds (0.8712, 0.9201) from 500 development questions | 500 test questions: ROC-AUC 0.876; honest answers flagged 18.6% at `possible`, 6.6% at `high`; but 36% at `high` on computer-science definitions (textbook answers look alike) |
 | Delivery | hand-set weights and thresholds in the spec | not calibrated | on SpiCE read sentences vs interview speech (34 speakers, 30-word stretches, no question delay measurable): ROC-AUC 0.55, and 28% of the interview stretches reach `possible` (not an interview false-positive rate, but a warning) |
@@ -65,17 +65,17 @@ academic Q&A and interview-style answers.
 
 | Dataset | Threshold | Value | FPR | AI recall |
 |---------|-----------|-------|-----|-----------|
-| HC3 test (unseen Qs) | `possible` | 0.247 | 1.8% | 97.8% |
-| HC3 test (unseen Qs) | `high` | 0.462 | 0.0% | 80.6% |
+| HC3 test (unseen Qs) | `possible` | 0.247 | 5.0% | 99.2% |
+| HC3 test (unseen Qs) | `high` | 0.462 | 1.8% | 97.8% |
 | Interview (31 Qs, old calibration set) | `possible` | 0.247 | 0% | 93.5% |
 | Interview (31 Qs, old calibration set) | `high` | 0.462 | 0% | 80.6% |
 | Interview (16 held-out Qs) | `possible` | 0.247 | 0% | ~90% |
 
 Mean AI score on interviews jumped from 0.22 (v1) to 0.72 (v2). Behavioural
 questions like "Tell me about yourself" that v1 missed now score 0.4–0.9.
-The echo detector is strongest when combined with the reading detector: a
-candidate whose eyes track like reading **and** whose answer scores as
-AI-written is a much stronger signal than either alone.
+The fused flag (above) asks for both: a calibrated `high` plus another raised
+signal. Two raised signals are therefore stronger evidence than one, but the
+combination has not been measured on real interviews.
 
 Training: `training/echo-detection/retrain_with_interviews.py`.
 Calibration: `training/echo-detection/calibrate_interview.py`.
@@ -92,11 +92,11 @@ Parakeet AI scenario: someone reading AI-generated text from an overlay
 | Reading from overlay (8 scenarios, 15–60 s) | 1.000 | 100% detected |
 | Normal interview gaze (8 scenarios, 15–60 s) | 0.007–0.347 | 0% false positives |
 
-The model's existing thresholds cleanly separate reading from normal
-interview behaviour at the `high` level. At `possible` (0.140) some
-nervous or fidgety speakers score above threshold, so the `high` level is
-recommended for interviews. The combined echo + reading signal is
-extremely strong: joint false-positive probability is essentially zero.
+On these synthetic patterns the existing thresholds separate the two cases at
+the `high` level. At `possible` (0.140) some nervous or fidgety speakers score
+above threshold, so `high` is the level to use in interviews. These are
+generated patterns, not recordings of candidates, so they say little about
+real false-positive rates.
 
 Calibration script: `training/gaze-detection/calibrate_reading.py`.
 

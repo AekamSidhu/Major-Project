@@ -1,5 +1,7 @@
 # Core Component Classes
 
+> Older duplicate. The current, as-built diagrams are in [`diagrams/`](../diagrams/README.md); this file is kept for reference and may not match the code.
+
 Main Rust types and how they relate. OpenMeet is written in Rust, so a
 "class" here is a struct and an «interface» is a trait; `..|>` means the
 struct implements the trait. Only the most important fields and methods are

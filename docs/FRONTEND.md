@@ -70,7 +70,17 @@ Two windows, two entry points:
     `MODE_CHANGED`, `STYLE_CHANGED`, `TOPICS_UPDATED`, `SCREEN_UPDATED`,
     `CLAIMS_EXTRACTED`, `SUGGESTION_PINNED`, `SUGGESTION_DISMISSED`,
     `AUDIO_LEVEL { source, level }` (0..1, ~10 Hz), `LATENCY_RECORDED`,
-    `VOICE_COMMAND_RECOGNIZED`.
+    `VOICE_COMMAND_RECOGNIZED`, `ACTION_ITEMS_UPDATED { items }`.
+  * `INTEGRITY_CHECKED { flag }` (interviewer mode, check on): one flag per
+    checked candidate answer. A later `revision` of the same `flag.id` replaces
+    the earlier one, and an older revision must never overwrite a newer one. Show
+    the headline with its evidence; it is a reason for a follow-up question, not
+    a verdict, and it is never shown to the candidate.
+  * `WORKPLACE_UPDATED { board }` (workplace mode): the whole live board
+    (decisions, action items, open questions, clarifying questions). Replace the
+    previous board; do not merge.
+  * The wire names are the variant names in `SCREAMING_SNAKE_CASE`
+    (`openmeet-core/src/events.rs`); `Notice` carries `component` as well.
 * **UI commands** (`openmeet://ui`, `UiCommand`): `FOCUS_ASK` (overlay: open the
   Ask input), `TOGGLE_EXPANDED` (overlay: minimal ↔ expanded),
   `CLICK_THROUGH_CHANGED { enabled }`, `OVERLAY_VISIBILITY_CHANGED { visible }`,
@@ -95,6 +105,36 @@ Two windows, two entry points:
   questions, `active` primary request (with text so far), follow-ups, pinned
   suggestions, topics, components, last observation/summary, flags.
 * Errors from `api.*` reject with `CoreError`; show `errorMessage(e)`.
+
+### Commands without a section above
+
+Each command is registered in `src-tauri/src/lib.rs` (`generate_handler!`) and
+wrapped in `src/lib/ipc.ts` (camel-case name). Arguments are the Rust
+parameters; "request id" means the `Id` of the request whose events follow.
+
+| Command (`api.*`) | Arguments | Returns | Notes |
+|---|---|---|---|
+| `generate_answer` (`generateAnswer`) | `GenerateAnswerRequest` | request id | Answer for the current or a given question |
+| `generate_followups` (`generateFollowups`) | none | request id | Interviewer follow-ups; refused in workplace mode |
+| `ask_openmeet` (`askOpenMeet`) | `prompt` | request id | Ask with the meeting and screen context |
+| `clarify_question` (`clarifyQuestion`) | none | request id | Clarifying questions for the latest ambiguous question |
+| `catch_up` (`catchUp`) | `minutes` (1 to 60) | request id | Workplace "Catch me up" over the recent window |
+| `cancel_request` (`cancelRequest`) | `requestId` | none | Cancels one request |
+| `pause_meeting` / `resume_meeting` / `toggle_pause` | none | none / none / `MeetingState` | Pause releases the microphone and screen |
+| `emergency_stop` (`emergencyStop`) | none | none | Stops capture and every AI request, hides the overlay (`PROCESSING_STOPPED`) |
+| `capture_screen_now` (`captureScreenNow`) | none | none | Captures the selected screen source once (the "Capture screen" action) |
+| `focus_meeting_app` (`focusMeetingApp`) | `windowId` | none | Returns focus to the meeting window |
+| `get_integrity_status` (`getIntegrityStatus`) | none | `IntegrityServiceView` | Whether the sidecar can run the check, even while the check is off |
+| `preview_integrity_region` (`previewIntegrityRegion`) | `region` (`Rect`) | PNG data URL | The candidate video region as the sidecar will capture it; nothing stored |
+| `regenerate_summary` (`regenerateSummary`) | `meetingId` | `MeetingSummary` | Rebuilds a stored meeting's summary |
+| `remove_privacy_rule` (`removePrivacyRule`) | `id` | none | Deletes one privacy rule |
+| `reset_settings` (`resetSettings`) | none | `Settings` | Defaults; onboarding stays completed and the profile is kept |
+| `reset_shortcuts` (`resetShortcuts`) | none | `ShortcutStatus[]` | Restores the default global shortcuts |
+| `get_app_info` (`getAppInfo`) | none | `AppInfo` | Version, platform, architecture, developer mode and debug build flags |
+| `overlay_show` / `overlay_toggle` | none | `bool` | Show, or toggle, the overlay; returns its visibility |
+| `overlay_move_to_display` (`overlayMoveToDisplay`) | `displayKey` | none | Moves the overlay to another display |
+| `set_click_through` (`setClickThrough`) | `enabled` | `bool` | Same as the click-through setting |
+| `stop_demo` (`stopDemo`) / `clear_simulation` (`clearSimulation`) | none | none | Stop a demo run; clear the developer simulation state |
 
 ## Design language (spec §61–§65)
 

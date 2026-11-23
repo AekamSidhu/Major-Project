@@ -1,5 +1,7 @@
 # Meeting Interaction Sequence
 
+> Older duplicate. The current, as-built diagrams are in [`diagrams/`](../diagrams/README.md); this file is kept for reference and may not match the code.
+
 The interviewer asks a question, the candidate answers over the call, and
 OpenMeet runs two things in parallel when the answer turn ends: grounded
 follow-up suggestions, and the integrity check (AI-echo answer analysis plus

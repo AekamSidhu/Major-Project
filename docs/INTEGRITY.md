@@ -97,9 +97,8 @@ other than `whisper-1` are never asked.
 ## Limits
 
 * **Thresholds are not calibrated on real interviews.** AI-text, reading and
-  (from the HC3 calibration on `feature/delivery-signal`) echo similarity are
-  thresholded on public data (HC3, GazeBase); delivery thresholds are hand-set
-  and marked uncalibrated. Which signals count as calibrated is read from
+  echo similarity are thresholded on public data (HC3, GazeBase); delivery
+  thresholds are hand-set and marked uncalibrated. Which signals count as calibrated is read from
   `thresholds.json`.
 * Fluent or prepared speakers, accents, transcription errors and nerves can
   raise signals without any AI help. Whisper often drops filler words.

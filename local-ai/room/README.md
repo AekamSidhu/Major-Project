@@ -225,7 +225,8 @@ candidate's separate consent, is the exception).
   a smaller model (`--whisper-model base.en` or `tiny.en`) keeps it closer to live.
 - Llama 3.2 on a laptop CPU takes several seconds to tens of seconds per set
   of follow-ups; the online mode takes about 5 seconds. Reference answers
-  are written while the candidate talks (about 2 s each on an RTX 4060), so
+  are written while the candidate talks (about 4 s each with llama3.2 in the
+  benchmark, median, see [docs/BENCHMARKS.md](../../docs/BENCHMARKS.md)), so
   echo similarity usually arrives a moment after the answer card.
 - Delivery needs three answers of at least 10 words before it scores
   anything, cannot tell a slow reader from a thoughtful speaker, and on

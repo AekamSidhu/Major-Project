@@ -1,5 +1,7 @@
 # System Architecture
 
+> Older duplicate. The current, as-built diagrams are in [`diagrams/`](../diagrams/README.md); this file is kept for reference and may not match the code.
+
 Component view of OpenMeet, an interview copilot for interviewers and
 workplace teams with built-in cheating detection. Top to bottom: the two React webviews, the Tauri
 desktop shell (`src-tauri`), the real-time engine, the library crates, and

@@ -54,10 +54,12 @@ All four ──> ONE FLAG per answer: "nothing stands out" or "worth a follow-up
 Transcript ─────────> FOLLOW-UP MODEL (Llama 3.2 or Gemini) ──> suggested follow-up questions
 ```
 
-Everything runs on the interviewer's own computer. The one exception is the
-optional *online* mode, which sends answer text and the interviewer's
-questions (never audio or video) to Google Gemini. The candidate is told
-about this before joining.
+Everything runs on the interviewer's own computer by default. In the interview
+room, two options send data online and have to be switched on: `--transcription
+groq` sends the candidate's audio to Groq for transcription, and `--followups
+online` sends the interviewer's questions and the text of answers (never audio
+or video) to Google Gemini for follow-up questions and reference answers. The
+candidate is told about whichever is on before joining.
 
 ## 2. Model 1: the reading detector
 
@@ -141,7 +143,9 @@ never says "reading" would already score 86% plain accuracy.
 
 **Real-world reading (Reading in the Wild, trained and tested on its own
 people):** 83.0% balanced accuracy per 10-second window with eye-tracker
-input, 79.1% with webcam-style noise added. Over a whole recording it is
+input, 79.1% with webcam-style noise added. This is a separate network trained
+on that dataset. The network the app ships was trained on GazeBase only, and it
+has not been scored on Reading in the Wild yet. Over a whole recording it is
 92.9% and 90.4%. The published gaze-only model on this dataset reaches about
 82–86% using 60 samples per second; ours uses 10 per second, the rate a webcam
 pipeline gives.
@@ -215,7 +219,10 @@ assistant?*
 
 **HC3** (Human ChatGPT Comparison Corpus): questions from several areas
 (everyday explanations, finance, medicine, open questions and others), each
-with answers written by people and answers written by ChatGPT.
+with answers written by people and answers written by ChatGPT. The shipped
+model (version 2) also learned from 54 interview-style question and answer
+pairs written in the style of newer assistants. Their questions are kept apart
+from the HC3 test questions.
 
 To keep the comparison fair, every answer was first turned into what a
 **speech transcript** of it would look like: lower case, words only, no
@@ -245,8 +252,20 @@ and the test questions were scored once.
 
 ### Results
 
-On questions it had never seen: **97.9% balanced accuracy** and an **AUC of
-0.998** (1.0 would be perfect ranking).
+On questions it had never seen (HC3 test questions, 15,203 answers): **98.0%
+balanced accuracy** and an **AUC of 0.998** (1.0 would be perfect ranking). At
+the `high` level it catches 97.8% of the AI answers and flags 1.8% of the human
+ones; at the lower `possible` level it catches 99.2% and flags 5.0%. The first
+version, trained on HC3 alone, scored 97.9% balanced accuracy on the same
+questions. The false-flag rate is highest on textbook-style answers from
+Wikipedia (26% at `high`); per-source numbers are in
+[BENCHMARKS.md](BENCHMARKS.md#the-ai-written-text-model-v1-and-v2).
+
+**Reproducibility.** Retraining with the repository's script does not give
+back the shipped file bit for bit (its `high` threshold came out at 0.490
+against 0.462). The numbers above are for the file in the app,
+`local-ai/integrity/models/echo_tfidf.json`. The cause of the difference has
+not been found.
 
 ### Limits
 
@@ -352,7 +371,8 @@ as their baseline:
 | Read stretches reaching "possible" | 23% |
 | Fillers alone (AUC) | 0.70 |
 
-So on this data the index barely works. Reading isolated sentences turned
+(Numbers: `training/echo-detection/results/delivery_spice.json`; see also
+[BENCHMARKS.md](BENCHMARKS.md).) So on this data the index barely works. Reading isolated sentences turned
 out *slower* and with *more* pauses than talking, the opposite of what the
 index expects; only the filler rate pointed the right way, and Whisper
 often leaves fillers out. The delay after the question, which carries the
@@ -366,10 +386,11 @@ These were not trained by us. We use them as published.
 
 | Model | What it does in OpenMeet | Where it runs |
 |---|---|---|
-| **Whisper** (faster-whisper, `base.en`) | Turns speech into text, with the time of every word | On this computer |
+| **Whisper** (faster-whisper; `base.en` in the sidecar by default, `small.en` in the room) | Turns speech into text, with the time of every word | On this computer |
+| **Whisper large-v3** through Groq (optional) | Turns the candidate's audio into text in the room's `--transcription groq` mode | Groq's servers |
 | **MediaPipe Face Landmarker** | Finds the face and the two irises in each video frame | On this computer |
 | **Llama 3.2** through Ollama | Writes follow-up questions and the reference answers in the interview room; answers and summaries in the desktop app | On this computer |
-| **Gemini 3.5 Flash** (optional) | Writes follow-up questions and reference answers in the room's online mode | Google's servers |
+| **Gemini 3.5 Flash** (optional) | In the room's online mode, writes follow-up questions from the answer text and reference answers from the interviewer's question | Google's servers |
 | **fastembed** sentence embeddings (`BAAI/bge-small-en-v1.5`) | Compares an answer with the reference answers; finds related parts of the earlier conversation in the desktop app | On this computer |
 
 ### Follow-up questions and their guardrails
@@ -431,20 +452,21 @@ is shown to the interviewer only, never to the candidate.
 
 ## 10. Where the code is and how to retrain
 
-| Part | Branch | Folder |
-|---|---|---|
-| Reading detector and gaze model: training code, notebooks, full results | `feature/gaze-detection` | `training/gaze-detection` |
-| AI-written answer detector: training code | `feature/echo-detection` | `training/echo-detection` |
-| The trained models inside the app, and the integrity check page | `feature/integrity-check` | `local-ai/integrity` |
-| The browser interview room and follow-up questions | `feature/interview-room` | `local-ai/room` |
-| Shared signal definitions, thresholds and test cases | `spec/integrity` | `spec/integrity` |
-| Echo-similarity calibration on HC3, delivery evaluation on SpiCE | `feature/delivery-signal` | `training/echo-detection` (`calibrate_similarity.py`, `evaluate_delivery.py`) |
-| Collecting our own labelled interviews (protocol, consent, study mode) | `feature/delivery-signal` | `training/data-collection` |
+| Part | Folder |
+|---|---|
+| Reading detector and gaze model: training code, notebooks, results | `training/gaze-detection` |
+| AI-written answer detector: training, the retraining with interview pairs, export to the app | `training/echo-detection` (`train_content.py`, `retrain_with_interviews.py`, `export_content_model.py`) |
+| Echo-similarity calibration on HC3, delivery evaluation on SpiCE | `training/echo-detection` (`calibrate_similarity.py`, `evaluate_delivery.py`) |
+| The trained models inside the app, and the integrity check page | `local-ai/integrity` |
+| The browser interview room and follow-up questions | `local-ai/room` |
+| Shared signal definitions, thresholds and test cases | `spec/integrity` |
+| Collecting our own labelled interviews (protocol, consent, study mode) | `training/data-collection`, and the room's `--study` mode |
 
-All training ran on free Kaggle GPUs. The scripts `kaggle_run.sh` (reading
-detector), `kaggle_content.sh` (AI-written detector) and the notebook
-`gaze_transfer_learning.ipynb` (gaze model) rebuild everything from the public
-datasets. The full reading-detector and gaze-model write-up, with every
+Training ran on free Kaggle GPUs. The scripts `experiments/kaggle_run.sh` (in
+`training/gaze-detection`, reading detector), `kaggle_content.sh` (in
+`training/echo-detection`, AI-written detector) and the notebook
+`notebooks/gaze_transfer_learning.ipynb` (gaze model) run the training from the
+public datasets. The full reading-detector and gaze-model write-up, with every
 number, is in `training/gaze-detection/README.md`.
 
 **Dataset licences:** GazeBase (CC BY 4.0), HC3 (CC BY-SA 4.0), SpiCE (CC BY 4.0), MPIIFaceGaze

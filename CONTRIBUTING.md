@@ -46,6 +46,10 @@ npx vite build
 # local AI sidecar (if you changed local-ai/)
 local-ai/.venv/Scripts/python -m pytest local-ai   # Windows
 local-ai/.venv/bin/python -m pytest local-ai       # macOS / Linux
+# integrity spec fixtures (if you changed spec/integrity/)
+python -I spec/integrity/reference.py && git diff --exit-code -- spec/integrity/*.json
+# benchmark numbers in the docs (if you changed benchmarks/ or docs/BENCHMARKS.md)
+python benchmarks/tables.py --doc docs/BENCHMARKS.md --check
 ```
 
 * Add tests for new behaviour. Tests must not need network access, API keys,
