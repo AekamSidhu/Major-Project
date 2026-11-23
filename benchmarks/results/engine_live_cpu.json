@@ -1,0 +1,457 @@
+{
+ "what": "desktop engine, live local pipeline (VAD, sidecar Whisper, question detection, Ollama)",
+ "environment": {
+  "date": "2026-11-23T21:27:43+05:30",
+  "cpu": "13th Gen Intel(R) Core(TM) i9-13900H",
+  "logical_cpus": 20,
+  "ram_gb": 15.7,
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24",
+  "os": "Windows-10-10.0.26300-SP0",
+  "python": "3.11.9",
+  "packages": {
+   "faster-whisper": "1.2.1",
+   "ctranslate2": "4.9.0"
+  },
+  "repo_commit": "72f9343",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "build": "cargo build --release (opt-level 3, no LTO)",
+  "ollama": "0.34.0"
+ },
+ "config": {
+  "whisper_model": "base.en",
+  "device": "cpu",
+  "llm": {
+   "model": "llama3.2",
+   "provider": "ollama"
+  },
+  "settings": {
+   "max_output_tokens": 1200,
+   "semantic_detection": true,
+   "turn_end_silence_ms": 1500
+  },
+  "speech": "Windows text-to-speech (make_inputs.py)"
+ },
+ "device_log": [
+  {
+   "model": "base.en",
+   "device": "cpu",
+   "load_s": 2.0
+  }
+ ],
+ "candidate_mode": {
+  "questions": 12,
+  "detected": 12,
+  "single_transcript": 12,
+  "speech_end_to_transcript_ms": {
+   "n": 12,
+   "median": 1386.0,
+   "p90": 2092.1,
+   "p95": 2103.6,
+   "mean": 1356.5,
+   "min": 569.0,
+   "max": 2113.7
+  },
+  "speech_end_to_question_ms": {
+   "n": 12,
+   "median": 1386.1,
+   "p90": 2092.1,
+   "p95": 2103.6,
+   "mean": 1356.5,
+   "min": 569.0,
+   "max": 2113.7
+  },
+  "question_to_first_token_ms": {
+   "n": 12,
+   "median": 389.1,
+   "p90": 496.5,
+   "p95": 600.9,
+   "mean": 423.7,
+   "min": 324.4,
+   "max": 725.8
+  },
+  "speech_end_to_first_token_ms": {
+   "n": 12,
+   "median": 1840.0,
+   "p90": 2530.7,
+   "p95": 2647.2,
+   "mean": 1780.2,
+   "min": 942.5,
+   "max": 2789.0
+  },
+  "first_token_to_complete_ms": {
+   "n": 12,
+   "median": 3807.2,
+   "p90": 6413.3,
+   "p95": 8230.2,
+   "mean": 4425.5,
+   "min": 2255.1,
+   "max": 10270.5
+  },
+  "speech_end_to_complete_ms": {
+   "n": 12,
+   "median": 6014.8,
+   "p90": 7605.8,
+   "p95": 9230.9,
+   "mean": 6205.7,
+   "min": 3939.4,
+   "max": 11213.0
+  },
+  "answer_chars": {
+   "n": 12,
+   "median": 953.0,
+   "p90": 1334.0,
+   "p95": 1519.0,
+   "mean": 996.0,
+   "min": 466.0,
+   "max": 1730.0
+  }
+ },
+ "interviewer_mode": {
+  "answers": 12,
+  "with_followups": 10,
+  "speech_end_to_first_followup_ms": {
+   "n": 11,
+   "median": 7393.5,
+   "p90": 16090.6,
+   "p95": 23697.3,
+   "mean": 9635.2,
+   "min": 2459.2,
+   "max": 31303.9
+  },
+  "speech_end_to_followups_done_ms": {
+   "n": 11,
+   "median": 18148.3,
+   "p90": 31690.6,
+   "p95": 34444.5,
+   "mean": 21532.0,
+   "min": 15152.3,
+   "max": 37198.3
+  },
+  "followups": {
+   "n": 11,
+   "median": 4.0,
+   "p90": 4.0,
+   "p95": 4.0,
+   "mean": 3.0,
+   "min": 0.0,
+   "max": 4.0
+  }
+ },
+ "summary_ms": 33257.517,
+ "summary_ok": true,
+ "engine_latency_stats": [
+  {
+   "count": 49,
+   "max_ms": 7937.0,
+   "p50_ms": 1389.0,
+   "p95_ms": 5111.0,
+   "stage": "AudioToTranscript"
+  },
+  {
+   "count": 49,
+   "max_ms": 201.7911,
+   "p50_ms": 0.9621999999999999,
+   "p95_ms": 10.6294,
+   "stage": "TranscriptToDetection"
+  },
+  {
+   "count": 24,
+   "max_ms": 25845.0,
+   "p50_ms": 726.0,
+   "p95_ms": 1486.0,
+   "stage": "DetectionToFirstToken"
+  },
+  {
+   "count": 23,
+   "max_ms": 28478.2811,
+   "p50_ms": 7616.7783,
+   "p95_ms": 22030.0768,
+   "stage": "FirstTokenToComplete"
+  }
+ ],
+ "raw": {
+  "answers": [
+   {
+    "file": "q01_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 6654.958,
+    "speech_end_to_followups_done_ms": 25533.334,
+    "speech_s": 26.87
+   },
+   {
+    "file": "q02_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 2459.218,
+    "speech_end_to_followups_done_ms": 15566.255,
+    "speech_s": 21.335
+   },
+   {
+    "file": "q03_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 5469.378,
+    "speech_end_to_followups_done_ms": 24381.319,
+    "speech_s": 22.285
+   },
+   {
+    "file": "q04_answer.wav",
+    "followups": 3,
+    "speech_end_to_first_followup_ms": 6537.46,
+    "speech_end_to_followups_done_ms": 31690.634,
+    "speech_s": 19.43
+   },
+   {
+    "file": "q05_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 7463.152,
+    "speech_end_to_followups_done_ms": 18033.822,
+    "speech_s": 22.725
+   },
+   {
+    "file": "q06_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 7440.606,
+    "speech_end_to_followups_done_ms": 15152.265,
+    "speech_s": 17.835
+   },
+   {
+    "file": "q07_answer.wav",
+    "followups": 3,
+    "speech_end_to_first_followup_ms": 7301.485,
+    "speech_end_to_followups_done_ms": 16722.422,
+    "speech_s": 18.655
+   },
+   {
+    "file": "q08_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 7393.487,
+    "speech_end_to_followups_done_ms": 18334.748,
+    "speech_s": 22.34
+   },
+   {
+    "file": "q09_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 7872.538,
+    "speech_end_to_followups_done_ms": 18148.345,
+    "speech_s": 18.975
+   },
+   {
+    "file": "q10_answer.wav",
+    "followups": 0,
+    "speech_end_to_first_followup_ms": 16090.639,
+    "speech_end_to_followups_done_ms": 16090.639,
+    "speech_s": 14.59
+   },
+   {
+    "file": "q11_answer.wav",
+    "speech_s": 4.915
+   },
+   {
+    "file": "q12_answer.wav",
+    "followups": 4,
+    "speech_end_to_first_followup_ms": 31303.874,
+    "speech_end_to_followups_done_ms": 37198.289,
+    "speech_s": 21.625
+   }
+  ],
+  "engine_latency_stats": [
+   {
+    "count": 49,
+    "max_ms": 7937.0,
+    "p50_ms": 1389.0,
+    "p95_ms": 5111.0,
+    "stage": "AudioToTranscript"
+   },
+   {
+    "count": 49,
+    "max_ms": 201.7911,
+    "p50_ms": 0.9621999999999999,
+    "p95_ms": 10.6294,
+    "stage": "TranscriptToDetection"
+   },
+   {
+    "count": 24,
+    "max_ms": 25845.0,
+    "p50_ms": 726.0,
+    "p95_ms": 1486.0,
+    "stage": "DetectionToFirstToken"
+   },
+   {
+    "count": 23,
+    "max_ms": 28478.2811,
+    "p50_ms": 7616.7783,
+    "p95_ms": 22030.0768,
+    "stage": "FirstTokenToComplete"
+   }
+  ],
+  "llm": {
+   "model": "llama3.2",
+   "provider": "ollama"
+  },
+  "questions": [
+   {
+    "answer_chars": 1069,
+    "file": "q01_question.wav",
+    "first_token_to_complete_ms": 4786.102,
+    "question_detected": true,
+    "question_to_first_token_ms": 725.792,
+    "speech_end_to_complete_ms": 7575.143,
+    "speech_end_to_first_token_ms": 2789.041,
+    "speech_end_to_question_ms": 2063.249,
+    "speech_end_to_transcript_ms": 2063.248,
+    "speech_s": 3.685,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 1228,
+    "file": "q02_question.wav",
+    "first_token_to_complete_ms": 3884.873,
+    "question_detected": true,
+    "question_to_first_token_ms": 413.347,
+    "speech_end_to_complete_ms": 6411.965,
+    "speech_end_to_first_token_ms": 2527.092,
+    "speech_end_to_question_ms": 2113.745,
+    "speech_end_to_transcript_ms": 2113.745,
+    "speech_s": 3.52,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 691,
+    "file": "q03_question.wav",
+    "first_token_to_complete_ms": 2255.143,
+    "question_detected": true,
+    "question_to_first_token_ms": 324.386,
+    "speech_end_to_complete_ms": 4674.851,
+    "speech_end_to_first_token_ms": 2419.708,
+    "speech_end_to_question_ms": 2095.323,
+    "speech_end_to_transcript_ms": 2095.322,
+    "speech_s": 4.47,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 827,
+    "file": "q04_question.wav",
+    "first_token_to_complete_ms": 2654.613,
+    "question_detected": true,
+    "question_to_first_token_ms": 476.766,
+    "speech_end_to_complete_ms": 5185.711,
+    "speech_end_to_first_token_ms": 2531.099,
+    "speech_end_to_question_ms": 2054.333,
+    "speech_end_to_transcript_ms": 2054.332,
+    "speech_s": 4.4,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 861,
+    "file": "q05_question.wav",
+    "first_token_to_complete_ms": 2669.678,
+    "question_detected": true,
+    "question_to_first_token_ms": 409.174,
+    "speech_end_to_complete_ms": 5019.322,
+    "speech_end_to_first_token_ms": 2349.644,
+    "speech_end_to_question_ms": 1940.469,
+    "speech_end_to_transcript_ms": 1940.38,
+    "speech_s": 3.995,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 1017,
+    "file": "q06_question.wav",
+    "first_token_to_complete_ms": 3566.999,
+    "question_detected": true,
+    "question_to_first_token_ms": 402.276,
+    "speech_end_to_complete_ms": 6004.469,
+    "speech_end_to_first_token_ms": 2437.47,
+    "speech_end_to_question_ms": 2035.194,
+    "speech_end_to_transcript_ms": 2035.15,
+    "speech_s": 3.66,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 692,
+    "file": "q07_question.wav",
+    "first_token_to_complete_ms": 5034.787,
+    "question_detected": true,
+    "question_to_first_token_ms": 364.115,
+    "speech_end_to_complete_ms": 6025.198,
+    "speech_end_to_first_token_ms": 990.41,
+    "speech_end_to_question_ms": 626.295,
+    "speech_end_to_transcript_ms": 626.295,
+    "speech_s": 3.865,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 1140,
+    "file": "q08_question.wav",
+    "first_token_to_complete_ms": 5084.504,
+    "question_detected": true,
+    "question_to_first_token_ms": 346.884,
+    "speech_end_to_complete_ms": 6073.159,
+    "speech_end_to_first_token_ms": 988.655,
+    "speech_end_to_question_ms": 641.771,
+    "speech_end_to_transcript_ms": 641.771,
+    "speech_s": 4.925,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 1346,
+    "file": "q09_question.wav",
+    "first_token_to_complete_ms": 6560.962,
+    "question_detected": true,
+    "question_to_first_token_ms": 375.83,
+    "speech_end_to_complete_ms": 7609.234,
+    "speech_end_to_first_token_ms": 1048.272,
+    "speech_end_to_question_ms": 672.442,
+    "speech_end_to_transcript_ms": 672.442,
+    "speech_s": 4.245,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 889,
+    "file": "q10_question.wav",
+    "first_token_to_complete_ms": 3729.431,
+    "question_detected": true,
+    "question_to_first_token_ms": 373.301,
+    "speech_end_to_complete_ms": 4737.136,
+    "speech_end_to_first_token_ms": 1007.705,
+    "speech_end_to_question_ms": 634.404,
+    "speech_end_to_transcript_ms": 634.404,
+    "speech_s": 3.99,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 466,
+    "file": "q11_question.wav",
+    "first_token_to_complete_ms": 2609.01,
+    "question_detected": true,
+    "question_to_first_token_ms": 498.674,
+    "speech_end_to_complete_ms": 3939.382,
+    "speech_end_to_first_token_ms": 1330.372,
+    "speech_end_to_question_ms": 831.698,
+    "speech_end_to_transcript_ms": 831.691,
+    "speech_s": 2.495,
+    "transcripts": 1
+   },
+   {
+    "answer_chars": 1730,
+    "file": "q12_question.wav",
+    "first_token_to_complete_ms": 10270.485,
+    "question_detected": true,
+    "question_to_first_token_ms": 373.484,
+    "speech_end_to_complete_ms": 11212.988,
+    "speech_end_to_first_token_ms": 942.503,
+    "speech_end_to_question_ms": 569.019,
+    "speech_end_to_transcript_ms": 569.019,
+    "speech_s": 4.485,
+    "transcripts": 1
+   }
+  ],
+  "settings": {
+   "max_output_tokens": 1200,
+   "semantic_detection": true,
+   "turn_end_silence_ms": 1500
+  },
+  "summary_ms": 33257.517,
+  "summary_ok": true,
+  "whisper_model": "base.en"
+ }
+}

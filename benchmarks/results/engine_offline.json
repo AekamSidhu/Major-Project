@@ -1,0 +1,115 @@
+{
+ "what": "Engine::run_benchmark (Diagnostics benchmark), repeated",
+ "environment": {
+  "date": "2026-11-23T18:56:45+05:30",
+  "cpu": "13th Gen Intel(R) Core(TM) i9-13900H",
+  "logical_cpus": 20,
+  "ram_gb": 15.7,
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24",
+  "os": "Windows-10-10.0.26300-SP0",
+  "python": "3.11.9",
+  "packages": {},
+  "repo_commit": "f10ae37",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "build": "cargo build --release (opt-level 3, no LTO)"
+ },
+ "runs": 20,
+ "items": [
+  {
+   "name": "Question detection",
+   "unit": "ms",
+   "note": "Heuristic detector per final transcript segment",
+   "n": 20,
+   "median": 0.101,
+   "p90": 0.1144,
+   "p95": 0.1309,
+   "mean": 0.1087,
+   "min": 0.095,
+   "max": 0.205
+  },
+  {
+   "name": "Voice activity detection",
+   "unit": "x realtime",
+   "note": "Higher is better",
+   "n": 20,
+   "median": 45420.4735,
+   "p90": 48065.3389,
+   "p95": 49083.0568,
+   "mean": 45278.0206,
+   "min": 40827.436,
+   "max": 49374.589
+  },
+  {
+   "name": "Local embedding",
+   "unit": "ms",
+   "note": "Built-in hashing embedder",
+   "n": 20,
+   "median": 0.007,
+   "p90": 0.007,
+   "p95": 0.0071,
+   "mean": 0.0067,
+   "min": 0.006,
+   "max": 0.009
+  },
+  {
+   "name": "Context retrieval (1,500 items)",
+   "unit": "ms",
+   "note": null,
+   "n": 20,
+   "median": 0.507,
+   "p90": 0.5579,
+   "p95": 0.5846,
+   "mean": 0.5181,
+   "min": 0.487,
+   "max": 0.595
+  },
+  {
+   "name": "Prompt assembly",
+   "unit": "ms",
+   "note": null,
+   "n": 20,
+   "median": 0.2045,
+   "p90": 0.236,
+   "p95": 0.2467,
+   "mean": 0.211,
+   "min": 0.193,
+   "max": 0.279
+  },
+  {
+   "name": "Pipeline: transcript → question detected",
+   "unit": "ms",
+   "note": "Includes event bus and conversation loop",
+   "n": 20,
+   "median": 0.2645,
+   "p90": 0.3279,
+   "p95": 0.3481,
+   "mean": 0.2748,
+   "min": 0.208,
+   "max": 0.407
+  },
+  {
+   "name": "Pipeline: question → first token (mock LLM)",
+   "unit": "ms",
+   "note": "Engine overhead only; provider latency excluded",
+   "n": 20,
+   "median": 0.0855,
+   "p90": 0.3773,
+   "p95": 0.4059,
+   "mean": 0.1323,
+   "min": 0.004,
+   "max": 0.556
+  },
+  {
+   "name": "Pipeline: first token → complete (mock LLM)",
+   "unit": "ms",
+   "note": null,
+   "n": 20,
+   "median": 0.0405,
+   "p90": 0.0506,
+   "p95": 0.0665,
+   "mean": 0.0397,
+   "min": 0.01,
+   "max": 0.094
+  }
+ ]
+}
