@@ -27,26 +27,30 @@ from urllib.request import urlretrieve
 
 LOG = logging.getLogger("openmeet.tunnel")
 
-# One pinned cloudflared release. Its binaries are checked against these SHA-256
-# digests before they are made executable or run. Digests: GitHub's asset digests
-# for this release, confirmed by downloading each asset and hashing it.
+# One pinned cloudflared release. Every value is checked before anything is
+# extracted, renamed, made executable or run. For each platform:
+#   asset        the file on the release page
+#   asset_sha    SHA-256 of that file (GitHub's asset digest, confirmed by download)
+#   binary_sha   SHA-256 of the cloudflared program itself (the release notes list
+#                these for the Darwin archives; for other platforms it equals asset_sha)
+#   is_archive   the asset is a .tgz holding the program
 CLOUDFLARED_VERSION = "2026.11.1"
 _RELEASE_URL = f"https://github.com/cloudflare/cloudflared/releases/download/{CLOUDFLARED_VERSION}"
 
-# (system, machine) -> (asset file name, SHA-256 of that asset, asset is a .tgz archive)
-_ASSETS: dict[tuple[str, str], tuple[str, str, bool]] = {
-    ("Windows", "AMD64"): ("cloudflared-windows-amd64.exe",
-                           "341deda3db5ec498a0482254d6c38c0b7cf01a30c37bb5dd95d2216d08955e35", False),
-    ("Windows", "x86_64"): ("cloudflared-windows-amd64.exe",
-                            "341deda3db5ec498a0482254d6c38c0b7cf01a30c37bb5dd95d2216d08955e35", False),
-    ("Linux", "x86_64"): ("cloudflared-linux-amd64",
-                          "97bb3b02d23a5980fc9c15a1a270e692da1923f103f920d5b16d4931d5ab55e7", False),
-    ("Linux", "aarch64"): ("cloudflared-linux-arm64",
-                           "b155cec3e48e489cfb8e5c602769fb8c771083018d8881d68b4d18a791567c5a", False),
+_WINDOWS_AMD64 = "341deda3db5ec498a0482254d6c38c0b7cf01a30c37bb5dd95d2216d08955e35"
+_LINUX_AMD64 = "97bb3b02d23a5980fc9c15a1a270e692da1923f103f920d5b16d4931d5ab55e7"
+_LINUX_ARM64 = "b155cec3e48e489cfb8e5c602769fb8c771083018d8881d68b4d18a791567c5a"
+_ASSETS: dict[tuple[str, str], tuple[str, str, str, bool]] = {
+    ("Windows", "AMD64"): ("cloudflared-windows-amd64.exe", _WINDOWS_AMD64, _WINDOWS_AMD64, False),
+    ("Windows", "x86_64"): ("cloudflared-windows-amd64.exe", _WINDOWS_AMD64, _WINDOWS_AMD64, False),
+    ("Linux", "x86_64"): ("cloudflared-linux-amd64", _LINUX_AMD64, _LINUX_AMD64, False),
+    ("Linux", "aarch64"): ("cloudflared-linux-arm64", _LINUX_ARM64, _LINUX_ARM64, False),
     ("Darwin", "x86_64"): ("cloudflared-darwin-amd64.tgz",
-                           "5e0403b188dfee71fbd9b995e7dc9910d61b661c52371935ab6475d41185632f", True),
+                           "5e0403b188dfee71fbd9b995e7dc9910d61b661c52371935ab6475d41185632f",
+                           "52686df40889be19803c368470bd46d5228737462f10a40380bedb6af8ed49a2", True),
     ("Darwin", "arm64"): ("cloudflared-darwin-arm64.tgz",
-                          "02fe4bcf08f2c09699cff30658228a739a0c47fb75f3653d1b8772a27ade4462", True),
+                          "02fe4bcf08f2c09699cff30658228a739a0c47fb75f3653d1b8772a27ade4462",
+                          "1cd7041838e5b0943378763ca86ddc0af896d1727875f36b29f5cc35eb2c4df7", True),
 }
 
 TUNNEL_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
@@ -86,16 +90,14 @@ def find_cloudflared(model_dir: Path) -> Path | None:
     system = shutil.which("cloudflared")
     if system:
         return Path(system)
-    local = _bin_dir(model_dir) / _exe_name()
-    if not local.exists():
-        return None
     entry = _ASSETS.get((platform.system(), platform.machine()))
     if entry is None:
         return None
-    if entry[2]:  # a Darwin binary was extracted from an archive that was verified before extraction
-        return local
+    local = _bin_dir(model_dir) / _exe_name()
+    if not local.exists():
+        return None
     try:
-        verify_file(local, entry[1])
+        verify_file(local, entry[2])  # re-checked on every start, whatever the platform
     except RuntimeError as error:
         LOG.warning("%s", error)
         return None
@@ -108,16 +110,14 @@ def download_cloudflared(model_dir: Path) -> Path:
     entry = _ASSETS.get(key)
     if entry is None:
         raise RuntimeError(f"No cloudflared download available for {key[0]} {key[1]}")
-    asset, digest, is_archive = entry
+    asset, asset_sha, binary_sha, is_archive = entry
 
     bin_dir = _bin_dir(model_dir)
     bin_dir.mkdir(parents=True, exist_ok=True)
     exe = bin_dir / _exe_name()
     if exe.exists():
-        if is_archive:
-            return exe
         try:
-            verify_file(exe, digest)
+            verify_file(exe, binary_sha)
             return exe
         except RuntimeError as error:
             LOG.warning("%s", error)
@@ -125,21 +125,23 @@ def download_cloudflared(model_dir: Path) -> Path:
     url = f"{_RELEASE_URL}/{asset}"
     LOG.info("Downloading cloudflared %s from %s ...", CLOUDFLARED_VERSION, url)
     tmp = bin_dir / (asset + ".download")
+    part = exe.with_name(exe.name + ".part")
     try:
         urlretrieve(url, tmp)
-        verify_file(tmp, digest)  # before anything is extracted, renamed or made executable
+        verify_file(tmp, asset_sha)  # before anything is extracted, renamed or made executable
         if is_archive:
             import tarfile
 
-            part = exe.with_name(exe.name + ".part")
             with tarfile.open(tmp) as tar:
                 member = next((m for m in tar.getmembers() if m.isfile() and m.name.split("/")[-1] == "cloudflared"), None)
-                if member is None:
-                    raise RuntimeError(f"{asset} does not contain a cloudflared binary")
-                extracted = tar.extractfile(member)
+                extracted = tar.extractfile(member) if member is not None else None
                 if extracted is None:
                     raise RuntimeError(f"{asset} does not contain a cloudflared binary")
-                part.write_bytes(extracted.read())
+                data = extracted.read()
+            actual = hashlib.sha256(data).hexdigest()
+            if actual != binary_sha:
+                raise RuntimeError(f"cloudflared inside {asset} failed its checksum (expected {binary_sha}, got {actual})")
+            part.write_bytes(data)
             part.replace(exe)
             tmp.unlink(missing_ok=True)
         else:
@@ -152,9 +154,8 @@ def download_cloudflared(model_dir: Path) -> Path:
         return exe
     except Exception:
         tmp.unlink(missing_ok=True)
-        exe.with_name(exe.name + ".part").unlink(missing_ok=True)
-        if not is_archive:
-            exe.unlink(missing_ok=True)
+        part.unlink(missing_ok=True)
+        exe.unlink(missing_ok=True)
         raise
 
 

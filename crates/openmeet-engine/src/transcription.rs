@@ -488,13 +488,22 @@ pub fn is_probable_hallucination(text: &str, clip: &AudioClip) -> bool {
     if norm.is_empty() {
         return true;
     }
-    const ALWAYS: [&str; 14] = [
+    // Long-standing stock lines: a short clip that starts with one of them is
+    // a hallucination.
+    const PREFIX_ALWAYS: [&str; 6] = [
         "subtitles by the amaraorg community",
         "thanks for watching",
         "thank you for watching",
         "please subscribe",
         "like and subscribe",
         "transcribed by",
+    ];
+    if PREFIX_ALWAYS.iter().any(|p| norm.starts_with(p)) && clip.duration_ms() < 4000 {
+        return true;
+    }
+    // Stock lines from the Room's phantom list: the whole utterance must be the
+    // stock line, so "Alright, so we sharded the database" is kept.
+    const WHOLE_ALWAYS: [&str; 8] = [
         "well see you in the next one",
         "see you in the next one",
         "now cut to the rest",
@@ -504,16 +513,13 @@ pub fn is_probable_hallucination(text: &str, clip: &AudioClip) -> bool {
         "hooray",
         "alright",
     ];
-    if ALWAYS.iter().any(|p| norm.starts_with(p)) && clip.duration_ms() < 4000 {
+    if WHOLE_ALWAYS.contains(&norm.as_str()) {
         return true;
     }
-    // Short utterances where every word is ≤4 chars are almost always
-    // hallucinated filler (e.g. "oh", "so", "uh um").
-    let words: Vec<&str> = norm.split_whitespace().collect();
-    if words.len() <= 2 && words.iter().all(|w| w.len() <= 4) {
-        return true;
-    }
-    const QUIET_ONLY: [&str; 10] = [
+    // Short filler words are what Whisper invents on silence, so they are
+    // dropped only when the audio really was quiet. Real short answers ("Yes.",
+    // "No.", "Why?", "I did.") are kept whatever the loudness.
+    const QUIET_ONLY: [&str; 11] = [
         "thank you",
         "thanks",
         "you",
@@ -522,6 +528,7 @@ pub fn is_probable_hallucination(text: &str, clip: &AudioClip) -> bool {
         "okay",
         "uh",
         "um",
+        "uh um",
         "hello",
         "oh",
     ];
@@ -791,17 +798,27 @@ mod tests {
         assert!(!is_probable_hallucination("Thank you.", &loud));
         assert!(is_probable_hallucination("Thanks for watching!", &loud));
         assert!(!is_probable_hallucination("How did you scale it?", &quiet));
-        // New phrases from the Room's expanded phantom list.
+        // Stock lines from the Room's phantom list match the whole utterance.
         assert!(is_probable_hallucination("For reference.", &loud));
         assert!(is_probable_hallucination("I'm not clear.", &loud));
         assert!(is_probable_hallucination("Hooray! Alright!", &loud));
         assert!(is_probable_hallucination("Now cut to the rest.", &loud));
-        // Short-word filter: ≤2 words, all ≤4 chars.
-        assert!(is_probable_hallucination("Oh.", &loud));
-        assert!(is_probable_hallucination("Uh um.", &loud));
-        assert!(!is_probable_hallucination("Great answer.", &loud));
-        // "hello" and "oh" are quiet-only.
-        assert!(is_probable_hallucination("Hello.", &quiet));
-        assert!(!is_probable_hallucination("Hello.", &loud));
+        assert!(!is_probable_hallucination(
+            "Alright, so we sharded it.",
+            &loud
+        ));
+        assert!(!is_probable_hallucination(
+            "Alright, so we sharded the database.",
+            &loud
+        ));
+        // Real short answers survive loud audio.
+        for answer in ["Yes.", "No.", "Why?", "How so?", "I did.", "Great answer."] {
+            assert!(!is_probable_hallucination(answer, &loud), "{answer}");
+        }
+        // Filler words are dropped only on quiet audio.
+        for filler in ["Oh.", "Hello.", "Uh um.", "Okay.", "Bye."] {
+            assert!(is_probable_hallucination(filler, &quiet), "{filler}");
+            assert!(!is_probable_hallucination(filler, &loud), "{filler}");
+        }
     }
 }

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import struct
+import wave
 import zlib
 from pathlib import Path
 
@@ -207,12 +210,41 @@ def test_transcription_keeps_speech_and_drops_phantoms():
     seg = local.post(f"/api/rooms/{room}/transcribe?speaker=interviewer&start=1&end=3", content=wav_bytes(1.0)).json()
     assert seg["text"] == "Tell me about a system you scaled."
     assert local.post(f"/api/rooms/{room}/transcribe?speaker=judge&start=1&end=3", content=wav_bytes(1.0)).status_code == 400
-    for text, conf in (("Thank you.", 0.9), ("We'll see you in the next one.", 0.9), ("real words here", 0.1)):
-        app2, _ = make(text, conf)
-        c = TestClient(app2, client=LOCAL, headers=LOCAL_HEADERS)
-        r2 = c.post("/api/rooms").json()["room"]
-        assert c.post(f"/api/rooms/{r2}/transcribe?speaker=candidate&start=1&end=2", content=wav_bytes(0.5)).json()["text"] == ""
     assert is_phantom("Thanks for watching!") and not is_phantom("thanks for the question")
+
+
+def said(text: str, audio: bytes, confidence: float = 0.9) -> str:
+    """What the interviewer's segment transcribes to, through the real endpoint."""
+    app, _ = make(text, confidence)
+    c = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = c.post("/api/rooms").json()["room"]
+    return c.post(f"/api/rooms/{room}/transcribe?speaker=candidate&start=1&end=2", content=audio).json()["text"]
+
+
+def quiet_wav(seconds: float = 0.5) -> bytes:
+    """Near-silence (RMS about 0.0001), the kind Whisper answers with stock phrases."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"".join(struct.pack("<h", (i % 7) - 3) for i in range(int(seconds * 16000))))
+    return buf.getvalue()
+
+
+def test_stock_phrases_are_dropped_and_real_short_answers_kept():
+    # Stock phrases go whatever the loudness; the whole utterance must be the phrase.
+    for text in ("We'll see you in the next one.", "Hooray! Alright!", "Thanks for watching!", "For reference.", "I'm not clear."):
+        assert said(text, wav_bytes(1.0)) == "", text
+    # Short answers survive loud audio, and so does "Alright" inside a sentence.
+    for text in ("Yes.", "No.", "Why?", "How so?", "I did.", "Thank you.", "Oh.", "Alright, so we sharded it."):
+        assert said(text, wav_bytes(1.0)) == text, text
+    # Low-confidence results are dropped whatever the audio.
+    assert said("real words here", wav_bytes(1.0), confidence=0.1) == ""
+    # Filler words are dropped on quiet audio only.
+    for text in ("Thank you.", "Oh.", "Hello.", "Uh um.", "Okay."):
+        assert said(text, quiet_wav()) == "", text
+        assert said(text, wav_bytes(1.0)) == text, text
 
 
 def test_answer_check_and_report():
@@ -581,7 +613,7 @@ def test_cloudflared_download_is_kept_only_when_its_checksum_matches(tmp_path, m
 
     payload = b"pinned cloudflared"
     _as_platform(monkeypatch, "Linux", "x86_64")
-    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(payload).hexdigest(), False))
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(payload).hexdigest(), hashlib.sha256(payload).hexdigest(), False))
     urls: list = []
     _fake_fetch(monkeypatch, payload, urls)
     exe = tunnel.download_cloudflared(tmp_path)
@@ -596,7 +628,7 @@ def test_a_cloudflared_download_that_fails_its_checksum_is_deleted_and_refused(t
     from room import tunnel
 
     _as_platform(monkeypatch, "Linux", "x86_64")
-    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", "0" * 64, False))
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", "0" * 64, "0" * 64, False))
     _fake_fetch(monkeypatch, b"tampered binary")
     with pytest.raises(RuntimeError, match="checksum"):
         tunnel.download_cloudflared(tmp_path)
@@ -612,7 +644,7 @@ def test_a_cached_cloudflared_that_fails_its_checksum_is_replaced(tmp_path, monk
     good = b"pinned cloudflared"
     _as_platform(monkeypatch, "Linux", "x86_64")
     monkeypatch.setattr(tunnel.shutil, "which", lambda name: None)  # no cloudflared on PATH
-    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(good).hexdigest(), False))
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(good).hexdigest(), hashlib.sha256(good).hexdigest(), False))
     cached = tmp_path / "bin" / tunnel._exe_name()
     cached.parent.mkdir(parents=True)
     cached.write_bytes(b"something else entirely")
@@ -638,11 +670,11 @@ def test_darwin_archive_is_verified_before_it_is_extracted(tmp_path, monkeypatch
     archive = buf.getvalue()
     _as_platform(monkeypatch, "Darwin", "arm64")
     monkeypatch.setattr(tunnel.shutil, "which", lambda name: None)
-    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", hashlib.sha256(archive).hexdigest(), True))
+    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", hashlib.sha256(archive).hexdigest(), hashlib.sha256(b"darwin cloudflared").hexdigest(), True))
     _fake_fetch(monkeypatch, archive)
     assert tunnel.download_cloudflared(tmp_path).read_bytes() == b"darwin cloudflared"
 
-    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", "0" * 64, True))
+    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", "0" * 64, "0" * 64, True))
     other = tmp_path / "other"
     _fake_fetch(monkeypatch, archive)
     with pytest.raises(RuntimeError, match="checksum"):

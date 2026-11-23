@@ -50,6 +50,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
@@ -71,21 +72,24 @@ ONLINE_TERMS = ("Nothing is recorded. To suggest follow-up questions and to writ
 STUDY_TERMS_OFFLINE = "Nothing goes to an online service, and nothing is recorded unless you join the study below;"
 STUDY_TERMS_ONLINE = ONLINE_TERMS.replace("Nothing is recorded.", "Nothing is recorded unless you join the study below.")
 STUDY_SLOT = "<!--study-consent-->"
-PHANTOMS = {"thank you", "thanks for watching", "thank you for watching", "well see you in the next one",
-            "see you in the next one", "bye", "you", "so", "okay", "oh", "im not clear",
-            "subtitles by the amaraorg community", "thanks", "hello", "for reference",
-            "now cut to the rest", "hooray alright", "hooray", "alright"}
+# Whisper's stock lines for non-speech audio: dropped when the whole utterance is one of them.
+PHANTOMS = {"thanks for watching", "thank you for watching", "well see you in the next one",
+            "see you in the next one", "im not clear", "subtitles by the amaraorg community",
+            "for reference", "now cut to the rest", "hooray alright", "hooray", "alright"}
+# Short filler words Whisper invents on silence: dropped only when the audio is quiet.
+QUIET_PHRASES = {"thank you", "thanks", "you", "bye", "so", "okay", "oh", "hello", "uh", "um", "uh um"}
 
 
-def is_phantom(text: str) -> bool:
-    """Whisper's stock phrases for non-speech audio."""
-    words = "".join(c for c in text.lower() if c.isalnum() or c == " ").split()
-    joined = " ".join(words)
-    if joined in PHANTOMS:
-        return True
-    if len(words) <= 2 and all(len(w) <= 4 for w in words):
-        return True
-    return False
+def is_quiet(samples: Any) -> bool:
+    """Near-silent audio: RMS below 0.008, the same threshold as the desktop engine."""
+    audio = np.asarray(samples, dtype=np.float32)
+    return audio.size == 0 or float(np.sqrt(np.mean(np.square(audio)))) < 0.008
+
+
+def is_phantom(text: str, quiet: bool = False) -> bool:
+    """True for Whisper's stock phrases; short filler words only when `quiet`."""
+    joined = " ".join("".join(c for c in text.lower() if c.isalnum() or c == " ").split())
+    return joined in PHANTOMS or (quiet and joined in QUIET_PHRASES)
 
 
 def is_loopback(host: str | None) -> bool:
@@ -314,7 +318,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
             text = " ".join(result.text.split())
             # The browser cuts speech by loudness, so noise and tones get through;
             # Whisper then invents stock phrases. Drop those and unsure results.
-            if (result.confidence is not None and result.confidence < MIN_CONFIDENCE) or is_phantom(text):
+            if (result.confidence is not None and result.confidence < MIN_CONFIDENCE) or is_phantom(text, is_quiet(audio)):
                 return "", []
             # Words on the meeting clock: the segment's audio starts at `start`.
             words = [{"word": w["word"], "start": round(start + w["start"], 3), "end": round(start + w["end"], 3)}
