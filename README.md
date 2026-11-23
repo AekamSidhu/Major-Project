@@ -15,6 +15,11 @@ always-on-top HUD — so you never have to leave the meeting window.
   based on what the candidate actually said, with the reason for each, topic
   coverage, duplicate avoidance and a post-interview summary. No scores, no
   hiring recommendations — the human decides.
+* **Workplace mode** — for ordinary team meetings (stand-ups, reviews,
+  planning, 1:1s): a live board of decisions, action items with owner and due
+  date, and open questions; answers to questions put to you; a "Catch me up"
+  summary; and minutes with a follow-up message when the meeting ends. Nobody
+  is interviewed or scored. See [docs/WORKPLACE.md](docs/WORKPLACE.md).
 
 OpenMeet is a copilot, not an autonomous participant: it never speaks into the
 meeting. It is **local-first** (local transcription, local LLMs, local OCR and
