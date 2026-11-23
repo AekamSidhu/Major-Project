@@ -1,9 +1,11 @@
-# Start the OpenMeet Room so a phone or laptop on the same Wi-Fi can join.
-#   .\start-room.ps1                  # simple-rules follow-ups
-#   .\start-room.ps1 -Followups local # Ollama follow-ups
+# Start the OpenMeet Room. A shareable link is created automatically.
+#   .\start-room.ps1                       # tunnel + simple-rules follow-ups
+#   .\start-room.ps1 -Followups local      # tunnel + Ollama follow-ups
+#   .\start-room.ps1 -NoTunnel             # LAN only (same Wi-Fi)
 param(
     [ValidateSet("rules", "local", "online")] [string]$Followups = "rules",
-    [int]$Port = 8443
+    [int]$Port = 8443,
+    [switch]$NoTunnel
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,12 +28,15 @@ if ($existing) {
     exit 1
 }
 
-# HTTPS (not --no-https): phones only allow camera access on a secure page.
+# Build the argument list: the tunnel is on by default, --no-tunnel disables it.
+$pyArgs = @("room_server.py", "--followups", $Followups, "--port", $Port)
+if ($NoTunnel) { $pyArgs += "--no-tunnel" }
+
 $env:PYTHONUNBUFFERED = "1"
-$server = Start-Process python -ArgumentList "room_server.py", "--followups", $Followups, "--port", $Port `
+$server = Start-Process python -ArgumentList $pyArgs `
     -WorkingDirectory (Join-Path $root "local-ai") -NoNewWindow -PassThru
 
-Write-Host "Starting the Room (loading models)..."
+Write-Host "Starting the Room (loading models and tunnel)..."
 $url = "https://localhost:$Port/host"
 for ($i = 0; $i -lt 120; $i++) {
     if ($server.HasExited) { Write-Host "The Room server stopped. See the output above." -ForegroundColor Red; exit 1 }
@@ -42,8 +47,10 @@ for ($i = 0; $i -lt 120; $i++) {
 
 Write-Host "`nRoom ready. Opening $url" -ForegroundColor Green
 Write-Host "  1. Accept the certificate warning once (Advanced -> Continue)."
-Write-Host "  2. Copy the 192.168.x.x invite link from the host page to the other device; accept its warning too."
-Write-Host "  The host page makes a new room each time it loads, so always copy the invite from the page you're on."
+Write-Host "  2. Copy the invite link from the host page and send it to the candidate."
+if (-not $NoTunnel) {
+    Write-Host "     The link works from any device on any network (powered by Cloudflare Tunnel)."
+}
 Write-Host "  Ctrl+C here stops the Room.`n"
 Start-Process $url
 Wait-Process -Id $server.Id

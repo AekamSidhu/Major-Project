@@ -61,7 +61,7 @@ LOG = logging.getLogger("openmeet.room")
 HERE = Path(__file__).resolve().parent
 MAX_SEGMENT_BYTES = 8 * 1024 * 1024
 SPEAKERS = ("interviewer", "candidate")
-MIN_CONFIDENCE = 0.35
+MIN_CONFIDENCE = 0.45
 OFFLINE_TERMS = "Nothing goes to an online service and nothing is recorded;"
 ONLINE_TERMS = ("Nothing is recorded. To suggest follow-up questions and to write the comparison answers, the "
                 "interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini, "
@@ -70,13 +70,20 @@ STUDY_TERMS_OFFLINE = "Nothing goes to an online service, and nothing is recorde
 STUDY_TERMS_ONLINE = ONLINE_TERMS.replace("Nothing is recorded.", "Nothing is recorded unless you join the study below.")
 STUDY_SLOT = "<!--study-consent-->"
 PHANTOMS = {"thank you", "thanks for watching", "thank you for watching", "well see you in the next one",
-            "see you in the next one", "bye", "you", "so", "okay", "subtitles by the amaraorg community"}
+            "see you in the next one", "bye", "you", "so", "okay", "oh", "im not clear",
+            "subtitles by the amaraorg community", "thanks", "hello", "for reference",
+            "now cut to the rest", "hooray alright", "hooray", "alright"}
 
 
 def is_phantom(text: str) -> bool:
     """Whisper's stock phrases for non-speech audio."""
     words = "".join(c for c in text.lower() if c.isalnum() or c == " ").split()
-    return " ".join(words) in PHANTOMS
+    joined = " ".join(words)
+    if joined in PHANTOMS:
+        return True
+    if len(words) <= 2 and all(len(w) <= 4 for w in words):
+        return True
+    return False
 
 
 def is_loopback(host: str | None) -> bool:
@@ -158,7 +165,8 @@ class LabelRequest(BaseModel):
 
 def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: Any, reading_factory: Any,
                     port: int, scheme: str, whisper_model: str, followup_writer: Any = None,
-                    similarity: Any = None, study: Any = None) -> dict[str, Room]:
+                    similarity: Any = None, study: Any = None,
+                    tunnel_url: str | None = None) -> dict[str, Room]:
     """`similarity`: a room.similarity.SimilarityChecker (None: echo similarity unavailable);
     `study`: a room.study.StudyRecorder in study mode."""
     from .followups import FollowupWriter
@@ -224,9 +232,12 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         room = Room(id=secrets.token_hex(3), host_key=secrets.token_urlsafe(16), guest_key=secrets.token_urlsafe(12))
         rooms[room.id] = room
         path = f"/join/{room.id}?k={room.guest_key}"
-        invites = [f"{scheme}://{ip}:{port}{path}" for ip in lan_addresses()] + [f"{scheme}://localhost:{port}{path}"]
+        lan_invites = [f"{scheme}://{ip}:{port}{path}" for ip in lan_addresses()] + [f"{scheme}://localhost:{port}{path}"]
+        tunnel_invite = f"{tunnel_url}{path}" if tunnel_url else None
+        invites = ([tunnel_invite] if tunnel_invite else []) + lan_invites
         monitor.reset()
-        return {"room": room.id, "host_key": room.host_key, "invites": invites}
+        return {"room": room.id, "host_key": room.host_key, "invites": invites,
+                "tunnel_url": tunnel_invite, "lan_invites": lan_invites}
 
     @app.get("/api/status", dependencies=[Depends(host_only)])
     def status() -> dict[str, Any]:
@@ -234,6 +245,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
                 "followup_model": writer.model_name, "followup_model_ok": writer.model_ok,
                 "followup_error": writer.last_error,
                 "reference_model": similarity.writer.model_name if similarity and similarity.writer.available else None,
+                "tunnel_url": tunnel_url,
                 "study": {"enabled": True, "conditions": list(study.conditions)} if study else {"enabled": False}}
 
     @app.post("/api/rooms/{room_id}/transcribe", dependencies=[Depends(host_only)])

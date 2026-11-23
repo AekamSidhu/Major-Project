@@ -131,6 +131,7 @@ def add_routes(
 
     @app.post("/v1/integrity/gaze/frame", dependencies=auth)
     async def frame(request: Request) -> dict[str, Any]:
+        import asyncio
         data = await request.body()
         if not data or len(data) > MAX_FRAME_BYTES:
             raise HTTPException(status_code=400, detail="send one JPEG or PNG frame under 4 MB as the request body")
@@ -138,8 +139,10 @@ def add_routes(
             rgb = decode_image(data)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"could not decode frame: {type(exc).__name__}") from exc
+        def run() -> tuple[float, float, bool]:
+            return monitor.add_frame(rgb, source="browser")
         try:
-            x, y, found = monitor.add_frame(rgb, source="browser")
+            x, y, found = await asyncio.get_running_loop().run_in_executor(None, run)
         except Exception as exc:  # mediapipe missing or failing
             raise HTTPException(status_code=503, detail=f"gaze tracking unavailable: {type(exc).__name__}: {exc}"[:300]) from exc
         return {"face_found": found, "tracked": x == x}

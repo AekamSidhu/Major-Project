@@ -43,6 +43,7 @@ import server
 from integrity import add_routes as add_integrity_routes
 from integrity.models import EchoModel, ReadingModel
 from room import add_room_routes, is_loopback, lan_addresses
+from room.tunnel import CloudflareTunnel
 
 CERT_DIR = server.MODEL_DIR / "room"
 
@@ -78,7 +79,8 @@ def self_signed_cert(folder: Path) -> tuple[Path, Path]:
 
 def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None,  # type: ignore[no-untyped-def]
                     followup_writer=None, followups: str | None = None, reference_writer=None, embedder=None,
-                    embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None) -> FastAPI:
+                    embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None,
+                    tunnel_url: str | None = None) -> FastAPI:
     from room.followups import FollowupWriter
     from room.similarity import ReferenceWriter, SimilarityChecker
     from room.study import StudyRecorder
@@ -118,6 +120,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         followup_writer=writer,
         similarity=similarity,
         study=study,
+        tunnel_url=tunnel_url,
     )
     return app
 
@@ -127,12 +130,18 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("OPENMEET_ROOM_PORT", "8443")))
     parser.add_argument("--no-https", action="store_true", help="plain http on localhost only")
     parser.add_argument("--host", default=None, help="override bind address (default: 127.0.0.1 for http, 0.0.0.0 for https)")
-    parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "base.en"))
+    parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "small.en"))
     parser.add_argument("--followups", choices=("local", "online", "rules"), default=None,
                         help="where follow-up questions and reference answers come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
     parser.add_argument("--study", type=Path, default=None, metavar="DIR",
                         help="study mode: with the candidate's consent, save labelled answers under DIR (outside the repository)")
+    parser.add_argument("--tunnel", action="store_true", default=True,
+                        help="start a Cloudflare quick tunnel so anyone can join (default: on)")
+    parser.add_argument("--no-tunnel", action="store_true",
+                        help="disable the Cloudflare tunnel (LAN only)")
     args = parser.parse_args()
+    if args.no_tunnel:
+        args.tunnel = False
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -140,8 +149,22 @@ def main() -> None:
     import uvicorn
 
     scheme = "http" if args.no_https else "https"
+
+    # Start the tunnel early so the URL is ready before the app serves requests.
+    tunnel = None
+    tunnel_url = None
+    if args.tunnel and not args.no_https:
+        print("\nStarting Cloudflare tunnel (downloading cloudflared on first run)...")
+        tunnel = CloudflareTunnel(f"https://localhost:{args.port}", server.MODEL_DIR)
+        tunnel_url = tunnel.start(timeout=30)
+        if tunnel_url:
+            print(f"  Tunnel ready: {tunnel_url}")
+        else:
+            print(f"  Tunnel failed: {tunnel.error or 'unknown error'}. Falling back to LAN only.")
+
     try:
-        app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups, study_dir=args.study)
+        app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups, study_dir=args.study,
+                              tunnel_url=tunnel_url)
     except ValueError as error:  # a study folder inside the repository
         parser.error(str(error))
     host = args.host or ("127.0.0.1" if args.no_https else "0.0.0.0")
@@ -159,12 +182,18 @@ def main() -> None:
              "rules": "simple rules"}[mode]
     print(f"\nOpenMeet Room: open {scheme}://localhost:{args.port} on this computer.")
     print(f"  follow-up questions and reference answers: {where}")
+    if tunnel_url:
+        print(f"  Anyone can join through: {tunnel_url}")
     if args.study:
         print(f"  STUDY MODE: answers of candidates who tick the study consent are saved under {args.study.resolve()}")
     if not args.no_https:
         for ip in lan_addresses():
             print(f"  candidates on this network join through {scheme}://{ip}:{args.port}/join/... (the invite link)")
-    uvicorn.run(app, host=host, port=args.port, log_level="warning", access_log=False, **ssl)
+    try:
+        uvicorn.run(app, host=host, port=args.port, log_level="warning", access_log=False, **ssl)
+    finally:
+        if tunnel:
+            tunnel.stop()
 
 
 if __name__ == "__main__":
