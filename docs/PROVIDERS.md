@@ -118,8 +118,18 @@ scripts/setup-local-ai.sh --download-models
   `distil-*`, `large-v3`, `large-v3-turbo`… — larger is more accurate and
   slower. `OPENMEET_WHISPER_DEVICE=auto|cpu|cuda` (auto uses an NVIDIA GPU when
   the CUDA runtime is installed and silently falls back to the CPU otherwise).
-* Measured during development (Windows PC, CPU, int8, `base.en`): ~1 s to
-  transcribe a 4–5 s utterance once the model is loaded.
+* Measured on the development laptop (`base.en`, int8, 600 LibriSpeech
+  utterances through the real endpoint): median request about 0.41 s on the CPU
+  and 0.09 s on the GPU for a clip of about 7 s on average. Word error rate 3.9%
+  on test-clean and 10.7% on test-other. Details and limits in
+  [BENCHMARKS.md](BENCHMARKS.md).
+* Word timestamps (`verbose_json` with `timestamp_granularities[]=word`) are
+  served when the engine asks for them, which it does only while the delivery
+  part of the answer-integrity check is on.
+* The sidecar also serves the answer-integrity endpoints (`/v1/integrity/...`)
+  and a check page at `/integrity`. Its contract is in
+  [`spec/integrity/README.md`](../spec/integrity/README.md) and
+  [`local-ai/integrity/README.md`](../local-ai/integrity/README.md).
 * Nothing leaves the device; models are cached in `local-ai/.models/`.
 
 ### OpenAI
@@ -132,6 +142,12 @@ vocabulary hint (names, jargon) can be set in settings.
 
 Any server implementing `/v1/audio/transcriptions` (e.g. faster-whisper-server,
 speaches, LocalAI, Groq). Set base URL and model.
+
+The interview room has its own Groq option, separate from these settings:
+`--transcription groq` (or `start-room.ps1 -Transcription groq`) sends the
+candidate's audio to Groq's `whisper-large-v3` with `OPENMEET_GROQ_API_KEY`.
+Nothing is sent to Groq unless that option is given. See
+[local-ai/room/README.md](../local-ai/room/README.md).
 
 ---
 
@@ -159,6 +175,24 @@ Screen context is off until you enable it for a meeting.
   default) for semantic retrieval.
 
 Vectors are stored with their model id; switching models never mixes vectors.
+
+### Answer-integrity check
+
+The check (interviewer mode, off by default) uses three providers, and only one
+of them is configurable:
+
+* the **Local AI sidecar** for the AI-written text and reading signals (fixed
+  to the sidecar; needs the sidecar running and, for reading, the candidate's
+  video region set);
+* the **configured LLM** for the reference answers that the echo-similarity signal
+  compares with, and
+* the **configured embedder**. The echo thresholds were measured with the
+  Local AI embedder `BAAI/bge-small-en-v1.5`, so with any other embedder the
+  signal shows as *unavailable*, not as a guess.
+
+Reference answers from a model other than `llama3.2` (for example a cloud LLM)
+are still shown, but the signal counts as uncalibrated. Details:
+[INTEGRITY.md](INTEGRITY.md).
 
 ---
 

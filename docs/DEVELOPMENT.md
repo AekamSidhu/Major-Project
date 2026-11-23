@@ -66,7 +66,12 @@ src/
   lib/                  IPC wrappers, answer parser, theme, formatting
   overlay/              overlay window (live HUD)
   main/                 main window (onboarding, settings, privacy, history, diagnostics)
-local-ai/               Python sidecar (faster-whisper + fastembed)
+local-ai/               Python sidecar (faster-whisper + fastembed, integrity endpoints)
+local-ai/room/          the browser interview room (room_server.py)
+spec/integrity/         shared answer-integrity definitions, thresholds and fixtures
+benchmarks/             benchmark scripts, inputs and results (docs/BENCHMARKS.md)
+training/               model training code: gaze-detection, echo-detection, data-collection
+diagrams/               diagram sources and rendered views (diagrams/README.md)
 docs/                   architecture and contracts
 scripts/                setup and maintenance scripts
 ```
@@ -80,6 +85,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --exclude openmeet   # libraries (see note below)
 cargo test -p openmeet                       # the desktop app crate
 cargo test -p openmeet-engine --test pipeline      # end-to-end pipeline with mocks
+cargo test -p openmeet-engine --test integrity     # answer-integrity flow with mocks
+cargo test -p openmeet-engine --test workplace     # workplace board and minutes
+cargo test -p openmeet-intel --test integrity_spec # parity with spec/integrity fixtures
 
 # Frontend
 npm run format          # Prettier (CI checks it)
@@ -91,9 +99,21 @@ npx vite build
 # TypeScript bindings after changing IPC types in openmeet-core
 npm run bindings
 
-# Local AI sidecar tests
+# Local AI sidecar tests (includes the interview room and the integrity endpoints)
 cd local-ai && .venv/Scripts/python -m pytest -q   # Windows (.venv/bin/python elsewhere)
+
+# Shared integrity spec: regenerate the fixtures and check they did not change
+python -I spec/integrity/reference.py && git diff --exit-code -- spec/integrity/*.json
+
+# Benchmarks: their own tests, and a check that docs/BENCHMARKS.md matches its result files
+(cd benchmarks && python -m pytest -q)
+python benchmarks/tables.py --doc docs/BENCHMARKS.md --check
 ```
+
+Changing an integrity definition starts in `spec/integrity/`: bump
+`SPEC_VERSION`, regenerate the fixtures, then update the Rust
+(`openmeet-intel`) and Python (`local-ai/integrity`) implementations until both
+reproduce every fixture to 1e-6.
 
 Why the app crate is tested separately: on Windows, Tauri links the Visual
 C++ runtime statically, and its build script puts a stub `msvcrt.lib` on the
@@ -134,6 +154,9 @@ They print counts and sizes only, never content.
 
 Settings → General → **Developer mode** (on by default in debug builds) adds:
 
+* Demo mode runs without devices, models or network. Besides the interview and
+  candidate scenarios it has "Answer integrity check (interviewer)" (the fourth
+  answer is read out and gets a flag) and "Sprint planning (workplace)".
 * Diagnostics → **Developer tools**: simulate an incoming question, a
   transcript line from any speaker, a candidate answer, a screen change, a
   forced AI response, an AI failure and network latency — everything needed to
