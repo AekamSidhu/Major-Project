@@ -46,7 +46,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
@@ -88,6 +88,47 @@ def is_phantom(text: str) -> bool:
 
 def is_loopback(host: str | None) -> bool:
     return host in ("127.0.0.1", "::1", "localhost") or (host or "").startswith("127.")
+
+
+# Headers that a reverse proxy or tunnel adds. cloudflared runs on this computer and
+# forwards public traffic to localhost, so a tunnelled request arrives from 127.0.0.1
+# too; these headers (and the public Host name) are what tell it apart.
+PROXY_HEADERS = ("cf-connecting-ip", "cf-ray", "x-forwarded-for", "x-forwarded-host", "forwarded")
+
+
+def _host_name(value: str) -> str:
+    """The name part of a Host header: `localhost:8443` -> `localhost`, `[::1]:8443` -> `::1`."""
+    value = value.strip().lower()
+    if value.startswith("["):
+        end = value.find("]")
+        return value[1:end] if end > 0 else ""
+    if value.count(":") == 1:
+        return value.split(":", 1)[0]
+    return value
+
+
+def interviewer_names() -> frozenset[str]:
+    """Host names that mean this computer: localhost and this computer's network addresses."""
+    return frozenset({"localhost", "127.0.0.1", "::1", *lan_addresses()})
+
+
+def is_interviewer(client: str | None, headers: Mapping[str, str], names: frozenset[str]) -> bool:
+    """True only for a request made on this computer: loopback client, no proxy headers,
+    and a Host header naming this computer (never the tunnel's hostname)."""
+    if not is_loopback(client):
+        return False
+    if any(name in headers for name in PROXY_HEADERS):
+        return False
+    return _host_name(headers.get("host", "")) in names
+
+
+def interviewer_only(names: frozenset[str]) -> Callable[[Request], None]:
+    """A FastAPI dependency: refuse anything that is not the interviewer's own computer."""
+    def check(request: Request) -> None:
+        if not is_interviewer(request.client.host if request.client else None, request.headers, names):
+            raise HTTPException(status_code=403, detail="only the interviewer's computer can use this")
+
+    return check
 
 
 def lan_addresses() -> list[str]:
@@ -181,9 +222,8 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     params = inspect.signature(transcriber.transcribe).parameters
     timed = "word_timestamps" in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
 
-    def host_only(request: Request) -> None:
-        if not is_loopback(request.client.host if request.client else None):
-            raise HTTPException(status_code=403, detail="only the interviewer's computer can use this")
+    names = interviewer_names()
+    host_only = interviewer_only(names)
 
     def model(name: str) -> Any:
         if name not in models:
@@ -204,7 +244,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
 
     @app.get("/", include_in_schema=False)
     def root(request: Request):  # type: ignore[no-untyped-def]
-        if is_loopback(request.client.host if request.client else None):
+        if is_interviewer(request.client.host if request.client else None, request.headers, names):
             return RedirectResponse("/host")
         return HTMLResponse("<p style='font-family:sans-serif'>Ask the interviewer for an invite link.</p>", status_code=404)
 
@@ -429,7 +469,8 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         client = ws.client.host if ws.client else None
         LOG.info("ws connect: room=%s role=%s client=%s room_exists=%s", room_id, role, client, room is not None)
         allowed = room is not None and (
-            (role == "host" and secrets.compare_digest(k, room.host_key) and is_loopback(client))
+            (role == "host" and secrets.compare_digest(k, room.host_key)
+             and is_interviewer(client, ws.headers, names))
             or (role == "guest" and secrets.compare_digest(k, room.guest_key))
         )
         if not allowed:

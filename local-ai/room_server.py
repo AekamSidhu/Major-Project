@@ -37,12 +37,12 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 
 import server
 from integrity import add_routes as add_integrity_routes
 from integrity.models import EchoModel, ReadingModel
-from room import add_room_routes, is_loopback, lan_addresses
+from room import add_room_routes, interviewer_names, interviewer_only, lan_addresses
 from room.tunnel import CloudflareTunnel
 
 CERT_DIR = server.MODEL_DIR / "room"
@@ -103,9 +103,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    def host_only_auth(request: Request) -> None:  # integrity API: this computer only
-        if not is_loopback(request.client.host if request.client else None):
-            raise HTTPException(status_code=403, detail="only the interviewer's computer can use this")
+    host_only_auth = interviewer_only(interviewer_names())  # integrity API: this computer only
 
     monitor = add_integrity_routes(app, host_only_auth, server.MODEL_DIR, tracker_factory=tracker_factory, clock=clock or time.time)
     app.state.rooms = add_room_routes(

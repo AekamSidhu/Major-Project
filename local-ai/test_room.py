@@ -14,7 +14,7 @@ from starlette.websockets import WebSocketDisconnect
 import room_server
 import server
 from integrity import signals
-from room import is_phantom
+from room import is_interviewer, is_phantom
 from langchain_core.runnables import RunnableLambda
 
 from room import checks, guardrails
@@ -26,6 +26,8 @@ from test_integrity import AI_ANSWER, Clock, SawtoothTracker, feed
 from test_server import wav_bytes
 
 LOCAL = ("127.0.0.1", 50000)
+# This computer's Host header (TestClient would send "testserver", which is not this computer).
+LOCAL_HEADERS = {"host": "localhost:8443"}
 REMOTE = ("192.168.1.50", 50000)
 
 
@@ -106,7 +108,7 @@ def test_interviewer_endpoints_answer_only_this_computer():
     assert remote.post("/api/rooms").status_code == 403
     assert remote.post("/v1/integrity/echo", json={"text": AI_ANSWER}).status_code == 403
     assert remote.get("/").status_code == 404
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()
     assert room["invites"][-1].startswith("https://localhost:8443/join/" + room["room"])
     # The candidate's side is reachable from the network.
@@ -116,7 +118,7 @@ def test_interviewer_endpoints_answer_only_this_computer():
 
 def test_signaling_relays_between_host_and_guest():
     app, _ = make()
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     guest_key = room["invites"][0].split("k=")[1]
     with local.websocket_connect(f"/ws/{room['room']}?role=host&k={room['host_key']}") as host:
@@ -133,7 +135,7 @@ def test_signaling_relays_between_host_and_guest():
 
 def test_wrong_keys_and_remote_hosts_are_refused():
     app, _ = make()
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     for client, url in ((remote, f"/ws/{room['room']}?role=guest&k=wrong"),
                         (remote, f"/ws/{room['room']}?role=host&k={room['host_key']}"),  # right key, wrong computer
@@ -143,16 +145,71 @@ def test_wrong_keys_and_remote_hosts_are_refused():
                 ws.receive_json()
 
 
+def test_tunnelled_requests_are_not_the_interviewer():
+    """cloudflared forwards public traffic to localhost, so the tunnel's requests arrive from 127.0.0.1 too."""
+    app, _ = make()
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = local.post("/api/rooms").json()
+    rid = room["room"]
+    tunnel_headers = [
+        {"host": "abc-def.trycloudflare.com", "cf-connecting-ip": "203.0.113.7", "cf-ray": "8f00-LHR"},  # Cloudflare
+        {"host": "localhost:8443", "cf-connecting-ip": "203.0.113.7"},  # Host looks local, proxy header present
+        {"host": "abc-def.trycloudflare.com"},  # the tunnel's Host name alone
+        {"host": "localhost:8443", "x-forwarded-for": "203.0.113.7"},
+        {"host": "localhost:8443", "x-forwarded-host": "abc-def.trycloudflare.com"},
+        {"host": "localhost:8443", "forwarded": "for=203.0.113.7"},
+    ]
+    for headers in tunnel_headers:
+        tunnel = TestClient(app, client=LOCAL, headers=headers)
+        assert tunnel.get("/host").status_code == 403, headers
+        assert tunnel.post("/api/rooms").status_code == 403, headers
+        assert tunnel.get("/api/status").status_code == 403, headers
+        assert tunnel.get(f"/api/rooms/{rid}/report").status_code == 403, headers
+        assert tunnel.get(f"/api/rooms/{rid}/report.md").status_code == 403, headers
+        assert tunnel.post("/v1/integrity/echo", json={"text": AI_ANSWER}).status_code == 403, headers
+        assert tunnel.get("/").status_code == 404, headers  # no redirect to /host through the tunnel
+        with pytest.raises(WebSocketDisconnect):
+            with tunnel.websocket_connect(f"/ws/{rid}?role=host&k={room['host_key']}") as ws:
+                ws.receive_json()
+
+
+def test_guests_join_through_the_tunnel():
+    app, _ = make()
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = local.post("/api/rooms").json()
+    rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
+    tunnel = TestClient(app, client=LOCAL, headers={"host": "abc-def.trycloudflare.com",
+                                                     "cf-connecting-ip": "198.51.100.4", "cf-ray": "8f01-LHR"})
+    assert tunnel.get(f"/join/{rid}?k={guest_key}").status_code == 200
+    with local.websocket_connect(f"/ws/{rid}?role=host&k={room['host_key']}") as host:
+        assert host.receive_json()["peer_present"] is False
+        with tunnel.websocket_connect(f"/ws/{rid}?role=guest&k={guest_key}&name=Asha") as guest:
+            assert guest.receive_json()["peer_present"] is True
+            assert host.receive_json() == {"type": "peer-joined", "role": "guest", "name": "Asha"}
+
+
+def test_only_this_computers_names_count_as_the_interviewer():
+    names = frozenset({"localhost", "127.0.0.1", "::1", "192.168.1.20"})
+    assert is_interviewer("127.0.0.1", {"host": "localhost:8443"}, names)
+    assert is_interviewer("127.0.0.1", {"host": "[::1]:8443"}, names)
+    assert is_interviewer("127.0.0.1", {"host": "192.168.1.20:8443"}, names)
+    assert is_interviewer("127.0.0.1", {"host": "192.168.1.20"}, names)
+    assert not is_interviewer("127.0.0.1", {"host": "abc-def.trycloudflare.com"}, names)
+    assert not is_interviewer("127.0.0.1", {"host": "localhost:8443", "cf-ray": "1"}, names)
+    assert not is_interviewer("127.0.0.1", {}, names)  # no Host header
+    assert not is_interviewer("192.168.1.50", {"host": "localhost:8443"}, names)  # another computer
+
+
 def test_transcription_keeps_speech_and_drops_phantoms():
     app, _ = make("Tell me about a system you scaled.")
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     seg = local.post(f"/api/rooms/{room}/transcribe?speaker=interviewer&start=1&end=3", content=wav_bytes(1.0)).json()
     assert seg["text"] == "Tell me about a system you scaled."
     assert local.post(f"/api/rooms/{room}/transcribe?speaker=judge&start=1&end=3", content=wav_bytes(1.0)).status_code == 400
     for text, conf in (("Thank you.", 0.9), ("We'll see you in the next one.", 0.9), ("real words here", 0.1)):
         app2, _ = make(text, conf)
-        c = TestClient(app2, client=LOCAL)
+        c = TestClient(app2, client=LOCAL, headers=LOCAL_HEADERS)
         r2 = c.post("/api/rooms").json()["room"]
         assert c.post(f"/api/rooms/{r2}/transcribe?speaker=candidate&start=1&end=2", content=wav_bytes(0.5)).json()["text"] == ""
     assert is_phantom("Thanks for watching!") and not is_phantom("thanks for the question")
@@ -160,7 +217,7 @@ def test_transcription_keeps_speech_and_drops_phantoms():
 
 def test_answer_check_and_report():
     app, clock = make()
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     start = clock.t
     feed(local, clock, 25)  # the candidate's eyes read for 25 s
@@ -208,7 +265,7 @@ def interview(local: TestClient, room: str, latencies: list[float]) -> list[dict
 def test_delivery_from_word_timings_against_the_candidates_baseline():
     n = 5
     app, _ = make(transcriber=ScriptedTranscriber("", texts=[QUESTION, WORDS23] * n))
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     answers = interview(local, room, [1.0, 1.2, 0.9, 5.0, 1.1])
     first = answers[0]["delivery"]
@@ -250,7 +307,7 @@ def test_question_end_and_utterances():
 def test_echo_similarity_from_the_rooms_model():
     sent: list = []
     app, _ = make(refs=references("local", answer=REFERENCE, sent=sent))
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     assert local.post(f"/api/rooms/{room}/references", json={"question": "How do you use caching?"}).json() == {"started": True}
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 30, "text": REFERENCE, "question": "How do you use caching?"})
@@ -270,7 +327,7 @@ def test_echo_similarity_from_the_rooms_model():
 def test_echo_similarity_unavailable(case):
     refs = references("rules") if case == "rules" else references("local", fail=case == "unreachable")
     app, _ = make(refs=refs, mode="rules" if case == "rules" else "local")
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 30, "text": REFERENCE,
                                                    "question": "" if case == "no_question" else "Why cache?"})
@@ -282,7 +339,7 @@ def test_echo_similarity_unavailable(case):
 def test_online_references_send_only_the_question_and_count_as_uncalibrated():
     sent: list = []
     app, _ = make(mode="online", refs=references("online", answer=REFERENCE, sent=sent))
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     guest_key = room["invites"][0].split("k=")[1]
     with remote.websocket_connect(f"/ws/{room['room']}?role=guest&k={guest_key}&name=Asha Rao") as guest:
@@ -301,7 +358,7 @@ def test_online_references_send_only_the_question_and_count_as_uncalibrated():
 
 def test_nothing_reaches_the_candidate():
     app, clock = make()
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
     with local.websocket_connect(f"/ws/{rid}?role=host&k={room['host_key']}") as host:
@@ -333,7 +390,7 @@ def test_study_folder_must_be_outside_the_repository(tmp_path):
 
 def test_study_mode_saves_labelled_answers_only_with_the_candidates_consent(tmp_path):
     app, clock = make(study_dir=tmp_path, transcriber=ScriptedTranscriber("", texts=[QUESTION, WORDS23] * 4))
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
     page = remote.get(f"/join/{rid}").text
@@ -409,7 +466,7 @@ def test_followups_come_from_the_model_through_the_guardrails():
         ])
 
     app, _ = make(model=model)
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()["room"]
     assert local.post(f"/api/rooms/{room}/followups", json={}).status_code == 409  # no answers yet
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 20, "text": ANSWER, "question": "Tell me about a project."})
@@ -431,7 +488,7 @@ def test_followups_come_from_the_model_through_the_guardrails():
 
 def test_followups_fall_back_to_rules_without_a_model():
     app, _ = make()
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 20, "text": ANSWER})
     result = local.post(f"/api/rooms/{room}/followups", json={}).json()
@@ -450,7 +507,7 @@ def test_online_mode_redacts_and_tells_the_candidate():
         return '{"question": "How did Asha handle Redis failures during the sale?", "priority": "high"}'
 
     app, _ = make(model=model, mode="online")
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     guest_key = room["invites"][0].split("k=")[1]
     with remote.websocket_connect(f"/ws/{room['room']}?role=guest&k={guest_key}&name=Asha Rao") as guest:
