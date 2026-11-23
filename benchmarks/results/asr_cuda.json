@@ -1,0 +1,398 @@
+{
+ "what": "sidecar transcription (faster-whisper) on LibriSpeech through POST /v1/audio/transcriptions",
+ "environment": {
+  "date": "2026-11-19T18:09:15+05:30",
+  "cpu": "13th Gen Intel(R) Core(TM) i9-13900H",
+  "logical_cpus": 20,
+  "ram_gb": 15.7,
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24",
+  "os": "Windows-10-10.0.26300-SP0",
+  "python": "3.11.9",
+  "packages": {
+   "faster-whisper": "1.2.1",
+   "ctranslate2": "4.9.0",
+   "fastapi": "0.165.0",
+   "uvicorn": "0.54.0",
+   "whisper_normalizer": "1.0.1",
+   "jiwer": "4.0.0"
+  },
+  "repo_commit": "1e093c0"
+ },
+ "config": {
+  "device": "cuda",
+  "compute_type": "int8 (sidecar default)",
+  "beam_size": "1 (sidecar default)",
+  "cpu_threads": "faster-whisper default (4)",
+  "language": "en",
+  "prompt": null,
+  "word_timestamps": false,
+  "per_split": 300,
+  "seed": 2026,
+  "subset": "random.Random(seed).sample over the sorted utterance ids, per split",
+  "normaliser": "whisper_normalizer.english.EnglishTextNormalizer (OpenAI Whisper's)",
+  "cuda_libs": "nvidia-cublas-cu12 + nvidia-cudnn-cu12 9 wheels on PATH",
+  "endpoint": "local sidecar"
+ },
+ "models": {
+  "tiny.en": {
+   "cold_first_request_ms": 1553.5,
+   "device_used": "cuda",
+   "model_load_s": 0.8,
+   "gpu_fallback_in_log": false,
+   "all": {
+    "utterances": 600,
+    "speakers": 72,
+    "audio_s": 4178.9,
+    "wer": 0.09218791471290808,
+    "ref_words": 11303,
+    "substitutions": 785,
+    "deletions": 92,
+    "insertions": 165,
+    "latency_ms": {
+     "n": 600,
+     "median": 62.5,
+     "p90": 115.9,
+     "p95": 136.3,
+     "mean": 70.2,
+     "min": 17.3,
+     "max": 214.9
+    },
+    "rtf": {
+     "n": 600,
+     "median": 0.011,
+     "p90": 0.019,
+     "p95": 0.021,
+     "mean": 0.012,
+     "min": 0.005,
+     "max": 0.028
+    },
+    "aggregate_rtf": 0.0101,
+    "server_inference_ms": {
+     "n": 600,
+     "median": 46.0,
+     "p90": 98.1,
+     "p95": 118.0,
+     "mean": 54.7,
+     "min": 15.0,
+     "max": 195.0
+    }
+   },
+   "test-clean": {
+    "utterances": 300,
+    "speakers": 40,
+    "audio_s": 2335.4,
+    "wer": 0.053388090349075976,
+    "ref_words": 6331,
+    "substitutions": 261,
+    "deletions": 30,
+    "insertions": 47,
+    "latency_ms": {
+     "n": 300,
+     "median": 69.0,
+     "p90": 129.9,
+     "p95": 143.7,
+     "mean": 76.6,
+     "min": 26.1,
+     "max": 214.9
+    },
+    "rtf": {
+     "n": 300,
+     "median": 0.011,
+     "p90": 0.018,
+     "p95": 0.021,
+     "mean": 0.012,
+     "min": 0.005,
+     "max": 0.028
+    },
+    "aggregate_rtf": 0.0098,
+    "server_inference_ms": {
+     "n": 300,
+     "median": 52.0,
+     "p90": 110.1,
+     "p95": 124.1,
+     "mean": 61.2,
+     "min": 16.0,
+     "max": 195.0
+    }
+   },
+   "test-other": {
+    "utterances": 300,
+    "speakers": 32,
+    "audio_s": 1843.5,
+    "wer": 0.1415929203539823,
+    "ref_words": 4972,
+    "substitutions": 524,
+    "deletions": 62,
+    "insertions": 118,
+    "latency_ms": {
+     "n": 300,
+     "median": 57.0,
+     "p90": 96.3,
+     "p95": 124.3,
+     "mean": 63.8,
+     "min": 17.3,
+     "max": 171.4
+    },
+    "rtf": {
+     "n": 300,
+     "median": 0.011,
+     "p90": 0.019,
+     "p95": 0.021,
+     "mean": 0.012,
+     "min": 0.006,
+     "max": 0.028
+    },
+    "aggregate_rtf": 0.0104,
+    "server_inference_ms": {
+     "n": 300,
+     "median": 42.0,
+     "p90": 79.4,
+     "p95": 99.1,
+     "mean": 48.2,
+     "min": 15.0,
+     "max": 153.0
+    }
+   }
+  },
+  "base.en": {
+   "cold_first_request_ms": 1315.9,
+   "device_used": "cuda",
+   "model_load_s": 0.9,
+   "gpu_fallback_in_log": false,
+   "all": {
+    "utterances": 600,
+    "speakers": 72,
+    "audio_s": 4178.9,
+    "wer": 0.06962753251349199,
+    "ref_words": 11303,
+    "substitutions": 603,
+    "deletions": 83,
+    "insertions": 101,
+    "latency_ms": {
+     "n": 600,
+     "median": 87.5,
+     "p90": 157.0,
+     "p95": 190.5,
+     "mean": 98.6,
+     "min": 34.9,
+     "max": 282.3
+    },
+    "rtf": {
+     "n": 600,
+     "median": 0.016,
+     "p90": 0.025,
+     "p95": 0.029,
+     "mean": 0.017,
+     "min": 0.007,
+     "max": 0.036
+    },
+    "aggregate_rtf": 0.0142,
+    "server_inference_ms": {
+     "n": 600,
+     "median": 69.0,
+     "p90": 139.0,
+     "p95": 170.0,
+     "mean": 80.9,
+     "min": 25.0,
+     "max": 277.0
+    }
+   },
+   "test-clean": {
+    "utterances": 300,
+    "speakers": 40,
+    "audio_s": 2335.4,
+    "wer": 0.04012004422682041,
+    "ref_words": 6331,
+    "substitutions": 192,
+    "deletions": 40,
+    "insertions": 22,
+    "latency_ms": {
+     "n": 300,
+     "median": 93.8,
+     "p90": 172.2,
+     "p95": 197.0,
+     "mean": 106.2,
+     "min": 34.9,
+     "max": 282.3
+    },
+    "rtf": {
+     "n": 300,
+     "median": 0.016,
+     "p90": 0.025,
+     "p95": 0.027,
+     "mean": 0.017,
+     "min": 0.007,
+     "max": 0.035
+    },
+    "aggregate_rtf": 0.0136,
+    "server_inference_ms": {
+     "n": 300,
+     "median": 75.0,
+     "p90": 159.0,
+     "p95": 184.1,
+     "mean": 87.7,
+     "min": 25.0,
+     "max": 277.0
+    }
+   },
+   "test-other": {
+    "utterances": 300,
+    "speakers": 32,
+    "audio_s": 1843.5,
+    "wer": 0.10720032180209171,
+    "ref_words": 4972,
+    "substitutions": 411,
+    "deletions": 43,
+    "insertions": 79,
+    "latency_ms": {
+     "n": 300,
+     "median": 81.3,
+     "p90": 137.9,
+     "p95": 172.0,
+     "mean": 90.9,
+     "min": 37.1,
+     "max": 251.2
+    },
+    "rtf": {
+     "n": 300,
+     "median": 0.016,
+     "p90": 0.026,
+     "p95": 0.029,
+     "mean": 0.018,
+     "min": 0.008,
+     "max": 0.036
+    },
+    "aggregate_rtf": 0.0148,
+    "server_inference_ms": {
+     "n": 300,
+     "median": 62.0,
+     "p90": 116.1,
+     "p95": 154.2,
+     "mean": 74.1,
+     "min": 27.0,
+     "max": 246.0
+    }
+   }
+  },
+  "small.en": {
+   "cold_first_request_ms": 1941.5,
+   "device_used": "cuda",
+   "model_load_s": 1.4,
+   "gpu_fallback_in_log": false,
+   "all": {
+    "utterances": 600,
+    "speakers": 72,
+    "audio_s": 4178.9,
+    "wer": 0.050606033796337255,
+    "ref_words": 11303,
+    "substitutions": 406,
+    "deletions": 100,
+    "insertions": 66,
+    "latency_ms": {
+     "n": 600,
+     "median": 156.4,
+     "p90": 283.8,
+     "p95": 337.9,
+     "mean": 177.2,
+     "min": 74.2,
+     "max": 530.8
+    },
+    "rtf": {
+     "n": 600,
+     "median": 0.029,
+     "p90": 0.046,
+     "p95": 0.051,
+     "mean": 0.031,
+     "min": 0.013,
+     "max": 0.068
+    },
+    "aggregate_rtf": 0.0254,
+    "server_inference_ms": {
+     "n": 600,
+     "median": 137.0,
+     "p90": 267.3,
+     "p95": 317.0,
+     "mean": 160.0,
+     "min": 65.0,
+     "max": 502.0
+    }
+   },
+   "test-clean": {
+    "utterances": 300,
+    "speakers": 40,
+    "audio_s": 2335.4,
+    "wer": 0.03395987995577318,
+    "ref_words": 6331,
+    "substitutions": 138,
+    "deletions": 59,
+    "insertions": 18,
+    "latency_ms": {
+     "n": 300,
+     "median": 160.8,
+     "p90": 308.3,
+     "p95": 361.3,
+     "mean": 184.7,
+     "min": 89.2,
+     "max": 530.8
+    },
+    "rtf": {
+     "n": 300,
+     "median": 0.027,
+     "p90": 0.042,
+     "p95": 0.048,
+     "mean": 0.029,
+     "min": 0.013,
+     "max": 0.063
+    },
+    "aggregate_rtf": 0.0237,
+    "server_inference_ms": {
+     "n": 300,
+     "median": 140.0,
+     "p90": 288.3,
+     "p95": 344.3,
+     "mean": 167.4,
+     "min": 65.0,
+     "max": 502.0
+    }
+   },
+   "test-other": {
+    "utterances": 300,
+    "speakers": 32,
+    "audio_s": 1843.5,
+    "wer": 0.07180209171359614,
+    "ref_words": 4972,
+    "substitutions": 268,
+    "deletions": 41,
+    "insertions": 48,
+    "latency_ms": {
+     "n": 300,
+     "median": 154.6,
+     "p90": 254.4,
+     "p95": 309.5,
+     "mean": 169.6,
+     "min": 74.2,
+     "max": 474.4
+    },
+    "rtf": {
+     "n": 300,
+     "median": 0.031,
+     "p90": 0.048,
+     "p95": 0.053,
+     "mean": 0.033,
+     "min": 0.014,
+     "max": 0.068
+    },
+    "aggregate_rtf": 0.0276,
+    "server_inference_ms": {
+     "n": 300,
+     "median": 135.0,
+     "p90": 240.3,
+     "p95": 291.3,
+     "mean": 152.5,
+     "min": 68.0,
+     "max": 454.0
+    }
+   }
+  }
+ }
+}

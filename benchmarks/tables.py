@@ -54,20 +54,52 @@ def env_line(res: dict) -> str:
             + (f"; {e['rustc']}" if e.get("rustc") else "") + ".*")
 
 
+def wer_ci(csv_path: Path, model: str, split: str, n_boot: int = 2000, seed: int = 0) -> tuple[float, float] | None:
+    """95% bootstrap interval of a WER, resampling utterances (from the run's per-utterance CSV)."""
+    import csv
+
+    import numpy as np
+
+    if not csv_path.exists():
+        return None
+    with csv_path.open(encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r["model"] == model and r["split"] == split]
+    if not rows:
+        return None
+    errors = np.array([int(r["sub"]) + int(r["del"]) + int(r["ins"]) for r in rows], dtype=float)
+    words = np.array([int(r["ref_words"]) for r in rows], dtype=float)
+    idx = np.random.default_rng(seed).integers(0, len(rows), size=(n_boot, len(rows)))
+    boot = errors[idx].sum(axis=1) / words[idx].sum(axis=1)
+    return float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))
+
+
+def wer_cell(res_path: Path, m: dict, model: str, split: str) -> str:
+    ci = wer_ci(res_path.with_name(res_path.stem + "_utterances.csv"), model, split)
+    return pct(m[split]["wer"], 2) + (f" ({100 * ci[0]:.1f}–{100 * ci[1]:.1f})" if ci else "")
+
+
 def asr() -> None:
     runs = [(d, load(R / f"asr_{d}.json")) for d in ("cpu", "cuda")]
     runs = [(d, r) for d, r in runs if r]
     if not runs:
         return
     print("### Transcription: WER and speed\n")
+    print("WER with a 95% bootstrap interval over utterances in brackets. First request: a fresh sidecar's first "
+          "transcription, which loads the model (models already on disk).\n")
     print("| Model | Device | WER test-clean | WER test-other | Latency per utterance, ms (median / p90 / p95) | "
-          "Real-time factor (median) | Aggregate RTF | First request (loads model), s |")
+          "Real-time factor (median) | Aggregate RTF | First request, s |")
     print("|---|---|---|---|---|---|---|---|")
+    cold = load(R / "asr_cpu_coldstart.json")
     for device, res in runs:
         for model, m in res["models"].items():
-            print(f"| {model} | {m.get('device_used') or device} | {pct(m['test-clean']['wer'], 2)} | {pct(m['test-other']['wer'], 2)} | "
+            path = R / f"asr_{device}.json"
+            first = m["cold_first_request_ms"]
+            if device == "cpu" and cold and model in cold["models"]:  # the main CPU run downloaded base.en and small.en first
+                first = cold["models"][model]["cold_first_request_ms"]
+            print(f"| {model} | {m.get('device_used') or device} | {wer_cell(path, m, model, 'test-clean')} | "
+                  f"{wer_cell(path, m, model, 'test-other')} | "
                   f"{lat(m['all']['latency_ms'])} | {m['all']['rtf']['median']:.3f} | {m['all']['aggregate_rtf']:.4f} | "
-                  f"{m['cold_first_request_ms'] / 1000:.1f} |")
+                  f"{first / 1000:.1f} |")
     first = runs[0][1]
     some = next(iter(first["models"].values()))
     print(f"\n{some['test-clean']['utterances']} + {some['test-other']['utterances']} utterances "
@@ -81,7 +113,9 @@ def asr() -> None:
         print("| Model | Word timings | WER test-clean | WER test-other | Latency, ms (median / p90 / p95) | Aggregate RTF |")
         print("|---|---|---|---|---|---|")
         for model, m in words["models"].items():
-            print(f"| {model} | yes | {pct(m['test-clean']['wer'], 2)} | {pct(m['test-other']['wer'], 2)} | {lat(m['all']['latency_ms'])} | "
+            path = R / "asr_cpu_words.json"
+            print(f"| {model} | yes | {wer_cell(path, m, model, 'test-clean')} | {wer_cell(path, m, model, 'test-other')} | "
+                  f"{lat(m['all']['latency_ms'])} | "
                   f"{m['all']['aggregate_rtf']:.4f} |")
         print(f"\n({words['config']['per_split']} utterances per split, the first of the same seeded order.) " + env_line(words) + "\n")
 

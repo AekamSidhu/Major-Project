@@ -177,7 +177,8 @@ npm run tauri dev
 Prerequisites, tests, developer tools and packaging:
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Crate contracts:
 [docs/INTERNALS.md](docs/INTERNALS.md); frontend contract:
-[docs/FRONTEND.md](docs/FRONTEND.md).
+[docs/FRONTEND.md](docs/FRONTEND.md). Measured latency, transcription
+accuracy, detection rates and false flags: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## AI providers
 
