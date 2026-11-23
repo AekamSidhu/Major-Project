@@ -1,0 +1,11 @@
+# Benchmarks: the sidecar's packages plus these (Python 3.10-3.12).
+#   pip install -r local-ai/requirements.txt -r local-ai/requirements-integrity.txt -r benchmarks/requirements.txt
+pytest>=8
+jiwer>=3.0               # word error rate
+whisper-normalizer>=0.1  # OpenAI Whisper's English text normaliser, packaged
+matplotlib>=3.8          # charts
+pandas>=2.0              # HC3 loading (training/echo-detection)
+scikit-learn>=1.4        # ROC-AUC; HC3 split helpers import it
+# GPU transcription only (Windows/Linux, NVIDIA): CUDA 12 cuBLAS and cuDNN 9,
+# installed into their own folder and given to the sidecar with --cuda-libs:
+#   pip install --target <DIR> nvidia-cublas-cu12 "nvidia-cudnn-cu12>=9,<10"
