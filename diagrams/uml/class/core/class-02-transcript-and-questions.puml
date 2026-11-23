@@ -57,6 +57,7 @@ enum SpeakerRole {
 enum Mode {
   Candidate  <<default>>
   Interviewer
+  Workplace
 }
 
 class DetectedQuestion <<struct>> {
@@ -146,6 +147,7 @@ note bottom of SpeakerRole
   label(): User -> "You"; Unknown -> "Speaker";
   Remote -> "Interviewer" (Mode::Candidate)
   or "Candidate" (Mode::Interviewer)
+  or "Others" (Mode::Workplace)
 end note
 
 note right of TranscriptSegment
@@ -157,7 +159,9 @@ end note
 note bottom of AnswerRecord
   What someone said in reply to a detected question:
   the user's own answer in candidate mode,
-  the candidate's answer in interviewer mode.
+  the candidate's answer in interviewer mode,
+  the reply from the other side in workplace mode
+  (a speaker whose role differs from the asker's).
 end note
 
 note bottom of VoiceCommand
