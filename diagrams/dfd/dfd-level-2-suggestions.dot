@@ -1,5 +1,7 @@
 // Derived from: crates/openmeet-engine/src/conversation.rs, assist.rs, memory.rs, crates/openmeet-intel/src/prompts
 //   (candidate_answer, interviewer_followup, context), crates/openmeet-intel/src/detect.
+//   Workplace mode: crates/openmeet-intel/src/workplace.rs (board, in 3.3), prompts/workplace_catchup.rs (Catch me up, 6.x).
+//   Turn ends (3.3 -> 6.1) are interviewer-only, so that edge does not apply in workplace mode.
 // DFD Level 2 for processes 3.0 (Analyse conversation), 5.0 (Assemble
 // context) and 6.0 (Generate suggestions).
 digraph dfd2_suggest {
@@ -47,20 +49,21 @@ digraph dfd2_suggest {
   p31 -> p33  [label="detected question"];
   p31 -> p7a  [label="question detected"];
   p33 -> d3a   [label="topics, claims,\nanswers"];
-  p33 -> p9a  [label="questions, answers,\ntopics, claims"];
+  p33 -> p9a  [label="questions, answers,\ntopics, claims,\naction items (board)"];
+  p31 -> p61  [label="workplace: question\naddressed to you\n(auto answer)", style=dashed];
   p33 -> p7a  [label="topics updated"];
   p33 -> llm_c [dir=both, label="topic-analysis\nprompt / topics"];
 
   p33 -> p61  [label="candidate turn ended\n(enough words, silence)"];
   p33 -> ext11 [label="question +\nanswer turn"];
-  p7d -> p61  [label="follow-ups / ask /\nrefine / style"];
+  p7d -> p61  [label="follow-ups / ask /\nrefine / style /\ncatch-up (1-60 min)"];
   p2 -> p61   [label="voice command\n(if enabled)", style=dashed];
   p61 -> p7c  [label="request started\n(previous in slot\ncancelled)"];
   p61 -> p51  [label="query text"];
   p51 -> emb  [dir=both, label="query / vector"];
   d3b -> p51   [label="BM25 + vector index"];
   p51 -> p52  [label="top snippets\n(screen boost if\n\"this\" / \"that\")"];
-  d3b -> p52   [label="recent window, summary,\nobservations, asked questions"];
+  d3b -> p52   [label="recent window, summary,\nobservations, asked questions,\nboard (workplace)"];
   d2 -> p52   [label="profile, style,\ntoken budget"];
   p52 -> p62  [label="prompt context"];
   p61 -> p62  [label="request kind, question,\nstyle, refinement"];

@@ -120,6 +120,7 @@ class AssistantSettings <<struct>> {
 enum Mode {
   Candidate  <<default>>
   Interviewer
+  Workplace
 }
 enum AnswerStyle
 enum ResponseLength

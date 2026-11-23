@@ -29,7 +29,7 @@ digraph dfd2_data {
   p93 [label="9.3\nDelete\nmeeting(s)"];
   p94 [label="9.4\nExport\nmeeting"];
   p95 [label="9.5\nBrowse\nhistory"];
-  p101 [label="10.1\nSummarize\n(LLM or\nextractive)"];
+  p101 [label="10.1\nSummarize or\nwrite minutes\n(LLM or\nextractive)"];
 
   node [shape=none, width=0, style="", penwidth=1];
   d1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D1</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Meeting database</TD></TR></TABLE>>];
@@ -70,6 +70,6 @@ digraph dfd2_data {
   p95 -> user2 [label="history view"];
 
   d3 -> p101   [label="meeting record,\nlong-term summary,\nopen gaps"];
-  p101 -> llm  [dir=both, label="summary prompt /\nJSON"];
-  p101 -> p91  [label="summary"];
+  p101 -> llm  [dir=both, label="summary or minutes prompt /\nJSON"];
+  p101 -> p91  [label="summary (workplace: minutes,\naction items with owner / due)"];
 }

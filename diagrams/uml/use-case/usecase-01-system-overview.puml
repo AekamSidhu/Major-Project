@@ -5,7 +5,9 @@
 ' EmbeddingProviderKind), src-tauri/src/lib.rs (registered commands), src-tauri/src/commands/*.rs,
 ' src-tauri/src/{shortcuts,tray,secrets,local_ai}.rs, src/main/App.tsx (NAV sections), src/overlay/actions.ts,
 ' local-ai/server.py, local-ai/room_server.py and room/ (interview room), src/main/sections/settings/Integrity.tsx,
-' crates/openmeet-core/src/settings.rs (IntegritySettings), docs/ARCHITECTURE.md
+' crates/openmeet-core/src/settings.rs (IntegritySettings), docs/ARCHITECTURE.md,
+' crates/openmeet-engine/src/{conversation,assist,engine}.rs (workplace paths), src/main/sections/home/WorkplaceBoard.tsx,
+' CompletedMeeting.tsx, src/overlay/cards.tsx (Catch me up)
 title OpenMeet - system use case overview
 
 left to right direction
@@ -19,6 +21,8 @@ actor "Candidate-mode user\n<size:10>Mode::Candidate</size>" as Cand
 actor "Interviewer-mode user\n<size:10>Mode::Interviewer</size>" as Intv
 User <|-- Cand
 User <|-- Intv
+actor "Workplace-mode user\n<size:10>Mode::Workplace</size>" as Work
+User <|-- Work
 
 actor "Remote participants /\nmeeting app\n<size:10>system audio = SpeakerRole::Remote</size>" as Remote
 actor "Operating system\n<size:10>audio + screen capture, shortcuts, tray,</size>\n<size:10>credential store, capture exclusion, OCR</size>" as OS
@@ -45,6 +49,9 @@ rectangle "OpenMeet desktop app" {
   usecase "Set the candidate's video region\n<size:10>for the reading signal (gaze)</size>" as UC_Region
   usecase "Host an interview room\n<size:10>in the browser, on this computer</size>" as UC_RoomHost
   usecase "Join an interview room\n<size:10>candidate: camera and microphone in the browser</size>" as UC_RoomJoin
+  usecase "Track decisions, action items\nand open questions\n<size:10>workplace mode: the live board</size>" as UC_Board
+  usecase "Catch up on the last minutes\n<size:10>workplace mode: Catch me up</size>" as UC_CatchUp
+  usecase "Review and copy the meeting minutes\n<size:10>workplace mode: after the meeting ends</size>" as UC_Minutes
   usecase "Configure settings" as UC_Settings
   usecase "Review meeting history" as UC_History
   usecase "Export a meeting" as UC_Export
@@ -67,6 +74,10 @@ User --> UC_Local
 Intv --> UC_Integrity
 Intv --> UC_Region
 Intv --> UC_RoomHost
+Work --> UC_Answer
+Work --> UC_Board
+Work --> UC_CatchUp
+Work --> UC_Minutes
 Joiner --> UC_RoomJoin
 User --> UC_Privacy
 User --> UC_Onboard
@@ -90,6 +101,8 @@ UC_Region --> OS
 UC_RoomHost --> RoomSrv
 UC_RoomJoin --> RoomSrv
 UC_Export --> FS
+UC_CatchUp --> AI
+UC_Minutes --> AI
 
 UC_Export .[norank].> UC_History : <<extend>>
 

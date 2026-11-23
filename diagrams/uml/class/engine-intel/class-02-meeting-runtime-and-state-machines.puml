@@ -3,6 +3,7 @@
 ' Derived from: crates/openmeet-engine/src/runtime.rs (MeetingRuntime, CandidateTurn, MAX_SUGGESTIONS),
 ' state.rs (MeetingStateMachine, AnswerStateMachine, answer_transition_allowed), memory.rs (ContextMemory),
 ' conversation.rs (ConvInput), crates/openmeet-intel/src/topics.rs (TopicTracker),
+' crates/openmeet-intel/src/workplace.rs (WorkplaceTracker),
 ' crates/openmeet-core/src/types.rs (MeetingState, AnswerState, PauseReason, MeetingRecord ..).
 title openmeet-engine: per-meeting runtime and explicit state machines
 
@@ -29,6 +30,8 @@ class MeetingRuntime {
   + action_items: Vec<ActionItem>
   + observations: Vec<ScreenObservation>
   + topics: TopicTracker
+  + workplace: WorkplaceTracker
+    (workplace mode only: the live board)
   + memory: ContextMemory
   + turn: CandidateTurn
   + pending_utterances: HashSet<String>
@@ -124,6 +127,15 @@ enum PauseReason <<core>> {
 
 class ContextMemory
 class TopicTracker <<intel>>
+class WorkplaceTracker <<intel>> {
+  - decisions: Vec<Claim>
+  - items: Vec<TrackedItem>
+  - questions: Vec<TrackedQuestion>
+  - clarifications: Vec<ClarifyingQuestion>
+  + observe(segment, claims, items, question): WorkplaceUpdate
+  + board(): WorkplaceBoard
+  + action_items(): Vec<ActionItem>
+}
 class MeetingRecord <<core>>
 interface MeetingStore <<core trait>>
 enum ConvInput {
@@ -136,6 +148,7 @@ MeetingRuntime *-- "1" MeetingStateMachine : machine
 MeetingRuntime *-- "1" CandidateTurn : turn
 MeetingRuntime *-- "1" ContextMemory : memory
 MeetingRuntime *-- "1" TopicTracker : topics
+MeetingRuntime *-- "1" WorkplaceTracker : workplace
 MeetingRuntime o-- "1" MeetingStore : store
 MeetingRuntime --> "0..1" PauseReason
 MeetingRuntime ..> ConvInput : conv_tx
