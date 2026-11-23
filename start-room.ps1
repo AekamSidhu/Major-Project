@@ -1,11 +1,11 @@
-# Start the OpenMeet Room. A shareable link is created automatically.
-#   .\start-room.ps1                       # tunnel + simple-rules follow-ups
-#   .\start-room.ps1 -Followups local      # tunnel + Ollama follow-ups
-#   .\start-room.ps1 -Transcription groq   # Groq cloud transcription (fast, accurate)
-#   .\start-room.ps1 -NoTunnel             # LAN only (same Wi-Fi)
+# Start the OpenMeet Room. A shareable Cloudflare link is created automatically.
+#   .\start-room.ps1                             # Groq transcription + Gemini follow-ups + tunnel (default)
+#   .\start-room.ps1 -Transcription local        # local Whisper instead of Groq
+#   .\start-room.ps1 -Followups rules            # simple-rules follow-ups (no AI model)
+#   .\start-room.ps1 -NoTunnel                   # LAN only (same Wi-Fi, no Cloudflare)
 param(
-    [ValidateSet("rules", "local", "online")] [string]$Followups = "rules",
-    [ValidateSet("local", "groq")] [string]$Transcription = "local",
+    [ValidateSet("rules", "local", "online")] [string]$Followups = "online",
+    [ValidateSet("local", "groq")] [string]$Transcription = "groq",
     [int]$Port = 8443,
     [switch]$NoTunnel
 )
