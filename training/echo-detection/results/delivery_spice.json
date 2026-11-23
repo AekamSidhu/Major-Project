@@ -1,0 +1,85 @@
+{
+ "what": "spec delivery index (spec/integrity, v1): read vs spontaneous answers of the same speakers",
+ "data": "SpiCE English sessions (Johnson, Babel, Fong & Yiu; CC BY 4.0; doi:10.5683/SP2/MJOXP3)",
+ "timing": "SpiCE hand transcripts, forced-aligned word times (Montreal Forced Aligner)",
+ "protocol": {
+  "chunk_words": 30,
+  "max_gap_s": 2.0,
+  "baseline_answers": 3,
+  "spontaneous_per_speaker": 15,
+  "latency": "not measurable (no questions)"
+ },
+ "summary": {
+  "speakers": 34,
+  "answers": {
+   "narration": 102,
+   "read": 125,
+   "spontaneous": 510
+  },
+  "roc_auc": 0.5472,
+  "roc_auc_95ci_by_speaker": [
+   0.5030565695913993,
+   0.5916750662646207
+  ],
+  "levels": {
+   "read": {
+    "possible_or_high": 0.232,
+    "high": 0.088,
+    "mean_index": 0.5931723371307573
+   },
+   "spontaneous": {
+    "possible_or_high": 0.27647058823529413,
+    "high": 0.12156862745098039,
+    "mean_index": 0.4167117654561497
+   },
+   "narration": {
+    "possible_or_high": 0.20588235294117646,
+    "high": 0.0784313725490196,
+    "mean_index": -0.26273952751376356
+   }
+  },
+  "feature_auc": {
+   "latency_s": null,
+   "rate_wpm": 0.44266666666666665,
+   "pause_per_min": 0.3755764705882353,
+   "filler_per_100w": 0.7042745098039216
+  },
+  "feature_means": {
+   "latency_s": {
+    "read": null,
+    "spontaneous": null
+   },
+   "rate_wpm": {
+    "read": 193.82599403559604,
+    "spontaneous": 205.3921147972437
+   },
+   "pause_per_min": {
+    "read": 19.553607475080213,
+    "spontaneous": 16.03594873388039
+   },
+   "filler_per_100w": {
+    "read": 0.16,
+    "spontaneous": 3.176470588235294
+   }
+  }
+ },
+ "fitted_weights_for_information": {
+  "train_speakers": 24,
+  "test_speakers": 10,
+  "coefficients": {
+   "latency_s": 0.0,
+   "rate_wpm": -0.102,
+   "pause_per_min": 0.23,
+   "filler_per_100w": -0.246
+  },
+  "intercept": -0.668,
+  "test_roc_auc_fitted": 0.7609259259259259,
+  "test_roc_auc_spec_index": 0.5612962962962963
+ },
+ "thresholds": {
+  "possible_index": 1.5,
+  "high_index": 2.5,
+  "calibrated": false
+ },
+ "seconds": 7
+}

@@ -23,33 +23,41 @@ OpenMeet uses two kinds of models:
 2. [Model 1: the reading detector](#2-model-1-the-reading-detector)
 3. [Model 2: the gaze model](#3-model-2-the-gaze-model)
 4. [Model 3: the AI-written answer detector](#4-model-3-the-ai-written-answer-detector)
-5. [Ready-made models we use](#5-ready-made-models-we-use)
-6. [How the scores are shown](#6-how-the-scores-are-shown)
-7. [How we kept the results honest](#7-how-we-kept-the-results-honest)
-8. [Where the code is and how to retrain](#8-where-the-code-is-and-how-to-retrain)
-9. [Glossary](#glossary)
+5. [Signal 4: similarity to an AI's answer](#5-signal-4-similarity-to-an-ais-answer)
+6. [Signal 5: delivery](#6-signal-5-delivery)
+7. [Ready-made models we use](#7-ready-made-models-we-use)
+8. [How the scores are shown](#8-how-the-scores-are-shown)
+9. [How we kept the results honest](#9-how-we-kept-the-results-honest)
+10. [Where the code is and how to retrain](#10-where-the-code-is-and-how-to-retrain)
+11. [Glossary](#glossary)
 
 ---
 
 ## 1. The big picture
 
-During an interview, OpenMeet looks at two things the candidate produces:
-their eye movements and their words.
+During an interview, OpenMeet looks at three things the candidate produces:
+their eye movements, their words and the timing of their speech.
 
 ```
 Candidate's video ──> face and iris points ──> gaze trace ──> READING DETECTOR ──> "reading" score
    (camera)            (MediaPipe)              (10 per s)     (trained by us)
 
 Candidate's voice ──> transcript ──────────────────────────> AI-WRITTEN DETECTOR ──> "AI-written" score
-   (microphone)        (Whisper)                               (trained by us)
+   (microphone)        (Whisper)  │                             (trained by us)
+                                  ├──> compared with the AI's own answers ───────> "similar to an AI answer"
+                                  │    to the question (Llama 3.2 + embeddings)    (thresholds measured by us)
+                                  └──> word timings vs. the candidate's ─────────> "delivery"
+                                       first answers                              (not calibrated)
+
+All four ──> ONE FLAG per answer: "nothing stands out" or "worth a follow-up", with the reasons
 
 Transcript ─────────> FOLLOW-UP MODEL (Llama 3.2 or Gemini) ──> suggested follow-up questions
 ```
 
 Everything runs on the interviewer's own computer. The one exception is the
-optional *online* mode for follow-up questions, which sends answer text (never
-audio or video) to Google Gemini. The candidate is told about this before
-joining.
+optional *online* mode, which sends answer text and the interviewer's
+questions (never audio or video) to Google Gemini. The candidate is told
+about this before joining.
 
 ## 2. Model 1: the reading detector
 
@@ -247,17 +255,122 @@ an answer from a newer model, or rephrases it in their own words, is harder to
 catch. Short answers carry little evidence, so answers below a minimum length
 are reported as "too short".
 
-## 5. Ready-made models we use
+## 5. Signal 4: similarity to an AI's answer
+
+### The question it answers
+
+*Is this answer close to what an AI assistant says when it is asked the same
+question?*
+
+### How it works
+
+No model is trained for this signal; it combines two ready-made models.
+
+1. While the candidate answers, Llama 3.2 (on the interviewer's computer)
+   writes two answers of its own to the interviewer's question. These are
+   the **reference answers**.
+2. The candidate's answer and the reference answers are each turned into a
+   list of 384 numbers by an **embedding model** (`BAAI/bge-small-en-v1.5`),
+   so that texts with similar meaning get similar numbers.
+3. The **cosine similarity** (from 0, unrelated, to 1, the same meaning) is
+   computed between the answer and each reference; the highest one is the
+   score.
+
+The idea: a candidate who reads out an AI answer says something close to
+what another AI would say, even when a different assistant wrote it.
+
+### How the thresholds were chosen
+
+On HC3 again: for questions it never saw during the other model's training
+split, Llama 3.2 wrote two reference answers per question, and every human
+and every ChatGPT answer was scored against them. The same number of
+questions came from each of HC3's five topic areas. The thresholds were
+chosen on development questions, and the test questions were scored once.
+
+### Results
+
+On 500 test questions (1,411 answers), with thresholds chosen on 500 other
+questions:
+
+| Measure | Result |
+|---|---|
+| How well the score ranks ChatGPT answers above human ones (AUC) | 0.876 |
+| At "possible": ChatGPT answers caught / human answers flagged | 81% / 18.6% |
+| At "high": ChatGPT answers caught / human answers flagged | 47% / 6.6% |
+| Computer-science definitions only: human answers flagged at "high" | 36% |
+
+The signal works best on open questions and questions about experience, and
+worst on factual technical ones: a correct textbook answer is close to what
+any AI says. It is counted as calibrated (the rule was fixed before the test
+questions were scored), but treat a high score on a definition question
+with care.
+
+### Limits
+
+- On a textbook question ("what is a hash map?") every good answer looks
+  alike, human or AI, so the score is high for honest answers too.
+- The thresholds hold only for the embedding model and the way the
+  reference answers are written (`local-ai/integrity/signals.py`); with
+  Gemini writing the references (online mode) the signal is shown as
+  uncalibrated.
+- HC3's AI answers are 2022 ChatGPT writing; a candidate who paraphrases an
+  answer in their own words lowers the score.
+
+## 6. Signal 5: delivery
+
+### The question it answers
+
+*Does the timing of this answer sound read out rather than spoken freely,
+compared with how this candidate spoke earlier?*
+
+### How it works
+
+Whisper gives the time of every word. For each answer OpenMeet measures how
+long the candidate waited after the question, how many words a minute they
+spoke, how many pauses a minute they made and how many fillers ("um", "uh",
+"you know") they used. The first three answers are this candidate's
+**baseline**; every later answer is compared with it, feature by feature,
+and the differences are added up into a **delivery index**. The idea: a
+candidate reading an AI's answer waits for it first, then speaks faster,
+more evenly and with fewer fillers than they normally do.
+
+### How well it works
+
+The weights and thresholds are set by hand: we have no labelled interviews
+yet, so the signal is shown as **uncalibrated** and can never raise the flag
+to its highest level on its own.
+
+We tested it on **SpiCE**, a public corpus (CC BY 4.0) in which the same 34
+speakers read sentences aloud and then talk freely in an interview. On
+30-word stretches of speech, with the speakers' own first interview answers
+as their baseline:
+
+| Measure | Result |
+|---|---|
+| How well the index separates read from free speech (AUC, 0.5 is chance) | 0.55 (95% range 0.50 to 0.59) |
+| Free-speech stretches reaching "possible" | 28% |
+| Read stretches reaching "possible" | 23% |
+| Fillers alone (AUC) | 0.70 |
+
+So on this data the index barely works. Reading isolated sentences turned
+out *slower* and with *more* pauses than talking, the opposite of what the
+index expects; only the filler rate pointed the right way, and Whisper
+often leaves fillers out. The delay after the question, which carries the
+most weight, cannot be measured on this data at all. Reading a full answer
+off a screen is different from reading single sentences, so our own
+recordings are needed before this signal can be trusted.
+
+## 7. Ready-made models we use
 
 These were not trained by us. We use them as published.
 
 | Model | What it does in OpenMeet | Where it runs |
 |---|---|---|
-| **Whisper** (faster-whisper, `base.en`) | Turns speech into text | On this computer |
+| **Whisper** (faster-whisper, `base.en`) | Turns speech into text, with the time of every word | On this computer |
 | **MediaPipe Face Landmarker** | Finds the face and the two irises in each video frame | On this computer |
-| **Llama 3.2** through Ollama | Writes follow-up questions in the interview room; answers and summaries in the desktop app | On this computer |
-| **Gemini 3.5 Flash** (optional) | Writes follow-up questions in the room's online mode | Google's servers |
-| **fastembed** sentence embeddings | Finds related parts of the earlier conversation in the desktop app | On this computer |
+| **Llama 3.2** through Ollama | Writes follow-up questions and the reference answers in the interview room; answers and summaries in the desktop app | On this computer |
+| **Gemini 3.5 Flash** (optional) | Writes follow-up questions and reference answers in the room's online mode | Google's servers |
+| **fastembed** sentence embeddings (`BAAI/bge-small-en-v1.5`) | Compares an answer with the reference answers; finds related parts of the earlier conversation in the desktop app | On this computer |
 
 ### Follow-up questions and their guardrails
 
@@ -277,7 +390,7 @@ through guardrails on both sides:
 If no model is available, simple rules write grounded follow-ups instead, and
 the page says so.
 
-## 6. How the scores are shown
+## 8. How the scores are shown
 
 Each score is turned into a level using two thresholds chosen on development
 data:
@@ -287,9 +400,23 @@ data:
 | **low** | Nothing unusual |
 | **possible** | Above the balanced threshold: worth a follow-up question |
 | **high** | Above the stricter threshold, where few honest candidates are flagged |
-| **too short / no gaze** | Not enough evidence to score |
+| **too short / no gaze / baseline** | Not enough evidence to score (delivery's first three answers are the baseline) |
 
-## 7. How we kept the results honest
+The four levels of an answer are then combined into **one flag** (the rules
+are in `spec/integrity/README.md`, shared by the room and the desktop app):
+
+- *Worth a follow-up: several signals agree* when a calibrated signal is
+  high and at least one other signal is raised too;
+- *Worth a follow-up* when any signal is raised;
+- *Nothing stands out* when every signal that could be scored is low.
+
+A signal whose thresholds were not measured on labelled data (delivery, for
+now) is marked **uncalibrated** and counts at most as *possible*, so it can
+never raise the flag to its highest level. One signal alone never does
+either. The flag always lists the signals behind it and their evidence; it
+is shown to the interviewer only, never to the candidate.
+
+## 9. How we kept the results honest
 
 - **Split by person (or by question), never by sample.** The same person's
   data is never on both the training and the test side, so the model cannot
@@ -302,7 +429,7 @@ data:
   windows are rare.
 - **Limits are written down** next to every result.
 
-## 8. Where the code is and how to retrain
+## 10. Where the code is and how to retrain
 
 | Part | Branch | Folder |
 |---|---|---|
@@ -310,6 +437,9 @@ data:
 | AI-written answer detector: training code | `feature/echo-detection` | `training/echo-detection` |
 | The trained models inside the app, and the integrity check page | `feature/integrity-check` | `local-ai/integrity` |
 | The browser interview room and follow-up questions | `feature/interview-room` | `local-ai/room` |
+| Shared signal definitions, thresholds and test cases | `spec/integrity` | `spec/integrity` |
+| Echo-similarity calibration on HC3, delivery evaluation on SpiCE | `feature/delivery-signal` | `training/echo-detection` (`calibrate_similarity.py`, `evaluate_delivery.py`) |
+| Collecting our own labelled interviews (protocol, consent, study mode) | `feature/delivery-signal` | `training/data-collection` |
 
 All training ran on free Kaggle GPUs. The scripts `kaggle_run.sh` (reading
 detector), `kaggle_content.sh` (AI-written detector) and the notebook
@@ -317,7 +447,7 @@ detector), `kaggle_content.sh` (AI-written detector) and the notebook
 datasets. The full reading-detector and gaze-model write-up, with every
 number, is in `training/gaze-detection/README.md`.
 
-**Dataset licences:** GazeBase (CC BY 4.0), HC3 (CC BY-SA 4.0), MPIIFaceGaze
+**Dataset licences:** GazeBase (CC BY 4.0), HC3 (CC BY-SA 4.0), SpiCE (CC BY 4.0), MPIIFaceGaze
 and ETH-XGaze (CC BY-NC-SA 4.0, non-commercial). Check each dataset's terms
 before redistributing anything trained on it.
 

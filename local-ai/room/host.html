@@ -45,6 +45,17 @@
   .answer .q { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .answer .a { font-size: 13px; color: var(--fg-soft); margin: 4px 0 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .scores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .flagline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+  .flagline.low, .flagline.unavailable { color: var(--muted); font-weight: 550; }
+  .flagline.possible { color: var(--possible); } .flagline.high { color: var(--high); }
+  .flagline .why { font-weight: 450; color: var(--muted); }
+  .uncal { font-size: 11px; font-weight: 550; color: var(--muted); margin-left: 4px; }
+  .evidence { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+  .evidence summary { cursor: pointer; }
+  .evidence ul { margin: 6px 0 0; padding-left: 16px; } .evidence li { margin: 3px 0; }
+  .study-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .study-row input, .study-row select { flex: 1; min-width: 0; }
+  .answer select.label { margin-top: 8px; font-size: 12px; }
   .score .row { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 6px; }
   .score b { font-size: 20px; font-stretch: 82%; font-weight: 620; font-variant-numeric: tabular-nums; }
   .panel .card { animation: rise .38s var(--ease) both; } .panel .card:nth-child(2) { animation-delay: .05s; }
@@ -123,11 +134,22 @@
         <div class="meter"><div id="liveBar"></div></div>
       </div>
     </div>
+    <div class="card" id="studyCard" hidden>
+      <div class="card-head"><h2>Study</h2><span class="note" id="studyConsent">candidate has not consented</span></div>
+      <div class="card-body">
+        <p class="note" style="margin:0">Answers are saved only if the candidate ticked the study consent. Use the participant id from the
+          label sheet, never a name.</p>
+        <div class="study-row"><input type="text" id="participant" placeholder="Participant id, e.g. P07" maxlength="32">
+          <button class="btn sm" id="btnParticipant">Set</button></div>
+        <div class="study-row"><span class="note">Next answer's condition</span><select id="condition"></select></div>
+      </div>
+    </div>
     <div class="card">
       <div class="card-head"><h2>Answers</h2><span class="note" id="answerCount"></span></div>
       <div class="card-body">
         <div id="answers"><p class="note empty">Each answer is checked when the candidate stops and you speak again.</p></div>
-        <p class="note" style="margin:12px 0 0">A high score is a reason to ask a follow-up question, never proof. Not yet calibrated on real interviews.</p>
+        <p class="note" style="margin:12px 0 0">Each answer gets one signal, never a verdict: at most "worth a follow-up". Ask, don't conclude.
+          Signals marked uncalibrated have no labelled data behind their thresholds, and none is calibrated on real interviews yet.</p>
       </div>
     </div>
     <div class="card">
@@ -140,7 +162,9 @@
 import { getMedia, connect, makePeer, handleSignal, toggleTrack, showSelf } from "/room.js";
 const $ = (id) => document.getElementById(id);
 const pct = (p) => (p == null ? "–" : Math.round(p * 100) + "%");
-const LABEL = { low: "low", possible: "possible", high: "high", too_short: "too short", not_enough_gaze: "no gaze" };
+const LABEL = { low: "low", possible: "possible", high: "high", too_short: "too short", not_enough_gaze: "no gaze", no_gaze: "no gaze",
+  baseline: "baseline", unavailable: "unavailable", pending: "waiting…" };
+const SIGNAL = { ai_text: "AI-written", echo_similarity: "Similar to AI answer", delivery: "Delivery", reading: "Reading" };
 const ICON = {
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></svg>',
   micOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 9.5V6.5a3 3 0 0 0-5.6-1.5M9 9v2.5a3 3 0 0 0 4.7 2.5M5.5 11.5a6.5 6.5 0 0 0 10.6 5M18.5 11.5c0 .9-.2 1.8-.5 2.6M12 18v2.5M4 4l16 16"/></svg>',
@@ -159,6 +183,8 @@ const setPill = (id, text, tone) => { $(id).className = "pill" + (tone ? " " + t
 
 // ---- room and call ----
 const room = await post("/api/rooms");
+const serverStatus = await (await fetch("/api/status")).json();
+const study = serverStatus.study && serverStatus.study.enabled ? serverStatus.study : null;
 $("roomId").textContent = "Room " + room.room;
 const fake = new URLSearchParams(location.search).has("fake") ? "&fake=1" : "";
 const links = room.invites.map((u) => u + fake);
@@ -278,6 +304,8 @@ function onSpeechStart(speaker, t) {
   if (speaker === "candidate" && !answer) {
     answer = { start: t, end: t, texts: [], pending: [], question: question.join(" ") };
     $("btnEndAnswer").disabled = false;
+    // The model writes its own answers to the question while the candidate talks (echo similarity).
+    if (answer.question) post(`/api/rooms/${room.room}/references`, { question: answer.question }).catch(() => {});
   }
   if (speaker === "interviewer" && answer && t > answer.end + 0.5) closeAnswer();
 }
@@ -308,24 +336,74 @@ async function closeAnswer() {
   await Promise.allSettled(a.pending);
   const end = Math.max(a.end, a.start + 1);
   if (!a.texts.length && end - a.start < 5) return; // a cough or noise, not an answer
-  try { renderAnswer(await post(`/api/rooms/${room.room}/answers`, { start: a.start, end, text: a.texts.join(" "), question: a.question })); }
+  const body = { start: a.start, end, text: a.texts.join(" "), question: a.question };
+  if (study) body.condition = $("condition").value;
+  try { renderAnswer(await post(`/api/rooms/${room.room}/answers`, body)); }
   catch (e) { console.warn(e); }
 }
 $("btnEndAnswer").onclick = closeAnswer;
+
+// One card per answer: the combined signal (never a verdict), the four signals and their evidence.
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function signalValue(r, name) {  // [shown value, meter fraction]
+  if (name === "ai_text") return r.echo ? [pct(r.echo.ai_probability), r.echo.ai_probability] : ["–", null];
+  if (name === "reading") return r.reading && r.reading.reading_probability != null ? [pct(r.reading.reading_probability), r.reading.reading_probability] : ["–", null];
+  if (name === "echo_similarity") { const s = r.similarity && r.similarity.similarity; return s == null ? ["–", null] : [s.toFixed(2), Math.max(0, s)]; }
+  const i = r.delivery && r.delivery.score.index;
+  return i == null ? ["–", null] : [(i >= 0 ? "+" : "") + i.toFixed(1), Math.min(1, Math.max(0, i / 4))];
+}
+function cardHtml(r) {
+  const f = r.flag || { level: "unavailable", label: "Not enough to go on", elevated: [], signals: [] };
+  const why = f.elevated.length ? `<span class="why">${f.elevated.map((n) => SIGNAL[n]).join(", ")}</span>` : "";
+  const scores = f.signals.map((s) => {
+    const [value, frac] = signalValue(r, s.name), level = s.pending ? "pending" : s.level, scored = ["low", "possible", "high"].includes(level);
+    return `<div class="score"><div class="note">${SIGNAL[s.name]}${scored && !s.calibrated ? '<span class="uncal">uncalibrated</span>' : ""}</div>
+      <div class="row"><b>${value}</b><span class="level ${scored ? level : "muted"}">${LABEL[level] || level}</span></div>
+      <div class="meter"><div style="width:${frac == null ? 0 : Math.round(frac * 100)}%;background:var(--${["possible", "high"].includes(level) ? level : "low"})"></div></div></div>`;
+  }).join("");
+  const evidence = f.signals.map((s) => `<li><b>${SIGNAL[s.name]}</b>: ${esc(s.evidence)}</li>`).join("");
+  return `<div class="head"><b>Answer ${r.index}</b><span class="note nums">${Math.round(r.end - r.start)} s</span></div>
+    <div class="flagline ${f.level}">${esc(f.label)}${why}</div><div class="q"></div><div class="a"></div>
+    <div class="scores">${scores}</div><details class="evidence"><summary>Why</summary><ul>${evidence}</ul></details>` +
+    (study ? `<select class="label">${conditionOptions(r.condition)}</select>` : "");
+}
+function fillCard(div, r) {
+  const open = div.querySelector("details") && div.querySelector("details").open;
+  div.innerHTML = cardHtml(r);
+  div.querySelector(".q").textContent = r.question ? "Q: " + r.question : "";
+  div.querySelector(".a").textContent = r.text || "(no transcript)";
+  if (open) div.querySelector("details").open = true;
+  const select = div.querySelector("select.label");
+  if (select) select.onchange = () => post(`/api/rooms/${room.room}/answers/${r.index}/label`, { condition: select.value })
+    .then((x) => { r.condition = x.condition; }).catch((e) => alert("Could not save the label: " + e.message));
+}
 function renderAnswer(r) {
   if (!answerCount) $("answers").innerHTML = "";
   answerCount += 1; $("answerCount").textContent = answerCount + (answerCount === 1 ? " answer" : " answers");
-  const score = (title, p, level) => `<div class="score"><div class="note">${title}</div>
-    <div class="row"><b>${pct(p)}</b><span class="level ${["low", "possible", "high"].includes(level) ? level : "muted"}">${LABEL[level] || level}</span></div>
-    <div class="meter"><div style="width:${p == null ? 0 : Math.round(p * 100)}%;background:var(--${["possible", "high"].includes(level) ? level : "low"})"></div></div></div>`;
   const div = document.createElement("div"); div.className = "answer";
-  div.innerHTML = `<div class="head"><b>Answer ${r.index}</b><span class="note nums">${Math.round(r.end - r.start)} s</span></div><div class="q"></div><div class="a"></div>
-    <div class="scores">${score("AI-written", r.echo && r.echo.ai_probability, r.echo ? r.echo.level : "too_short")}
-    ${score("Reading", r.reading && r.reading.reading_probability, r.reading ? r.reading.level : "not_enough_gaze")}</div>`;
-  div.querySelector(".q").textContent = r.question ? "Q: " + r.question : "";
-  div.querySelector(".a").textContent = r.text || "(no transcript)";
+  fillCard(div, r);
   $("answers").prepend(div);
   suggest(r.index);
+  // Echo similarity arrives when the model's reference answers are written.
+  if (r.similarity && r.similarity.level === "pending")
+    post(`/api/rooms/${room.room}/answers/${r.index}/similarity`).then((u) => fillCard(div, u)).catch((e) => console.warn(e));
+}
+
+// ---- study mode: participant id, condition labels, the candidate's consent ----
+function conditionOptions(selected) {
+  return ['<option value="">unlabelled</option>', ...study.conditions.map((c) => `<option value="${c}"${c === selected ? " selected" : ""}>${c.replace("_", " ")}</option>`)].join("");
+}
+async function refreshStudy() {
+  const s = await (await fetch(`/api/rooms/${room.room}/study`)).json();
+  // The session id goes into the label sheet's "session" column.
+  $("studyConsent").textContent = s.consent ? `candidate consented: saving as session ${s.session}` : "candidate has not consented: nothing is saved";
+  $("studyConsent").className = s.consent ? "note level low" : "note";
+}
+if (study) {
+  $("studyCard").hidden = false; $("condition").innerHTML = conditionOptions("");
+  $("btnParticipant").onclick = () => post(`/api/rooms/${room.room}/study`, { participant: $("participant").value })
+    .then(() => { $("btnParticipant").textContent = "Saved"; }).catch((e) => alert(e.message));
+  setInterval(refreshStudy, 3000); refreshStudy();
 }
 
 // ---- follow-up questions for the latest answer ----
@@ -369,24 +447,9 @@ async function suggest(index) {
 $("btnFollowups").onclick = () => suggest(null);
 
 // ---- report ----
-$("btnReport").onclick = async () => {
-  const r = await (await fetch(`/api/rooms/${room.room}/report`)).json();
-  const t = (s) => new Date(s * 1000).toLocaleTimeString();
-  const lines = [`# Interview report`, ``, `Room ${r.room}, ${new Date(r.created * 1000).toLocaleString()}${r.candidate ? ", candidate " + r.candidate : ""}.`, ``,
-    `Scores are signals for follow-up questions, not judgements; they are not yet calibrated on real interviews.`, ``, `## Answers`, ``];
-  for (const a of r.answers) {
-    lines.push(`### Answer ${a.index} (${t(a.start)}, ${Math.round(a.end - a.start)} s)`, ``);
-    if (a.question) lines.push(`**Question:** ${a.question}`, ``);
-    lines.push(`**Answer:** ${a.text || "(no transcript)"}`, ``,
-      `- AI-written: ${a.echo ? pct(a.echo.ai_probability) + " (" + a.echo.level + ")" : "–"}`,
-      `- Reading: ${a.reading && a.reading.reading_probability != null ? pct(a.reading.reading_probability) + " (" + a.reading.level + ")" : "not enough gaze"}`, ``);
-    if (a.followups && a.followups.items.length) {
-      lines.push(`**Follow-ups** (${a.followups.source === "ai" ? "by " + a.followups.model : "by rules"}):`, ``,
-        ...a.followups.items.map((f) => `- ${f.question}${f.reason ? " _" + f.reason + "_" : ""}`), ``);
-    }
-  }
-  lines.push(`## Transcript`, ``, ...r.transcript.map((s) => `- ${t(s.start)} **${s.speaker}:** ${s.text}`));
-  const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/markdown" })), download: `interview-${r.room}.md` });
+$("btnReport").onclick = async () => {  // written by the server (room/report.py)
+  const text = await (await fetch(`/api/rooms/${room.room}/report.md`)).text();
+  const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([text], { type: "text/markdown" })), download: `interview-${room.room}.md` });
   link.click();
 };
 </script>

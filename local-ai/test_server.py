@@ -146,6 +146,130 @@ def test_gpu_runtime_errors_are_recognized():
     assert not server.is_gpu_runtime_error(ValueError("invalid audio"))
 
 
+class TimedTranscriber(FakeTranscriber):
+    """Also gives timings when asked (word_timestamps=True), as WhisperTranscriber does."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.timed: list[bool] = []
+
+    def transcribe(self, audio, model, language, prompt, word_timestamps=False):  # type: ignore[no-untyped-def]
+        self.timed.append(word_timestamps)
+        result = super().transcribe(audio, model, language, prompt)
+        if word_timestamps:
+            result.segments = [{"id": 0, "start": 0.1, "end": 0.45, "text": "How did you scale it?"}]
+            result.words = [{"word": w, "start": 0.1 + 0.07 * i, "end": 0.15 + 0.07 * i}
+                            for i, w in enumerate(["How", "did", "you", "scale", "it?"])]
+        return result
+
+
+def post_audio(client, **data):  # type: ignore[no-untyped-def]
+    return client.post("/v1/audio/transcriptions", files={"file": ("a.wav", wav_bytes(), "audio/wav")}, data=data)
+
+
+def test_word_timestamps_openai_shape():
+    t = TimedTranscriber()
+    client = TestClient(server.create_app(transcriber=t, embedder=FakeEmbedder()))
+    body = post_audio(client, response_format="verbose_json", **{"timestamp_granularities[]": "word"}).json()
+    assert body["task"] == "transcribe" and body["language"] == "en" and body["duration"] == 0.5
+    assert body["text"] == "How did you scale it?" and "segments" not in body
+    assert [w["word"] for w in body["words"]] == ["How", "did", "you", "scale", "it?"]
+    assert set(body["words"][0]) == {"word", "start", "end"}
+    # Both granularities: the repeated form field, as OpenAI's clients send it.
+    both = post_audio(client, response_format="verbose_json", **{"timestamp_granularities[]": ["word", "segment"]}).json()
+    assert both["segments"] == [{"id": 0, "start": 0.1, "end": 0.45, "text": "How did you scale it?"}]
+    assert len(both["words"]) == 5
+    # verbose_json alone gives segments (OpenAI's default granularity).
+    plain = post_audio(client, response_format="verbose_json").json()
+    assert "segments" in plain and "words" not in plain
+    assert t.timed == [True, True, True]
+
+
+def test_requests_without_timestamps_are_unchanged():
+    t = TimedTranscriber()
+    client = TestClient(server.create_app(transcriber=t, embedder=FakeEmbedder()))
+    assert post_audio(client).json() == {"text": "How did you scale it?", "confidence": 0.87}
+    # Granularities only apply to verbose_json, as in OpenAI's API.
+    assert post_audio(client, **{"timestamp_granularities[]": "word"}).json() == {"text": "How did you scale it?", "confidence": 0.87}
+    assert post_audio(client, response_format="text").json() == "How did you scale it?"
+    assert t.timed == [False, False, False]
+    # A backend without timestamps still serves plain requests (four-argument transcribe).
+    fake = TestClient(server.create_app(transcriber=FakeTranscriber(), embedder=FakeEmbedder()))
+    assert post_audio(fake).status_code == 200
+
+
+def test_bad_granularity_is_rejected():
+    client = TestClient(server.create_app(transcriber=TimedTranscriber(), embedder=FakeEmbedder()))
+    r = post_audio(client, response_format="verbose_json", **{"timestamp_granularities[]": "phoneme"})
+    assert r.status_code == 400
+
+
+def test_timings_from_faster_whisper_segments():
+    from types import SimpleNamespace as NS
+
+    segments = [
+        NS(text=" So we cached it.", start=0.0, end=30.0, avg_logprob=-0.1,
+           words=[NS(word=" So", start=0.52, end=0.7), NS(word=" we", start=0.7, end=0.81),
+                  NS(word=" ", start=0.81, end=0.82), NS(word=" cached", start=0.9, end=1.3), NS(word=" it.", start=1.3, end=1.51)]),
+        NS(text=" ", start=30.0, end=30.0, avg_logprob=-0.1, words=[]),
+    ]
+    segs, words = server.timings(segments)
+    assert segs == [{"id": 0, "start": 0.52, "end": 1.51, "text": "So we cached it."}]
+    assert [w["word"] for w in words] == ["So", "we", "cached", "it."]
+    assert words[2] == {"word": "cached", "start": 0.9, "end": 1.3}
+
+
+def test_whisper_asks_for_word_timestamps_only_when_needed(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    calls: list[dict] = []
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append(kwargs)
+            words = [NS(word=" hi", start=0.2, end=0.4)] if kwargs.get("word_timestamps") else None
+            return iter([NS(text=" hi", start=0.0, end=1.0, avg_logprob=-0.2, words=words)]), NS(language="en", duration=1.0)
+
+    t = server.WhisperTranscriber("base.en", device="cpu")
+    monkeypatch.setattr(t, "_load", lambda name, device: FakeModel())
+    plain = t.transcribe(np.zeros(16000, dtype=np.float32), "base.en", "en", None)
+    timed = t.transcribe(np.zeros(16000, dtype=np.float32), "base.en", "en", None, word_timestamps=True)
+    assert "word_timestamps" not in calls[0] and calls[0]["without_timestamps"] is True
+    assert calls[1]["word_timestamps"] is True and calls[1]["without_timestamps"] is True  # same decoding
+    assert plain.words is None and plain.segments is None
+    assert timed.words == [{"word": "hi", "start": 0.2, "end": 0.4}] and timed.segments[0]["start"] == 0.2
+
+
+def test_word_timestamps_do_not_redecode_the_tail_of_a_short_clip(monkeypatch):
+    """faster-whisper re-seeks to the last word when aligning words; on a clip that fits one window
+    the re-decoded silence comes back as invented words, which must not reach the transcript."""
+    from types import SimpleNamespace as NS
+
+    decoded: list[int] = []
+
+    def gen(duration):  # type: ignore[no-untyped-def]
+        for seek, text in ((0, " So we cached it."), (856, " months."), (880, " Thanks for watching.")):
+            decoded.append(seek)
+            yield NS(text=text, seek=seek, start=seek / 100, end=seek / 100 + 0.5, avg_logprob=-0.2,
+                     words=[NS(word=" " + w, start=seek / 100, end=seek / 100 + 0.2) for w in text.split()])
+
+    class FakeModel:
+        def __init__(self, duration: float) -> None:
+            self.duration = duration
+
+        def transcribe(self, audio, **kwargs):  # type: ignore[no-untyped-def]
+            return gen(self.duration), NS(language="en", duration=self.duration)
+
+    t = server.WhisperTranscriber("base.en", device="cpu")
+    monkeypatch.setattr(t, "_load", lambda name, device: FakeModel(9.7))
+    short = t.transcribe(np.zeros(16000, dtype=np.float32), "base.en", "en", None, word_timestamps=True)
+    assert short.text == "So we cached it." and [w["word"] for w in short.words] == ["So", "we", "cached", "it."]
+    assert decoded == [0, 856]  # stopped at the first re-seek, without decoding further
+    long = server.WhisperTranscriber("base.en", device="cpu")
+    monkeypatch.setattr(long, "_load", lambda name, device: FakeModel(45.0))
+    assert "months." in long.transcribe(np.zeros(16000, dtype=np.float32), "base.en", "en", None, word_timestamps=True).text
+
+
 def test_whisper_falls_back_to_cpu_on_missing_cuda_runtime(monkeypatch):
     """A machine with an NVIDIA driver but no cuBLAS must still transcribe."""
     loads: list[str] = []

@@ -1,0 +1,207 @@
+{
+  "spec_version": 1,
+  "cases": [
+    {
+      "signals": [],
+      "expected": {
+        "level": "unavailable",
+        "elevated": []
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "reading",
+          "level": "no_gaze",
+          "calibrated": true
+        },
+        {
+          "name": "delivery",
+          "level": "baseline",
+          "calibrated": false
+        }
+      ],
+      "expected": {
+        "level": "unavailable",
+        "elevated": []
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "ai_text",
+          "level": "low",
+          "calibrated": true
+        },
+        {
+          "name": "reading",
+          "level": "low",
+          "calibrated": true
+        }
+      ],
+      "expected": {
+        "level": "low",
+        "elevated": []
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "ai_text",
+          "level": "high",
+          "calibrated": true
+        }
+      ],
+      "expected": {
+        "level": "possible",
+        "elevated": [
+          "ai_text"
+        ]
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "ai_text",
+          "level": "high",
+          "calibrated": true
+        },
+        {
+          "name": "reading",
+          "level": "low",
+          "calibrated": true
+        }
+      ],
+      "expected": {
+        "level": "possible",
+        "elevated": [
+          "ai_text"
+        ]
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "ai_text",
+          "level": "high",
+          "calibrated": true
+        },
+        {
+          "name": "delivery",
+          "level": "possible",
+          "calibrated": false
+        }
+      ],
+      "expected": {
+        "level": "high",
+        "elevated": [
+          "ai_text",
+          "delivery"
+        ]
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "ai_text",
+          "level": "high",
+          "calibrated": true
+        },
+        {
+          "name": "reading",
+          "level": "high",
+          "calibrated": true
+        }
+      ],
+      "expected": {
+        "level": "high",
+        "elevated": [
+          "ai_text",
+          "reading"
+        ]
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "delivery",
+          "level": "high",
+          "calibrated": false
+        }
+      ],
+      "expected": {
+        "level": "possible",
+        "elevated": [
+          "delivery"
+        ]
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "delivery",
+          "level": "high",
+          "calibrated": false
+        },
+        {
+          "name": "echo_similarity",
+          "level": "high",
+          "calibrated": false
+        }
+      ],
+      "expected": {
+        "level": "possible",
+        "elevated": [
+          "delivery",
+          "echo_similarity"
+        ]
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "delivery",
+          "level": "high",
+          "calibrated": false
+        },
+        {
+          "name": "ai_text",
+          "level": "possible",
+          "calibrated": true
+        }
+      ],
+      "expected": {
+        "level": "possible",
+        "elevated": [
+          "ai_text",
+          "delivery"
+        ]
+      }
+    },
+    {
+      "signals": [
+        {
+          "name": "echo_similarity",
+          "level": "possible",
+          "calibrated": false
+        },
+        {
+          "name": "reading",
+          "level": "too_short",
+          "calibrated": true
+        },
+        {
+          "name": "ai_text",
+          "level": "low",
+          "calibrated": true
+        }
+      ],
+      "expected": {
+        "level": "possible",
+        "elevated": [
+          "echo_similarity"
+        ]
+      }
+    }
+  ]
+}
