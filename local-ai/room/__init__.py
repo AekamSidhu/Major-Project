@@ -415,11 +415,13 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     async def signaling(ws: WebSocket, room_id: str, role: str, k: str, name: str = "", study_consent: str = "") -> None:
         room = rooms.get(room_id)
         client = ws.client.host if ws.client else None
+        LOG.info("ws connect: room=%s role=%s client=%s room_exists=%s", room_id, role, client, room is not None)
         allowed = room is not None and (
             (role == "host" and secrets.compare_digest(k, room.host_key) and is_loopback(client))
             or (role == "guest" and secrets.compare_digest(k, room.guest_key))
         )
         if not allowed:
+            LOG.warning("ws rejected: room=%s role=%s client=%s", room_id, role, client)
             await ws.close(code=4403)
             return
         assert room is not None
