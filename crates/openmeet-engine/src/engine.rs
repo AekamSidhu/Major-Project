@@ -49,8 +49,19 @@ pub struct EngineDeps {
     pub settings: Settings,
 }
 
+/// An audio frame tagged with the audio epoch it was pushed in. A new epoch
+/// starts with each session start, so frames pushed before it are ignored and
+/// frames pushed after it are kept, whatever order the router sees them in.
+pub(crate) struct QueuedFrame {
+    epoch: u64,
+    frame: AudioFrame,
+}
+
 pub(crate) enum AudioControl {
-    Start(Vec<(AudioSourceKind, Box<dyn TranscriptionSession>)>),
+    Start {
+        epoch: u64,
+        sessions: Vec<(AudioSourceKind, Box<dyn TranscriptionSession>)>,
+    },
     /// Finalize current utterances; the optional sender is completed once the
     /// sessions have been flushed.
     Flush(Option<tokio::sync::oneshot::Sender<()>>),
@@ -92,8 +103,10 @@ pub(crate) struct Inner {
     pub latency: LatencyTracker,
     pub health: Arc<HealthRegistry>,
     pub persist: Persister,
-    pub audio_tx: mpsc::Sender<AudioFrame>,
+    pub audio_tx: mpsc::Sender<QueuedFrame>,
     pub audio_ctl: mpsc::UnboundedSender<AudioControl>,
+    /// Current audio epoch; bumped by every session start.
+    pub audio_epoch: AtomicU64,
     pub screen_tx: watch::Sender<Option<ScreenFrame>>,
     pub embed_tx: mpsc::UnboundedSender<EmbedJob>,
     pub accepting_audio: AtomicBool,
@@ -147,6 +160,7 @@ impl Engine {
             persist,
             audio_tx,
             audio_ctl,
+            audio_epoch: AtomicU64::new(0),
             screen_tx,
             embed_tx,
             accepting_audio: AtomicBool::new(false),
@@ -654,7 +668,11 @@ impl Engine {
             if let Some(rt) = self.inner.state.lock().runtime.as_mut() {
                 rt.sessions_running = true;
             }
-            let _ = self.inner.audio_ctl.send(AudioControl::Start(sessions));
+            let epoch = self.inner.audio_epoch.fetch_add(1, Ordering::AcqRel) + 1;
+            let _ = self
+                .inner
+                .audio_ctl
+                .send(AudioControl::Start { epoch, sessions });
         }
     }
 
@@ -912,7 +930,13 @@ impl Engine {
         if !self.inner.accepting_audio.load(Ordering::Acquire) {
             return;
         }
-        if self.inner.audio_tx.try_send(frame).is_err() {
+        let epoch = self.inner.audio_epoch.load(Ordering::Acquire);
+        if self
+            .inner
+            .audio_tx
+            .try_send(QueuedFrame { epoch, frame })
+            .is_err()
+        {
             let dropped = self.inner.dropped_frames.fetch_add(1, Ordering::Relaxed) + 1;
             if dropped % 100 == 1 {
                 tracing::warn!(dropped, "audio frames dropped: pipeline overloaded");
@@ -1253,15 +1277,16 @@ fn default_title(mode: Mode) -> String {
 
 /// Routes audio frames to the transcription session of their source.
 async fn audio_router(
-    mut frames: mpsc::Receiver<AudioFrame>,
+    mut frames: mpsc::Receiver<QueuedFrame>,
     mut control: mpsc::UnboundedReceiver<AudioControl>,
 ) {
     let mut sessions: HashMap<AudioSourceKind, Box<dyn TranscriptionSession>> = HashMap::new();
+    let mut epoch = 0u64;
     loop {
         tokio::select! {
             biased;
             ctl = control.recv() => match ctl {
-                Some(AudioControl::Start(new_sessions)) => {
+                Some(AudioControl::Start { epoch: new_epoch, sessions: new_sessions }) => {
                     for s in sessions.values_mut() {
                         s.stop();
                     }
@@ -1269,14 +1294,12 @@ async fn audio_router(
                     for (source, s) in new_sessions {
                         sessions.insert(source, s);
                     }
-                    // Drop frames queued for the previous sessions.
-                    while frames.try_recv().is_ok() {}
+                    // Frames from before this start are ignored by epoch below.
+                    epoch = new_epoch;
                 }
                 Some(AudioControl::Flush(ack)) => {
-                    while let Ok(frame) = frames.try_recv() {
-                        if let Some(s) = sessions.get_mut(&frame.source) {
-                            s.push_audio(frame);
-                        }
+                    while let Ok(queued) = frames.try_recv() {
+                        route_frame(&mut sessions, epoch, queued);
                     }
                     for s in sessions.values_mut() {
                         s.flush();
@@ -1290,21 +1313,30 @@ async fn audio_router(
                         s.stop();
                     }
                     sessions.clear();
-                    while frames.try_recv().is_ok() {}
                 }
                 None => break,
             },
-            frame = frames.recv() => match frame {
-                Some(frame) => {
-                    if let Some(s) = sessions.get_mut(&frame.source) {
-                        s.push_audio(frame);
-                    }
-                }
+            queued = frames.recv() => match queued {
+                Some(queued) => route_frame(&mut sessions, epoch, queued),
                 None => break,
             },
         }
     }
     for s in sessions.values_mut() {
         s.stop();
+    }
+}
+
+/// Hands a frame to the session of its source when it belongs to the current epoch.
+fn route_frame(
+    sessions: &mut HashMap<AudioSourceKind, Box<dyn TranscriptionSession>>,
+    epoch: u64,
+    queued: QueuedFrame,
+) {
+    if queued.epoch != epoch {
+        return;
+    }
+    if let Some(s) = sessions.get_mut(&queued.frame.source) {
+        s.push_audio(queued.frame);
     }
 }

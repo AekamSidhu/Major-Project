@@ -1024,7 +1024,8 @@ async fn reading_check(
         ) => r,
     };
     match result {
-        Ok(Ok(r)) => reading_signal(r.probability, r.level, calibrated),
+        // An early reading (short answer) is uncalibrated whatever the signal's own setting.
+        Ok(Ok(r)) => reading_signal(r.probability, r.level, calibrated && r.calibrated),
         Ok(Err(e)) => unavailable(service_error("Reading check", &e)),
         Err(_) => unavailable("Reading check took too long".into()),
     }

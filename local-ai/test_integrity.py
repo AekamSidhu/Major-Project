@@ -119,14 +119,35 @@ def test_reading_endpoint_from_frames(reading):
     assert status["echo_ready"] and status["reading_ready"]
     assert status["gaze"]["source"] == "browser" and status["gaze"]["face_found_fraction"] == 1.0
     assert status["live_reading"] is not None and len(status["trace_x"]) == 300
+    assert status["live_reading"]["early"] is False and status["live_reading"]["calibrated"] is True
 
 
-def test_reading_needs_ten_seconds_of_gaze():
+def test_reading_rules_by_length_of_gaze():
+    # Under 3 s: not enough gaze. 3-10 s: early detector, uncalibrated. 10 s or more: the network, calibrated.
     client, clock = make_client(reading=True)
-    feed(client, clock, 4)
-    body = client.post("/v1/integrity/reading", json={"seconds": 4}).json()
+    feed(client, clock, 2)
+    body = client.post("/v1/integrity/reading", json={"seconds": 2}).json()
     assert body["level"] == "not_enough_gaze" and body["reading_probability"] is None
     assert client.post("/v1/integrity/reading", json={"start": 10, "end": 5}).status_code == 400
+
+    client, clock = make_client(reading=True)
+    feed(client, clock, 5)
+    body = client.post("/v1/integrity/reading", json={"seconds": 5}).json()
+    assert body["reading_probability"] is not None, body
+    assert body["early"] is True and body["calibrated"] is False
+
+    client, clock = make_client(reading=True)
+    feed(client, clock, 12)
+    body = client.post("/v1/integrity/reading", json={"seconds": 12}).json()
+    assert body["reading_probability"] is not None, body
+    assert body["early"] is False and body["calibrated"] is True
+
+
+def test_short_gaze_without_a_sweep_is_not_enough():
+    client, clock = make_client(reading=False)
+    feed(client, clock, 5)
+    body = client.post("/v1/integrity/reading", json={"seconds": 5}).json()
+    assert body["level"] == "not_enough_gaze" and body["reading_probability"] is None
 
 
 def test_frame_validation_and_page():

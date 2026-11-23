@@ -79,15 +79,15 @@ jobs:
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
-    # audit-check reports through a check run, which needs write access to checks.
-    permissions:
-      contents: read
-      checks: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
+      # cargo-audit itself fails the job on any RustSec vulnerability; unlike
+      # rustsec/audit-check it needs no check-run API (which returned "Not Found"
+      # on pull requests even with checks: write).
+      - uses: taiki-e/install-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tool: cargo-audit
+      - run: cargo audit
 
   local-ai:
     name: Local AI sidecar
