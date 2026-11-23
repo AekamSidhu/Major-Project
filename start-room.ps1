@@ -1,11 +1,12 @@
-# Start the OpenMeet Room. A shareable link is created automatically.
-#   .\start-room.ps1                       # tunnel + simple-rules follow-ups
-#   .\start-room.ps1 -Followups local      # tunnel + Ollama follow-ups
-#   .\start-room.ps1 -NoTunnel             # LAN only (same Wi-Fi)
+# Start the OpenMeet Room. An invite link is created automatically.
+#   .\start-room.ps1                       # simple-rules follow-ups, LAN only (same Wi-Fi)
+#   .\start-room.ps1 -Followups local      # Ollama follow-ups, LAN only
+#   .\start-room.ps1 -Tunnel               # also a public Cloudflare link (off by default)
+# With -Tunnel, anyone with the link can reach the room's join page.
 param(
     [ValidateSet("rules", "local", "online")] [string]$Followups = "rules",
     [int]$Port = 8443,
-    [switch]$NoTunnel
+    [switch]$Tunnel
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,9 +29,9 @@ if ($existing) {
     exit 1
 }
 
-# Build the argument list: the tunnel is on by default, --no-tunnel disables it.
+# Build the argument list: the tunnel is off unless -Tunnel is given.
 $pyArgs = @("room_server.py", "--followups", $Followups, "--port", $Port)
-if ($NoTunnel) { $pyArgs += "--no-tunnel" }
+if ($Tunnel) { $pyArgs += "--tunnel" }
 
 $env:PYTHONUNBUFFERED = "1"
 $server = Start-Process python -ArgumentList $pyArgs `
@@ -48,8 +49,10 @@ for ($i = 0; $i -lt 120; $i++) {
 Write-Host "`nRoom ready. Opening $url" -ForegroundColor Green
 Write-Host "  1. Accept the certificate warning once (Advanced -> Continue)."
 Write-Host "  2. Copy the invite link from the host page and send it to the candidate."
-if (-not $NoTunnel) {
-    Write-Host "     The link works from any device on any network (powered by Cloudflare Tunnel)."
+if ($Tunnel) {
+    Write-Host "     Anyone with the link can reach this room's join page (through Cloudflare Tunnel)." -ForegroundColor Yellow
+} else {
+    Write-Host "     The link works from devices on this Wi-Fi. Use -Tunnel for other networks."
 }
 Write-Host "  Ctrl+C here stops the Room.`n"
 Start-Process $url

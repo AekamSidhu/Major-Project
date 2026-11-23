@@ -2,7 +2,8 @@
 
 The interviewer runs `room_server.py` on their own computer and opens
 https://localhost:8443. The candidate opens an invite link in any browser
-(laptop or phone, same Wi-Fi, or through a tunnel). Video and audio go
+(laptop or phone on the same Wi-Fi, or through a Cloudflare tunnel when the
+interviewer starts the room with --tunnel; the tunnel is off by default). Video and audio go
 directly between the two browsers (WebRTC); this server only introduces
 them (signaling) and serves the pages.
 
@@ -19,7 +20,8 @@ The interviewer's browser then sends, to this computer only:
 
 Who may call what:
 - interviewer endpoints (/host, /api/*, /v1/integrity/*) answer only to
-  this computer (loopback), so nobody on the network can use them;
+  this computer (loopback, Host naming this computer, no tunnel headers), so
+  nobody on the network or through the tunnel can use them;
 - the candidate gets the join page and the signaling socket, nothing else,
   and needs the room's guest key from the invite link. No score or flag
   ever reaches the candidate's side.

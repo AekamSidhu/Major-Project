@@ -1,15 +1,17 @@
 """OpenMeet Room server: host a 1:1 interview from this computer.
 
     python room_server.py                 # https://localhost:8443, reachable on the local network
+    python room_server.py --tunnel        # also a public Cloudflare address (opt-in, see below)
     python room_server.py --no-https      # http://localhost:8443 (this computer only: browsers
                                           # allow camera access on plain http only for localhost)
 
 Open https://localhost:8443 (accept the self-signed certificate once),
 create a room and send the invite link to the candidate. On a phone or a
 second laptop on the same Wi-Fi, the link uses this computer's network
-address; across networks, run a tunnel such as
-`cloudflared tunnel --url https://localhost:8443 --no-tls-verify` and
-share its address instead.
+address. Across networks, add --tunnel: the server then starts a Cloudflare
+quick tunnel (cloudflared, downloaded once and checked against a pinned
+SHA-256) that publishes this room's join page to the internet. It is off by
+default, because anyone with an invite link can then reach the join page.
 
 Transcription (faster-whisper) and the integrity signals run here; see
 room/__init__.py for what each side can reach.
@@ -133,13 +135,13 @@ def main() -> None:
                         help="where follow-up questions and reference answers come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
     parser.add_argument("--study", type=Path, default=None, metavar="DIR",
                         help="study mode: with the candidate's consent, save labelled answers under DIR (outside the repository)")
-    parser.add_argument("--tunnel", action="store_true", default=True,
-                        help="start a Cloudflare quick tunnel so anyone can join (default: on)")
+    parser.add_argument("--tunnel", action="store_true",
+                        help="publish the join page through a Cloudflare quick tunnel (off by default)")
     parser.add_argument("--no-tunnel", action="store_true",
-                        help="disable the Cloudflare tunnel (LAN only)")
+                        help="no-op: the tunnel is off unless --tunnel is given")
     args = parser.parse_args()
-    if args.no_tunnel:
-        args.tunnel = False
+    if args.tunnel and args.no_https:
+        parser.error("--tunnel needs https (drop --no-https)")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -151,7 +153,7 @@ def main() -> None:
     # Start the tunnel early so the URL is ready before the app serves requests.
     tunnel = None
     tunnel_url = None
-    if args.tunnel and not args.no_https:
+    if args.tunnel:
         print("\nStarting Cloudflare tunnel (downloading cloudflared on first run)...")
         tunnel = CloudflareTunnel(f"https://localhost:{args.port}", server.MODEL_DIR)
         tunnel_url = tunnel.start(timeout=30)
@@ -181,7 +183,7 @@ def main() -> None:
     print(f"\nOpenMeet Room: open {scheme}://localhost:{args.port} on this computer.")
     print(f"  follow-up questions and reference answers: {where}")
     if tunnel_url:
-        print(f"  Anyone can join through: {tunnel_url}")
+        print(f"  Anyone with the link can reach this room's join page: {tunnel_url}")
     if args.study:
         print(f"  STUDY MODE: answers of candidates who tick the study consent are saved under {args.study.resolve()}")
     if not args.no_https:

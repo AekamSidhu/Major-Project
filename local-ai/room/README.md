@@ -43,10 +43,11 @@ python room_server.py                      # follow-ups from Llama 3.2 on this c
 python room_server.py --followups online   # follow-ups from Gemini; the candidate is told
 python room_server.py --followups rules    # no AI model, simple rules (no echo similarity)
 python room_server.py --study D:/study     # study mode, see "Study mode" below
+python room_server.py --tunnel             # also a public link for candidates on other networks
 ```
 
-The first start downloads the Whisper speech model (about 140 MB); the
-first answer downloads the embedding model (about 70 MB).
+The first start downloads the Whisper speech model (`small.en`, about 480 MB);
+the first answer downloads the embedding model (about 70 MB).
 
 1. Open **https://localhost:8443** on the interviewer's computer and accept
    the certificate warning once (the server made the certificate itself).
@@ -63,11 +64,17 @@ example a normal and a private window), or use your phone on the same Wi-Fi.
 Add `?fake=1` to both URLs to send a moving test picture and a tone instead of
 a camera and microphone, so two windows don't fight over one camera.
 
-**Across networks** (candidate at home): run a tunnel such as
-`cloudflared tunnel --url https://localhost:8443 --no-tls-verify` and swap
-the invite link's address for the tunnel's. Video still goes browser to
-browser; a TURN server is only needed if both sides are behind strict
-corporate firewalls.
+**Across networks** (candidate at home): start the room with `--tunnel`
+(`start-room.ps1 -Tunnel` on Windows). The tunnel is off by default, because
+publishing the room puts its join page on the internet. The server downloads
+`cloudflared` once (a pinned release, checked against its SHA-256 before it
+runs; a `cloudflared` already on the PATH is used instead), starts a Cloudflare
+quick tunnel and lists its invite link first on the host page.
+**Anyone with the link can reach this room's join page.** The host page, the
+interviewer API and the report answer only to this computer, and requests that
+arrive through the tunnel are refused. Video still goes browser to browser; a
+TURN server is only needed if both sides are behind strict corporate firewalls.
+The tunnel needs https (do not combine `--tunnel` with `--no-https`).
 
 ### What to try
 
@@ -186,8 +193,8 @@ candidate's separate consent, is the exception).
 - One candidate per room, one room at a time for the gaze check.
 - Speech is cut by loudness in the browser; use headphones so the
   candidate's voice doesn't reach the interviewer's microphone.
-- Transcription runs on the CPU (`base.en`, a few seconds behind). A GPU or
-  a smaller model (`--whisper-model tiny.en`) keeps it closer to live.
+- Transcription runs on the CPU (`small.en`, a few seconds behind). A GPU or
+  a smaller model (`--whisper-model base.en` or `tiny.en`) keeps it closer to live.
 - Llama 3.2 on a laptop CPU takes several seconds to tens of seconds per set
   of follow-ups; the online mode takes about 5 seconds. Reference answers
   are written while the candidate talks (about 2 s each on an RTX 4060), so
