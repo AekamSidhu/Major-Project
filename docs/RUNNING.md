@@ -109,9 +109,12 @@ cd local-ai
 - **Launching a new build upgrades your database.** The app opens
   `%APPDATA%\dev.openmeet.desktop\openmeet.db` and applies migrations (on the
   test machine, schema 2 to 3). Back up that file before the first run of a new build.
-- **Screenshots of the app come out black or show other windows.** WebView2
-  draws on the GPU, so `PrintWindow` returns a black image. Use a screen
-  capture of a window that is not covered.
+- **Screenshots of the app come out black or show the windows behind it.**
+  That is OpenMeet's capture exclusion working: it asks Windows to keep its
+  windows out of screen capture and screen sharing (the log says "capture
+  exclusion applied"). Turn off **Privacy & data → Hide the overlay from
+  screen capture** if you need a screenshot, or use the screenshot harness
+  (`scripts/screenshots`), which renders the UI in a browser.
 - **The sidecar did not start.** Check that port 8765 is free
   (`netstat -ano | findstr :8765`) and that `local-ai\.venv` exists. Running
   `local-ai\server.py` by hand shows the error.
