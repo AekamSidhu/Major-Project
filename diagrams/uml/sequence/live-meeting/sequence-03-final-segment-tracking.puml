@@ -1,0 +1,104 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-engine/src/conversation.rs (handle_final, compression_due, remember_answer, run_actions),
+' crates/openmeet-engine/src/runtime.rs (MeetingRuntime::add_final, open_answer_for, extend_answer, CandidateTurn),
+' crates/openmeet-intel/src/detect/mod.rs (detect), detect/voice.rs (parse_voice_command), crates/openmeet-intel/src/claims.rs,
+' crates/openmeet-intel/src/topics.rs (TopicTracker::observe), crates/openmeet-engine/src/embedder.rs
+title Final transcript segment: question detection and conversation tracking (handle_final)
+skinparam maxMessageSize 250
+
+participant "conversation loop\nEngine::handle_final" as Conv
+participant "MeetingRuntime\n(under state lock)" as RT
+participant "ContextMemory\nrt.memory" as Mem
+participant "openmeet_intel\ndetect / claims" as Intel
+participant "TopicTracker\nrt.topics" as Top
+participant "Persister" as Per
+participant "embedder\n<<tokio task>>" as Emb
+participant "TauriSink" as Sink
+
+activate Conv
+Conv -> RT : lock; runtime for meeting_id && accepts_transcript()\n(Active | Paused | Stopping) else return
+activate RT
+Conv -> RT : pending_utterances.remove(utterance_id)\nsegment_from_draft(rt, &d)
+Conv -> RT : recent = last DETECTION_CONTEXT_SEGMENTS (8) finals\nadd_final(segment)
+note right of Conv : collected while locked, sent after unlock:\nevents += TranscriptFinal\npersist_ops += PersistOp::Segment
+Conv -> Mem : add(MemoryItem { kind: Segment, "<label>: text" })
+note right of Conv : embed_jobs += EmbedJob(Segment)
+
+alt settings.general.voice_commands && role != Remote\n&& parse_voice_command(text) is Some(cmd)
+  Conv -> Intel : parse_voice_command(&segment.text)
+  Intel --> Conv : Some(VoiceCommand)
+  note right of Conv : events += VoiceCommandRecognized;\nif Active: actions += Action::Voice(cmd)  (voice commands: not drawn here)
+else ordinary speech
+  Conv -> Intel : extract_claims(&segment)
+  Intel --> Conv : Vec<Claim>
+  opt claims not empty
+    Conv -> RT : claims.extend(..)
+    Conv -> Mem : add(MemoryItem { kind: Claim })
+    note right of Conv : persist Claims; events += ClaimsExtracted
+  end
+  Conv -> Intel : extract_action_items(&segment)
+  opt items not empty
+    note right of Conv : rt.action_items.extend; persist ActionItems;\nevents += ActionItemsUpdated
+  end
+  Conv -> Top : observe(&segment)
+  Top --> Conv : changed: bool
+  opt changed
+    note right of Conv : persist Topics; events += TopicsUpdated\n{ topics(), suggested_next() }
+  end
+
+  Conv -> Intel : detect(&DetectionInput { segment, recent, mode,\nlast_question: rt.questions.last() })
+  Intel --> Conv : DetectionResult { is_question, confidence, requires_response,\nambiguous, category, parts, supersedes, .. }
+  alt is_question && accepted\n(Candidate: confidence >= detection_threshold;\nInterviewer + user asker: >= threshold * 0.85;\nInterviewer otherwise: requires_response && >= threshold)
+    Conv -> RT : q = question_from(.., DetectionMethod::Heuristic)\nquestions.push(q)
+    Conv -> Mem : add(MemoryItem { kind: Question, "<label> asked: …" })
+    note right of Conv : persist Question; embed Question;\nevents += QuestionDetected
+    opt answers_question (Candidate: role != User;\nInterviewer: user asked or role Unknown)
+      Conv -> RT : open_answer_for(&q) -> previous AnswerRecord
+      opt previous answer has text
+        Conv -> Mem : remember_answer: add(MemoryItem { kind: Answer })
+        note right of Conv : persist Answer; embed Answer
+      end
+    end
+    opt Interviewer && user asked
+      Conv -> RT : turn.reset()  (new candidate turn)
+    end
+    opt Active && Candidate && q.requires_response && assistant.auto_answer
+      note right of Conv : actions += Action::Answer(q)  (answer generation: not drawn here)
+    end
+  else Active && Candidate && ambiguous && semantic_detection\n(and requires_response, or a non-user speaker when not a question)
+    note right of Conv : actions += Action::Semantic { segment, heuristic, recent }\n(sequence-04)
+  end
+  opt segment was not an accepted question
+    Conv -> RT : extend_answer(&segment)\n(appended when spoken by the answerer)
+  end
+  opt Interviewer && role != User (not an accepted question from Unknown)
+    Conv -> RT : turn.push(&segment)  (version += 1)
+    Conv -> RT : integrity::on_candidate_segment (open answer += utterance;\nreturns a turn-end timer; see sequence-01 in integrity/)
+    note right of Conv : if Active: actions += Action::TurnTimer\n{ version, turn_end_silence_ms }  (turn timer: see timing-01)
+  end
+end
+
+opt Active
+  Conv -> RT : compression_due(rt, &settings)
+  note right of Conv : >= 900 tokens outside the raw window\n-> actions += Action::Compress (context compression: not drawn here)
+  opt finals_since_topic_analysis >= 12 && >= 180 s since last
+    note right of Conv : actions += Action::TopicAnalysis\n{ lines_since(now - 300 s), topics }
+  end
+end
+Conv -> RT : unlock (store = rt.store)
+deactivate RT
+
+Conv -> Sink : LatencyRecorded (AudioToTranscript, TranscriptToDetection)
+loop persist_ops (in order)
+  Conv ->> Per : engine.persist(&store, op)
+end
+loop events
+  Conv -> Sink : emit(ev)
+end
+loop embed_jobs
+  Conv ->> Emb : embed_tx.send(job)
+end
+Conv -> Conv : run_actions(meeting_id, actions)
+deactivate Conv
+@enduml

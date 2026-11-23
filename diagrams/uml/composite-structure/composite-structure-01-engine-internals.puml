@@ -1,0 +1,68 @@
+@startuml
+!include ../../_style.iuml
+' Derived from crates/openmeet-engine/src/engine.rs (struct Inner: sink, db_store, providers, settings, hashing, state,
+' requests, latency, health, persist, audio_tx, audio_ctl, screen_tx, embed_tx, accepting_audio, dropped_frames, sim,
+' deleted, summaries, gaze_tx, handle; Engine::new spawns the workers), crates/openmeet-engine/src/conversation.rs
+' (spawn_conversation), transcription.rs (audio_router / sessions), embedder.rs (spawn_embedder), screen.rs
+' (spawn_screen_worker), integrity.rs (spawn_gaze_worker), persist.rs (Persister::spawn).
+' Engine is a cheap handle around Arc<Inner>; workers hold Weak<Inner> and stop when the engine is dropped.
+title openmeet-engine: composite structure of Engine (Arc<Inner>) and the workers it connects
+
+skinparam componentStyle uml2
+skinparam linetype ortho
+
+component "Engine\n(Clone handle)" as Engine <<class>> {
+  portin "commands\n(start, stop, pause, answer ...)" as cmd
+  portout "events" as evt
+
+  component "inner: Arc<Inner>" as Inner {
+    component "state: Mutex<EngineState>\n(runtime: MeetingRuntime)" as State
+    component "requests: RequestManager\n(Primary, Followups, Background)" as Req
+    component "persist: Persister" as Persist
+    component "providers: RwLock<ProviderSet>" as Prov
+    component "settings: RwLock<Settings>" as Set
+    component "health: Arc<HealthRegistry>" as Health
+    component "hashing: Arc<HashingEmbedder>" as Hash
+    component "sim: Mutex<SimState>\n(demo / mock)" as Sim
+    component "audio_tx, audio_ctl" as Audio
+    component "screen_tx: watch" as ScreenTx
+    component "embed_tx" as EmbedTx
+    component "gaze_tx" as GazeTx
+    component "accepting_audio, dropped_frames" as Flags
+  }
+}
+
+component "audio_router\n(async task)" as Router
+component "spawn_conversation\n(async task, per meeting)" as Conv
+component "spawn_embedder\n(async task)" as Emb
+component "spawn_screen_worker\n(async task)" as Scr
+component "spawn_gaze_worker\n(async task)" as Gaze
+component "Persister worker\n(writer thread)" as PWorker
+interface "EventSink\n(UI windows)" as Sink
+interface "MeetingStore" as Store
+interface "IntegrityService\n(Local AI sidecar)" as IS
+
+cmd -down-> State : starts and ends meetings
+cmd -down-> Req : begin(slot, kind)
+Audio -down-> Router : AudioFrame / AudioControl
+Router -right-> Conv : TranscriptionEvent
+Conv -right-> State : handle_final, run_actions
+Conv -down-> Persist : PersistOp
+Conv -down-> EmbedTx : EmbedJob
+EmbedTx -down-> Emb : mpsc
+ScreenTx -down-> Scr : latest frame (watch)
+GazeTx -down-> Gaze : GazeCmd (ordered)
+Gaze -down-> IS : start / stop / reset gaze
+Persist -down-> PWorker : queue
+PWorker -down-> Store : save / load
+Prov -down-> IS : integrity checks\n(ai_text, reading)
+Req -right-> evt : ANSWER_* events
+evt -right-> Sink : emit (MeetingEvent)
+Health -right-> Sink : COMPONENT_STATUS_CHANGED
+note bottom of Inner
+  Engine::new creates the channels and
+  spawns the workers on the given tokio handle.
+  Work decided under the state lock (conversation and
+  integrity actions) runs after the lock is released.
+end note
+@enduml

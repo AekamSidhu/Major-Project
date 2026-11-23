@@ -1,0 +1,51 @@
+@startuml
+!include ../../_style.iuml
+' Derived from crates/openmeet-intel/src/integrity/fusion.rs (fuse, FusionInput, FusedFlag: rank,
+' calibration cap, elevated list, high/possible/low/unavailable rule) and
+' crates/openmeet-intel/src/integrity/evidence.rs (fusion_inputs, not_scored),
+' crates/openmeet-core/src/integrity.rs (IntegrityLevel::is_scored, is_elevated).
+' The same rule is in local-ai/integrity/signals.py (fuse) and room/checks.py (flag), and
+' spec/integrity/README.md "The combined flag" defines it; fusion_cases.json holds the fixtures.
+title Answer-integrity fusion: four signal levels to one flag (fuse)
+
+start
+:Input: one {name, level, calibrated} per signal\n(ai_text, echo_similarity, delivery, reading);
+note right
+  Signals that were not computed have a level
+  unavailable; a signal not scored (too_short,
+  baseline, no_gaze) is also ignored.
+end note
+partition "Per signal" {
+  :Keep only scored levels\n(low, possible, high);
+  if (level is low, possible or high?) then (no: too_short, baseline,\nno_gaze, unavailable)
+    :ignore this signal;
+  else (yes)
+    if (calibrated?) then (yes)
+      :rank = low 0, possible 1, high 2;
+    else (no: uncalibrated)
+      :rank = min(rank, 1)\n(counts at most as possible);
+    endif
+  endif
+}
+if (any signal left with a rank?) then (no)
+  :level = unavailable;
+  :elevated = [];
+  stop
+else (yes)
+  :elevated = names with rank >= 1,\nsorted by spec name;
+  if (some rank == 2 (calibrated high)\nAND elevated has >= 2 signals?) then (yes)
+    :level = high;
+  elseif (elevated is not empty?) then (yes)
+    :level = possible;
+  else (no)
+    :level = low;
+  endif
+  :Return FusedFlag { level, elevated };
+  note right
+    One signal alone never makes the flag high.
+    The flag and its elevated list go to the
+    IntegrityFlag, with each signal's evidence.
+  end note
+  stop
+endif
+@enduml

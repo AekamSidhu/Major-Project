@@ -1,0 +1,165 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-engine/src/engine.rs (EngineDeps, AudioControl, EngineState,
+' SimState, Inner, Engine, audio_router), screen.rs (spawn_screen_worker), embedder.rs
+' (spawn_embedder, EmbedJob), conversation.rs (spawn_conversation), lib.rs (re-exports),
+' crates/openmeet-core/src/providers.rs (ProviderSet), events.rs (EventSink), store.rs (MeetingStore),
+' integrity.rs (spawn_gaze_worker, GazeCmd; gaze_tx in Inner).
+title openmeet-engine: Engine handle, shared state and background workers
+
+skinparam linetype ortho
+left to right direction
+hide empty members
+
+package "openmeet-core" #FFFFFF {
+  interface EventSink <<trait>> {
+    + emit(event: MeetingEvent)
+  }
+  interface MeetingStore <<trait>>
+  class ProviderSet {
+    + llm / fast_llm / transcription
+    + vision / ocr / embeddings
+    + background_llm()
+    ..
+  }
+  class Settings
+  interface TranscriptionSession <<trait>>
+}
+
+package "openmeet-intel" #FFFFFF {
+  class HashingEmbedder
+  class MockLlmProvider
+}
+
+package "openmeet-engine" {
+  class Engine <<Clone>> {
+    ~ inner: Arc<Inner>
+    --
+    + new(deps: EngineDeps, handle: Handle): Engine
+    + start_meeting(req) / stop_meeting()
+    + pause() / resume() / emergency_stop()
+    + push_audio(frame) / push_screen_frame(frame)
+    + generate_answer / generate_followups / ask
+    + clarify / refine / cancel_request / dismiss / pin
+    + set_mode / toggle_mode / set_style / cycle_style
+    + update_settings / set_providers / provider_set
+    + snapshot(): EngineSnapshot
+    + forget_meeting / forget_all_meetings / flush_persistence
+    + summarize_record / run_benchmark / start_demo ..
+  }
+  note right of Engine
+    EngineError is a type alias of CoreError.
+    Cheap to clone; workers hold Weak<Inner>
+    and stop when the engine is dropped.
+  end note
+
+  class EngineDeps {
+    + sink: Arc<dyn EventSink>
+    + store: Arc<dyn MeetingStore>
+    + providers: ProviderSet
+    + settings: Settings
+  }
+
+  class Inner {
+    + sink: Arc<dyn EventSink>
+    + db_store: Arc<dyn MeetingStore>
+    + providers: RwLock<ProviderSet>
+    + settings: RwLock<Settings>
+    + hashing: Arc<HashingEmbedder>
+    + state: Mutex<EngineState>
+    + requests: RequestManager
+    + latency: LatencyTracker
+    + health: Arc<HealthRegistry>
+    + persist: Persister
+    + audio_tx: mpsc::Sender<AudioFrame>
+    + audio_ctl: mpsc::UnboundedSender<AudioControl>
+    + screen_tx: watch::Sender<Option<ScreenFrame>>
+    + embed_tx: mpsc::UnboundedSender<EmbedJob>
+    + accepting_audio: AtomicBool
+    + dropped_frames: AtomicU64
+    + sim: Mutex<SimState>
+    + deleted: Mutex<VecDeque<Id>>
+    + summaries: Mutex<HashMap<Id, CancellationToken>>
+    + gaze_tx: UnboundedSender<GazeCmd>
+    + handle: Handle
+  }
+
+  class EngineState {
+    + runtime: Option<MeetingRuntime>
+    + mode: Mode
+    + style: AnswerStyle
+    + processing_stopped: bool
+    + detached: VecDeque<Suggestion>
+    + detached_active: Option<ActiveRequestView>
+  }
+
+  class SimState {
+    + mock: Option<MockLlmProvider>
+    + saved_llm: Option<Option<Arc<dyn LlmProvider>>>
+    + saved_providers: Option<ProviderSet>
+    + demo_cancel: Option<CancellationToken>
+    + demo_meeting: Option<Id>
+  }
+
+  enum AudioControl {
+    Start : Vec<(AudioSourceKind, Box<dyn TranscriptionSession>)>
+    Flush : Option<oneshot::Sender<()>>
+    Stop
+  }
+
+  class MeetingRuntime
+  class RequestManager
+  class LatencyTracker
+  class HealthRegistry
+  class Persister
+  class EmbedJob
+
+  class audio_router <<async task>> {
+    frames: mpsc::Receiver<AudioFrame>
+    control: mpsc::UnboundedReceiver<AudioControl>
+    sessions: HashMap<AudioSourceKind, Box<dyn TranscriptionSession>>
+  }
+  class spawn_screen_worker <<async task>> {
+    rx: watch::Receiver<Option<ScreenFrame>>
+    calls Engine::process_screen_frame
+  }
+  class spawn_gaze_worker <<async task>> {
+    rx: UnboundedReceiver<GazeCmd>
+    applies Start / Stop / ResetAfterChecks in order
+    calls IntegrityService (gaze/screen, gaze/stop, gaze/reset)
+  }
+  class spawn_embedder <<async task>> {
+    rx: mpsc::UnboundedReceiver<EmbedJob>
+    calls Engine::embed_batch (batches of 16 / 50 ms)
+  }
+  class spawn_conversation <<async task, per meeting>> {
+    trans_rx: UnboundedReceiver<TranscriptionEvent>
+    conv_rx: UnboundedReceiver<ConvInput>
+    calls on_transcription_event / on_conv_input
+  }
+}
+
+Engine *-- "1" Inner
+Engine ..> EngineDeps : new(deps)
+Inner *-- "1" EngineState
+Inner *-- "1" SimState
+Inner *-- "1" RequestManager
+Inner *-- "1" LatencyTracker
+Inner o-- "1" HealthRegistry
+Inner *-- "1" Persister
+Inner o-- "1" HashingEmbedder
+Inner o-- "1" EventSink : sink
+Inner *-- "1" ProviderSet : providers
+Inner o-- "1" MeetingStore : db_store
+EngineState *-- "0..1" MeetingRuntime : runtime
+SimState o-- "0..1" MockLlmProvider : mock
+
+Inner ..> audio_router : audio_tx / audio_ctl
+Inner ..> spawn_screen_worker : screen_tx
+Inner ..> spawn_embedder : embed_tx
+Inner ..> spawn_gaze_worker : gaze_tx
+audio_router ..> AudioControl
+audio_router o-- "*" TranscriptionSession
+spawn_embedder ..> EmbedJob
+Engine ..> spawn_conversation : start_meeting_inner
+@enduml

@@ -1,0 +1,73 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: src/main/store.ts (updateSettings), src/main/components/save.ts (saveSettings),
+' src-tauri/src/commands/app.rs (update_settings, reset_settings), src-tauri/src/state.rs
+' (update_settings, apply_settings, rebuild_providers), crates/openmeet-core/src/settings.rs (sanitized, validate),
+' crates/openmeet-store/src/settings.rs (save_settings), crates/openmeet-engine/src/engine.rs (update_settings,
+' set_providers), src-tauri/src/shortcuts.rs (register_all), src/overlay/store.ts (SETTINGS_CHANGED)
+title Saving settings: sanitise, validate, persist, apply
+
+autonumber
+actor User
+participant "Main window\n(useMain.updateSettings)" as UI
+participant "update_settings\ncommand" as Cmd
+participant "AppState" as AS
+database "SQLite\nsettings table" as DB
+participant "Engine" as Eng
+participant "OverlayController" as Ovl
+participant "ShortcutManager" as SM
+participant "Overlay window" as OW
+
+User -> UI : edit a setting
+UI -> UI : draft = structuredClone(prev); mutate(draft);\nset({settings: draft}) (optimistic), seq = ++saveSeq
+UI -> Cmd : invoke update_settings(draft)
+Cmd -> AS : update_settings(requested)
+activate AS
+AS -> AS : settings_lock.lock() (serialises read-modify-write)
+AS -> AS : next = requested.sanitized()\n(clamp numbers, clean URLs, fill missing shortcut bindings)
+AS -> AS : next.validate()
+alt validation errors
+  AS --> Cmd : Err(CoreError::InvalidInput(errors.join("; ")))
+  Cmd --> UI : error
+  UI -> UI : rollback to prev (if seq is latest);\nnotify "Settings not saved: ..."
+else valid
+  AS -> DB : blocking: save_settings(&next)\nINSERT INTO settings(name='app', value=JSON, updated_at)\nON CONFLICT(name) DO UPDATE\n(a write error returns Err and the UI rolls back the same way)
+  AS -> AS : apply_settings(&previous, &next)
+  activate AS
+  AS -> Eng : update_settings(next)\n(style -> StyleChanged; mode only when not live -> ModeChanged)
+  AS -> AS : sink.set_notifications(general.notifications)
+  opt ai, transcription or privacy.local_only changed
+    AS -> AS : rebuild_providers(): spawn_blocking providers_build::build
+    AS -> Eng : set_providers(set)\n(restarts transcription sessions if that provider changed)
+  end
+  opt overlay changed
+    AS -> Ovl : set_click_through(..) if changed;\napply_layout(..) if width/max_height/position/\ntarget_display/layout/margin changed
+  end
+  opt privacy.capture_exclusion changed
+    AS -> Ovl : apply_capture_privacy(enabled)
+    AS -> AS : emit PrivacyStateChanged{enabled, supported, active}
+  end
+  opt shortcuts changed
+    AS -> SM : register_all(app, next.shortcuts)\n(unregister_all, then on_shortcut per action;\nfailures recorded, Hotkeys health Active/Degraded)
+  end
+  opt general.launch_at_startup changed
+    AS -> AS : autolaunch().enable() / disable()
+  end
+  opt privacy.retention changed
+    AS -> AS : apply_retention()
+  end
+  opt screen changed && engine.is_live()
+    AS -> AS : sync_screen_capture()
+  end
+  deactivate AS
+  AS -> OW : windows::emit_ui(UiCommand::SettingsChanged)\n(to every window)
+  AS --> Cmd : Ok(next)
+  deactivate AS
+  Cmd --> UI : stored Settings (applied if seq is still latest)
+  OW -> OW : SETTINGS_CHANGED -> loadSettings()
+end
+note over User, OW
+Settings are stored as one JSON row in SQLite; API keys are never part of Settings (see the API-key diagram).
+reset_settings builds Settings::default() (keeping onboarding_complete and profile) and goes through the same path.
+end note
+@enduml

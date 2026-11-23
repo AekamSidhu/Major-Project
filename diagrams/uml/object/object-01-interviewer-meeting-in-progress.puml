@@ -1,0 +1,216 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-core/src/types.rs (Meeting, Participant, TranscriptSegment,
+' DetectedQuestion, AnswerRecord, Claim, Topic, FollowUpQuestion), crates/openmeet-engine/src/engine.rs
+' (EngineState), runtime.rs (MeetingRuntime, CandidateTurn, participants_for, role_for, open_answer_for),
+' requests.rs (RequestManager, Slots, Entry, RequestTicket), state.rs (MeetingStateMachine, AnswerStateMachine),
+' conversation.rs (on_final / on_turn_timer), assist.rs (start_followups, run_followups),
+' crates/openmeet-intel/src/claims.rs, topics.rs.
+title Object diagram: interviewer-mode meeting in progress (follow-ups streaming into the Followups slot)
+
+left to right direction
+skinparam nodesep 25
+skinparam ranksep 40
+
+object "state : EngineState" as es {
+  mode = Mode::Interviewer
+  style = AnswerStyle::Concise
+  processing_stopped = false
+}
+
+object "rt : MeetingRuntime" as rt {
+  system_audio_active = true
+  microphone_active = true
+  demo = false
+  sessions_running = true
+  latest_followups_request = Some("0192d7a1..f7")
+  last_turn_text = "We moved the ledger writes to Kafka. ..."
+  gaps = []
+  ..
+}
+
+object "meeting : Meeting" as m {
+  id = "0192d6f0..a1"
+  title = "Backend interview"
+  mode = Mode::Interviewer
+  state = MeetingState::Active
+  started_at = 1760781600000
+  ended_at = None
+  persisted = true
+}
+
+object "machine : MeetingStateMachine" as msm {
+  state = MeetingState::Active
+}
+
+object "p1 : Participant" as p1 {
+  id = "user"
+  role = SpeakerRole::User
+  label = "You"
+}
+
+object "p2 : Participant" as p2 {
+  id = "remote"
+  role = SpeakerRole::Remote
+  label = "Candidate"
+}
+
+object "s1 : TranscriptSegment" as s1 {
+  id = "0192d6f4..11"
+  speaker_id = Some("user")
+  speaker_role = SpeakerRole::User
+  source = AudioSourceKind::Microphone
+  start_time = 241200
+  end_time = 244900
+  text = "Tell me how you scaled the payments API."
+  is_final = true
+}
+
+object "s2 : TranscriptSegment" as s2 {
+  id = "0192d6f5..12"
+  speaker_id = Some("remote")
+  speaker_role = SpeakerRole::Remote
+  source = AudioSourceKind::System
+  start_time = 246100
+  text = "We moved the ledger writes to Kafka. ..."
+  is_final = true
+}
+
+object "s3 : TranscriptSegment" as s3 {
+  id = "0192d6f6..13"
+  speaker_role = SpeakerRole::Remote
+  source = AudioSourceKind::System
+  start_time = 259800
+  text = "p99 latency dropped from 800 ms to 120 ms."
+  is_final = true
+}
+
+object "q1 : DetectedQuestion" as q1 {
+  id = "0192d6f4..q1"
+  segment_ids = ["0192d6f4..11"]
+  is_question = true
+  confidence = 0.82
+  question = "Tell me how you scaled the payments API."
+  category = QuestionCategory::Technical
+  speaker_role = SpeakerRole::User
+  requires_response = false
+  method = DetectionMethod::Heuristic
+  supersedes = None
+}
+
+object "open_answer : AnswerRecord" as a1 {
+  question_id = Some("0192d6f4..q1")
+  speaker_role = SpeakerRole::Remote
+  text = "We moved the ledger writes ... 120 ms."
+  segment_ids = [s2.id, s3.id]
+}
+
+object "turn : CandidateTurn" as turn {
+  segment_ids = []
+  text = ""
+  version = 4
+}
+
+object "c1 : Claim" as c1 {
+  text = "p99 latency dropped from 800 ms to 120 ms."
+  kind = ClaimKind::Metric
+  segment_id = Some(s3.id)
+  speaker_role = SpeakerRole::Remote
+  source = ExtractionSource::Heuristic
+}
+
+object "c2 : Claim" as c2 {
+  text = "Postgres was sharded by merchant id"
+  kind = ClaimKind::Implementation
+  segment_id = None
+  speaker_role = SpeakerRole::Remote
+  source = ExtractionSource::Llm
+}
+
+object "t1 : Topic" as t1 {
+  id = "performance"
+  name = "Scaling & performance"
+  status = TopicStatus::Current
+  mentions = 2
+  planned = false
+}
+
+object "t2 : Topic" as t2 {
+  id = "observability"
+  name = "Observability"
+  status = TopicStatus::Pending
+  mentions = 0
+  planned = true
+}
+
+object "requests : RequestManager" as rm
+
+map "slots.current : HashMap<RequestSlot, Id>" as cur {
+  Followups => "0192d7a1..f7"
+}
+
+object "entry : Entry" as en
+
+object "ticket : RequestTicket" as tk {
+  id = "0192d7a1..f7"
+  slot = RequestSlot::Followups
+  kind = RequestKind::InterviewerFollowups
+}
+
+object "machine : AnswerStateMachine" as asm {
+  state = AnswerState::Streaming
+}
+
+object "f1 : FollowUpQuestion" as f1 {
+  request_id = "0192d7a1..f7"
+  question = "How did you measure p99 before and after?"
+  category = QuestionCategory::Tradeoff
+  reason = "Metric stated without method"
+  priority = Priority::High
+  trigger = Some("p99 latency dropped ...")
+}
+
+es --> rt : runtime
+rt --> m : meeting
+rt --> msm : machine
+m --> p1 : participants
+m --> p2 : participants
+rt --> s1 : segments
+rt --> s2 : segments
+rt --> s3 : segments
+rt --> q1 : questions
+rt --> a1 : open_answer
+rt --> turn : turn
+rt --> c1 : claims
+rt --> c2 : claims
+rt --> t1 : topics.topics()
+rt --> t2 : topics.topics()
+rt --> f1 : latest_followups
+q1 ..> s1 : segment_ids
+a1 ..> q1 : question_id
+c1 ..> s3 : segment_id
+rm --> cur : slots
+rm --> en : slots.entries
+en --> tk : ticket
+en --> asm : machine
+cur ..> tk : current id
+f1 ..> tk : request_id
+
+note bottom of turn
+  on_turn_timer copied the candidate's turn
+  into last_turn_text, reset the turn and
+  called start_followups (auto_followups).
+end note
+
+note bottom of en
+  begin(Followups, ...) cancelled the previous
+  Followups request; each accepted item is
+  sent as FOLLOWUPS_READY via emit_if_current.
+end note
+
+note top of m
+  Ids are UUIDv7 simple hex (32 chars), shortened here.
+  start_time / end_time: ms since meeting start;
+  started_at, created_at: Unix ms.
+end note
+@enduml

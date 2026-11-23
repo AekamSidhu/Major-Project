@@ -1,0 +1,48 @@
+@startuml
+!include ../_style.iuml
+' C4 level 2 (containers), plain PlantUML. Derived from src-tauri/src (Tauri 2 app "openmeet", windows.rs,
+' overlay.rs, local_ai.rs, secrets.rs, commands/), src/ (React 19 + TypeScript main and overlay windows),
+' crates/openmeet-store (SQLite file, WAL, migrations 0001 and 0002), local-ai/server.py (sidecar, default
+' 127.0.0.1:8765), local-ai/room_server.py and room/ (interview room, default port 8443),
+' local-ai/room/host.html, guest.html, room.js (browser pages), crates/openmeet-providers/src/local_ai.rs.
+title C4 level 2: OpenMeet containers
+
+skinparam rectangle {
+  BackgroundColor #F6F7FD
+  BorderColor #4F5BD5
+  RoundCorner 12
+}
+
+actor "Candidate or interviewer" as User
+
+rectangle "OpenMeet desktop app\n[container: Tauri 2 process]\nRust engine and crates, React 19 UI\n(main window, transparent overlay window)" as App #E6E9FB
+
+rectangle "Local AI sidecar\n[container: Python process, optional]\nlocal-ai/server.py (FastAPI)\nWhisper transcription, embeddings,\nanswer-integrity endpoints\n127.0.0.1:8765" as Side #E6E9FB
+
+rectangle "Interview room server\n[container: Python process, optional]\nlocal-ai/room_server.py (FastAPI)\nroom pages, signaling, integrity checks\nHTTPS 8443 (LAN)" as Room #E6E9FB
+
+rectangle "Browser pages\n[container: web]\nhost.html (interviewer)\nguest.html (candidate)" as Pages #E6E9FB
+
+database "SQLite store\n[container: file]\nmeetings, transcript, suggestions,\nintegrity_flags (schema v2), settings" as DB #EEF7F1
+database "OS keyring\n[container: OS service]\nAPI keys only (service\ndev.openmeet.desktop)" as KR #EEF7F1
+folder "Model files\n[container: disk]\nlocal-ai/.models (Whisper, embedder,\nECHO and reading models, face model)" as MOD #EEF7F1
+
+rectangle "Ollama / OpenAI-compatible server\n[external, optional]" as LLM #FFFFFF
+
+User --> App : overlay, main window, shortcuts
+User --> Pages : interview room (interviewer or candidate)
+App --> Side : HTTP loopback (spawns the sidecar when needed)
+App --> DB : rusqlite, WAL, one writer thread
+App --> KR : API keys
+Side --> MOD : loads models
+Room --> MOD : loads models
+Pages --> Room : HTTPS and WebSocket signaling;\nWebRTC media goes browser to browser
+App --> LLM : suggestions (HTTP)
+Room --> LLM : follow-ups and reference answers
+
+note right of DB
+  Meeting data only. No audio and no gaze samples
+  are stored. Screenshot files (ScreenshotStore) are
+  written only when store_screenshots is on (off by default).
+end note
+@enduml

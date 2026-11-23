@@ -1,0 +1,81 @@
+@startuml
+!include ../_style.iuml
+' C4 level 3 (components) of the desktop app's Rust side, plain PlantUML. One box per workspace crate and per
+' module that the diagrams name. Derived from Cargo.toml workspace members (crates/openmeet-core, -engine, -intel,
+' -providers, -platform, -store), crates/*/src/lib.rs and module files, src-tauri/src (commands/, sink.rs,
+' local_ai.rs, providers_build.rs, secrets.rs, capture.rs, overlay.rs, screenshots.rs, state.rs).
+title C4 level 3: components of the OpenMeet desktop app (Rust side)
+
+skinparam rectangle {
+  BackgroundColor #F6F7FD
+  BorderColor #4F5BD5
+  RoundCorner 10
+}
+skinparam packageStyle rectangle
+
+rectangle "UI (React 19 + TypeScript)\nsrc/main (settings, history, privacy), src/overlay (HUD)" as UI #FFFFFF
+
+package "src-tauri: openmeet (shell)" as Shell {
+  rectangle "commands/\nmeeting, history, integrity, privacy,\nproviders, devices, overlay, shortcuts" as Cmds
+  rectangle "sink.rs\nMeetingEvent -> openmeet://event" as Sink
+  rectangle "providers_build.rs + local_ai.rs\nbuild ProviderSet; start the sidecar" as Build
+  rectangle "secrets.rs (keyring), capture.rs,\noverlay.rs, screenshots.rs, state.rs" as Misc
+}
+
+package "openmeet-engine" as Engine {
+  rectangle "engine.rs + conversation.rs\nmeeting loop, turn and question handling" as Loop
+  rectangle "transcription.rs, embedder.rs, screen.rs\naudio sessions, embeddings, screen worker" as Work
+  rectangle "assist.rs, requests.rs\nanswers, follow-ups, request slots" as Assist
+  rectangle "integrity.rs\nanswer-integrity analyzer and gaze worker" as IntEng
+  rectangle "persist.rs, memory.rs, metrics.rs, runtime.rs" as Persist
+}
+
+package "openmeet-intel" as Intel {
+  rectangle "detect/, vad.rs\nquestion detection, speech segmenter" as Detect
+  rectangle "prompts/, topics.rs, claims.rs,\nexport.rs, vision.rs" as Prompts
+  rectangle "integrity/\ndelivery, echo, evidence, fusion, text" as IntegrityPure
+}
+
+package "openmeet-providers" as Providers {
+  rectangle "factory.rs\nbuild_llm, build_transcriber,\nbuild_embedder, build_integrity" as Factory
+  rectangle "anthropic.rs, openai.rs, ollama.rs\nLLM adapters (streaming)" as Llms
+  rectangle "local_ai.rs, integrity.rs\nsidecar transcription, embeddings,\nintegrity client" as LocalAi
+}
+
+package "openmeet-platform" as Platform {
+  rectangle "audio/, screen/, ocr.rs\ncapture, screen diff, OCR" as Capture
+  rectangle "privacy.rs, focus.rs, win.rs\ncapture exclusion, app focus" as OsPriv
+}
+
+package "openmeet-store" as Store {
+  rectangle "database.rs, migrations.rs\nSQLite (WAL), schema v2" as Db
+  rectangle "records.rs, history.rs, settings.rs\nrows, history, retention" as Rec
+}
+
+package "openmeet-core" as Core {
+  rectangle "types.rs, settings.rs, events.rs\nprovider traits (providers.rs), store trait,\nintegrity vocabulary (integrity.rs)" as CoreMod
+}
+
+UI --> Cmds : Tauri commands (invoke)
+Sink --> UI : events
+Cmds --> Loop : start, stop, settings
+Build --> Factory : ProviderSet
+Loop --> Detect : detect()
+Loop --> Assist : answers, follow-ups
+Loop --> IntEng : integrity actions
+Loop --> Persist : PersistOp
+Work --> Capture : audio frames, screen frames
+Work --> LocalAi : transcribe, embed
+IntEng --> LocalAi : ai_text, reading, gaze
+IntEng --> IntegrityPure : fuse, delivery
+Assist --> Llms : complete, stream
+Persist --> Db : save, load
+Rec --> Db
+Loop --> Sink : MeetingEvent
+Factory --> Llms
+Factory --> LocalAi
+Factory --> CoreMod : traits and settings
+Misc --> OsPriv
+Loop ..> CoreMod
+Db ..> CoreMod : store trait
+@enduml

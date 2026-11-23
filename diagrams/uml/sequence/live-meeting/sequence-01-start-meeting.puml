@@ -1,0 +1,116 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: src/main/sections/home/StartMeeting.tsx, src/lib/ipc.ts,
+' src-tauri/src/commands/meeting.rs, src-tauri/src/state.rs (AppState::start_meeting, start_capture, start_screen),
+' src-tauri/src/capture.rs (CaptureManager::start_audio/start_screen), src-tauri/src/tray.rs, src-tauri/src/shortcuts.rs,
+' crates/openmeet-engine/src/engine.rs (start_meeting_inner, start_sessions, audio_router),
+' crates/openmeet-engine/src/transcription.rs (VadTranscriptionProvider::start_session), src-tauri/src/sink.rs
+title Starting a meeting (explicit activation -> engine -> capture)
+autoactivate off
+skinparam maxMessageSize 210
+
+actor User
+participant "Main window\n<<StartMeeting.tsx>>" as UI
+participant "start_meeting\n<<tauri::command>>" as Cmd
+participant "AppState" as App
+participant "LocalAiManager" as LAI
+participant "Engine" as Eng
+participant "VadTranscriptionProvider" as VTP
+participant "audio_router\n<<tokio task>>" as Router
+participant "conversation loop\n<<tokio task>>" as Conv
+participant "Persister\n<<writer thread>>" as Per
+participant "CaptureManager" as Cap
+participant "AudioCapture /\nScreenSampler\n<<platform threads>>" as Plat
+participant "OverlayController" as Ov
+participant "TauriSink\n(openmeet://event)" as Sink
+
+note over User, UI
+Explicit activation: capture starts only from the Start form (onSubmit -> start()).
+No global shortcut starts a meeting; the tray item "Start Meeting…" only
+opens the main window (windows::show_main(app, Some("home"))).
+end note
+
+User -> UI : press Start (mode, title, microphone,\nsystem audio, optional screen, focus app)
+activate UI
+UI -> Cmd : api.startMeeting(buildStartRequest(form, ..))\ninvoke("start_meeting", { request })
+activate Cmd
+Cmd -> Cmd : validate_start(&request)
+Cmd -> App : tray::set_tooltip("OpenMeet — meeting in progress")\nstart_meeting(request)
+activate App
+opt !microphone && !system_audio
+  App -> Sink : Notice(Info, "No audio source selected: transcription is off…")
+end
+opt audio selected && local_ai::sidecar_in_use(&settings)
+  App -> LAI : start(&settings)
+  activate LAI
+  LAI --> App : Ok(LocalAiStatus) | Err(e)
+  deactivate LAI
+  opt Err(e)
+    App -> Eng : set_component_status(Transcription, Error, ..)
+    App -> Sink : Notice(Warning, "Local transcription unavailable: …")
+  end
+end
+opt focus_app_id is Some
+  App -> App : blocking(apps::detect_meeting_apps()) -> app name
+end
+
+App -> Eng : start_meeting(req) -> start_meeting_inner(req, demo=false)
+activate Eng
+alt a meeting is Starting / Active / Paused / Stopping
+  Eng --> App : Err(CoreError::InvalidState("A meeting is already running…"))
+else no live meeting
+  Eng -> Eng : requests.cancel_all(false)\nMeeting { id: new_id(), state: Starting,\n persisted: retention.persists() }\nstore = db_store | NullStore
+  Eng -> Eng : MeetingRuntime::new(.., conv_tx, trans_tx)\nrt.transition(Starting); state.runtime = Some(rt)
+  Eng -> Sink : MeetingStateChanged(Starting), ModeChanged
+  Eng ->> Conv : conversation::spawn_conversation(engine, meeting_id, trans_rx, conv_rx)
+  activate Conv
+  Eng -> Eng : start_sessions([Microphone?, System?])
+  alt providers.transcription is None
+    Eng -> Sink : Notice(Warning, "Transcription unavailable… Ask OpenMeet still works.")
+  else provider present
+    loop each selected AudioSourceKind
+      Eng -> VTP : start_session(TranscriptionSessionConfig, trans_tx)
+      activate VTP
+      VTP --> Eng : Box<dyn TranscriptionSession> (VadSession)
+      deactivate VTP
+    end
+    Eng ->> Router : audio_ctl.send(AudioControl::Start(sessions))
+    activate Router
+  end
+  Eng -> Eng : rt.transition(Active)
+  Eng ->> Per : persist(store, PersistOp::Meeting(meeting))
+  Eng -> Eng : accepting_audio = true
+  Eng -> Sink : MeetingStarted, MeetingStateChanged(Active)
+  Eng --> App : Ok(Meeting)
+end
+deactivate Eng
+
+App -> Cap : set_sources(Some(MeetingSources))
+App -> App : start_capture(&sources)
+opt sources.microphone / sources.system_audio
+  App -> Cap : start_audio(&engine, Microphone | System, device)
+  activate Cap
+  Cap -> Plat : AudioCapture::start(config, on_frame = engine.push_audio, on_error)
+  activate Plat
+  Cap -> Eng : set_component_status(Microphone | SystemAudio, Active | Error)
+  deactivate Cap
+end
+opt sources.screen is Some(spec)
+  App -> App : start_screen(spec): db.list_privacy_rules()
+  App -> Cap : start_screen(&engine, spec, &settings, rules, keep)
+  Cap -> Plat : ScreenSampler::start(SamplerConfig, on_frame = push_screen_frame, on_status)
+end
+App -> Ov : set_app_name(app_name)
+opt settings.overlay.show_on_meeting_start
+  App -> Ov : show(&settings.overlay)
+end
+opt focus_app_id is Some
+  App -> App : platform::focus::focus_window(id); minimize main window
+end
+App --> Cmd : Ok(Meeting)
+deactivate App
+Cmd --> UI : Meeting (on Err: tooltip reset to "OpenMeet")
+deactivate Cmd
+UI -> UI : useMain.getState().refreshSnapshot()
+deactivate UI
+@enduml

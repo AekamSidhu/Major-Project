@@ -1,0 +1,80 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: Cargo.toml (workspace members + [workspace.dependencies] path deps),
+' crates/*/Cargo.toml, src-tauri/Cargo.toml, package.json, .cargo/config.toml (TS_RS_EXPORT_DIR),
+' scripts/gen-bindings-index.mjs, index.html, overlay.html, src/lib/ipc.ts,
+' src-tauri/src/local_ai.rs, crates/openmeet-providers/src/{local_ai,openai}.rs, local-ai/server.py
+title OpenMeet workspace: packages and their dependencies
+
+left to right direction
+
+skinparam nodesep 40
+skinparam ranksep 70
+
+package "Frontend (package.json: openmeet, Vite)" as FE {
+  package "src/main\n(index.html)" as fe_main {
+}
+  package "src/overlay\n(overlay.html)" as fe_overlay {
+}
+  package "src/lib" as fe_lib {
+}
+  package "src/bindings\n(ts-rs output)" as fe_bind {
+}
+}
+
+package "Rust workspace (Cargo.toml, resolver 3)" as WS {
+  package "openmeet\n(src-tauri: lib openmeet_lib + bin openmeet)" as app {
+}
+  package "openmeet-engine" as engine {
+}
+  package "openmeet-providers" as providers {
+}
+  package "openmeet-platform" as platform {
+}
+  package "openmeet-store" as store {
+}
+  package "openmeet-intel" as intel {
+}
+  package "openmeet-core" as core {
+}
+}
+
+package "local-ai (Python sidecar)\nserver.py: FastAPI app" as sidecar {
+}
+
+fe_main ..> fe_lib : <<import>>
+fe_overlay ..> fe_lib : <<import>>
+fe_main ..> fe_bind : <<import>>
+fe_overlay ..> fe_bind : <<import>>
+fe_lib ..> fe_bind : <<import>>
+
+fe_lib ..> app : <<use>>\ninvoke() commands,\nlisten() "openmeet://event"\nand "openmeet://ui"
+core ..> fe_bind : <<generates>>\nts-rs (npm run bindings)
+
+app ..> engine : <<import>>
+app ..> providers : <<import>>
+app ..> platform : <<import>>
+app ..> store : <<import>>
+app ..> intel : <<import>>
+app ..> core : <<import>>
+
+engine ..> intel : <<import>>
+engine ..> core : <<import>>
+engine ..> providers : <<import>>\n[dev-dependencies]
+
+intel ..> core : <<import>>
+providers ..> core : <<import>>
+platform ..> core : <<import>>
+store ..> core : <<import>>
+
+app ..> sidecar : <<use>>\nlocal_ai.rs spawns\npython server.py
+providers ..> sidecar : <<use>>\nHTTP loopback: GET /health,\nPOST /v1/audio/transcriptions,\nPOST /v1/embeddings
+
+note as N1
+  All Rust path dependencies are declared once in
+  [workspace.dependencies] and used with ".workspace = true".
+  openmeet-engine depends on openmeet-providers only
+  as a dev-dependency (tests); at run time the app
+  injects providers through openmeet-core traits.
+end note
+@enduml

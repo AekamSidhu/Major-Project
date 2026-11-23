@@ -1,0 +1,66 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-core/src/types.rs (AnswerState, is_terminal, RequestKind, RequestSlot),
+' crates/openmeet-engine/src/state.rs (answer_transition_allowed, AnswerStateMachine),
+' crates/openmeet-engine/src/requests.rs (RequestManager::begin, set_state, cancel, cancel_all),
+' crates/openmeet-engine/src/assist.rs (start_primary, run_primary, followups runner, background tasks),
+' crates/openmeet-engine/src/screen.rs, crates/openmeet-engine/src/engine.rs (cancel_request, dismiss),
+' src-tauri/src/commands/assistant.rs (cancel_request, dismiss_suggestion)
+title AI request lifecycle - AnswerState (one AnswerStateMachine per RequestTicket)
+
+hide empty description
+left to right direction
+skinparam StateFontSize 12
+
+state "In flight (not is_terminal)" as InFlight {
+  state Created : RequestManager::begin(slot, kind)\n/ emit AnswerStarted (Primary, Followups)
+  state ContextBuilding : build_prompt_context
+  state Requesting : LlmRequest sent\n(stream_text or complete)
+  state Streaming : do / emit AnswerDelta (Primary),\nFollowupsReady { done: false } (Followups)
+
+  [*] --> Created
+  Created --> ContextBuilding : run_primary / followups runner
+  Created --> Requesting : background tasks\n(Compression, Summary,\nQuestionClassification)
+  ContextBuilding --> Requesting : context built\n[not ticket.is_cancelled()]
+  Requesting --> Streaming : first delta
+}
+
+state Complete : emit AnswerComplete, Suggestion\nstored (Primary, Followups)
+state Failed : error: Option<String>\n(user-facing message)
+state Cancelled
+
+Requesting --> Complete : Ok(text)\n(non-streamed result)
+Streaming --> Complete : Ok(text)
+InFlight --> Failed : Err(ProviderError)\nor no LLM provider (from Created)
+InFlight --> Cancelled : ticket cancelled: begin() in same\nexclusive slot / cancel_request /\ndismiss_suggestion / cancel_all(..)\n/ ProviderError::Cancelled
+
+
+note right of InFlight
+  answer_transition_allowed(from, to):
+  * from == to: accepted, nothing changes
+  * from terminal: rejected (late states are ignored)
+  * Failed / Cancelled: from any non-terminal state
+  * ContextBuilding <- Created
+  * Requesting <- Created | ContextBuilding
+  * Streaming <- Requesting
+  * Complete <- Requesting | Streaming
+  * Created: never re-entered
+end note
+
+note bottom of Cancelled
+  cancel_all(false): start_meeting, pause, stop_meeting (Background kept alive)
+  cancel_all(true): emergency_stop (Background cancelled too)
+  AnswerStateChanged { request_id, state, error } is emitted only for the
+  Primary and Followups slots: while the ticket is current, and always
+  for terminal states so the UI never hangs on a spinner.
+end note
+
+note left of Failed
+  As implemented, TopicAnalysis and ScreenAnalysis
+  call set_state(Complete) straight from Created;
+  answer_transition_allowed rejects that move, so a
+  successful run leaves the machine in Created
+  (Failed / Cancelled still apply). TopicAnalysis
+  reports a cancelled call as Failed.
+end note
+@enduml

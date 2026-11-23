@@ -1,0 +1,74 @@
+// Derived from: crates/openmeet-store/migrations/0001_initial.sql (columns question_id, supersedes, parent_id,
+// segment_ids, segment_id, source_segment_id: none has a FOREIGN KEY clause),
+// crates/openmeet-core/src/types.rs (doc comments: DetectedQuestion.segment_ids "Transcript segments that make up
+// the question", supersedes "Earlier question this one extends", Suggestion.parent_id "For refinements: the
+// suggestion that was refined"), crates/openmeet-engine/src/runtime.rs (open_answer_for / extend_answer fill
+// AnswerRecord.question_id and segment_ids), crates/openmeet-intel/src/claims.rs (Claim.segment_id and
+// ActionItem.source_segment_id set to segment.id).
+// Chen notation: rectangles = entities, dashed diamonds = relationships held in an id column WITHOUT a
+// FOREIGN KEY (SQLite does not check them and nothing cascades through them). Edge labels = cardinality.
+// embeddings.item_id (polymorphic reference) is drawn separately in er-08-embeddings.puml.
+graph ER {
+  graph [fontname="Segoe UI", rankdir=TB, nodesep=0.4, ranksep=0.5, pad=0.3, bgcolor="#FFFFFF",
+         label=<<B>OpenMeet storage - conceptual ER, cross-references between meeting rows (Chen notation)</B>>,
+         labelloc=t, fontsize=18];
+  node  [fontname="Segoe UI", fontsize=12, color="#4F5BD5", fontcolor="#1F2430", style=filled, fillcolor="#E6E9FB"];
+  edge  [fontname="Segoe UI", fontsize=11, color="#3E4756", fontcolor="#3E4756", style=dashed];
+
+  node [shape=box, penwidth=1.4, width=1.9, height=0.55];
+  ai_suggestions; answers; claims; action_items;
+  questions;
+  transcript_segments [fontsize=14, height=0.7];
+
+  node [shape=diamond, style="filled,dashed", fillcolor="#FFF8E1", color="#C9A227", fontsize=10,
+        width=1.5, height=0.75, margin=0.02, penwidth=1];
+  s_par  [label="refines\n(parent_id)"];
+  s_q    [label="responds to\n(question_id)"];
+  a_q    [label="answers\n(question_id)"];
+  q_sup  [label="extends\n(supersedes)"];
+  q_seg  [label="made of\n(segment_ids)"];
+  a_seg  [label="made of\n(segment_ids)"];
+  c_seg  [label="extracted from\n(segment_id)"];
+  ai_seg [label="extracted from\n(source_segment_id)", width=1.8];
+
+  // self-reference of ai_suggestions (refinement chain)
+  { rank=same; ai_suggestions; answers; claims; action_items; }
+  s_par:sw -- ai_suggestions:nw [label="N (refined)  "];
+  s_par:se -- ai_suggestions:ne [label="  0..1 (parent)"];
+
+  // references into questions
+  ai_suggestions -- s_q [label="N"];
+  s_q -- questions [label="0..1"];
+  answers -- a_q [label="N"];
+  a_q -- questions [label="0..1"];
+
+  // self-reference of questions (continuation)
+  { rank=same; q_sup; s_q; a_q; }
+  ai_suggestions -- q_sup [style=invis];
+  q_sup:sw -- questions:ne [label="N (newer)  "];
+  q_sup:se -- questions:e [label="  0..1 (earlier)"];
+
+  // references into transcript_segments
+  questions -- q_seg [label="M"];
+  q_seg -- transcript_segments [label="N"];
+  answers -- a_seg [label="M"];
+  a_seg -- transcript_segments [label="N"];
+  claims -- c_seg [label="N"];
+  c_seg -- transcript_segments [label="0..1"];
+  action_items -- ai_seg [label="N"];
+  ai_seg -- transcript_segments [label="0..1"];
+
+  { rank=same; q_seg; a_seg; c_seg; ai_seg; }
+
+  legend [shape=note, style=filled, fillcolor="#FFF8E1", color="#C9A227", fontsize=11, label=<
+    <B>Reading the diagram</B><BR ALIGN="LEFT"/>
+    Every entity here is also owned by meetings (see er-02); its key is id.<BR ALIGN="LEFT"/>
+    These links are plain TEXT columns, not FOREIGN KEYs: SQLite neither checks<BR ALIGN="LEFT"/>
+    nor cascades them; load_meeting returns the rows and Rust code resolves the ids.<BR ALIGN="LEFT"/>
+    segment_ids is a JSON array column (questions, answers), hence M:N.<BR ALIGN="LEFT"/>
+    question_id, supersedes, parent_id, segment_id, source_segment_id are nullable (0..1).<BR ALIGN="LEFT"/>
+    embeddings.item_id + kind name the item a vector belongs to (no row-id reference). screen_observations, topics, participants and<BR ALIGN="LEFT"/>
+    meeting_summaries hold no row-id references (summary lists are JSON arrays of strings).<BR ALIGN="LEFT"/>
+  >];
+  { rank=same; transcript_segments; legend; }
+}

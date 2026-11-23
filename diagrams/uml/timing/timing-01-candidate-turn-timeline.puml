@@ -1,0 +1,61 @@
+@startuml
+!include ../../_style.iuml
+' Derived from crates/openmeet-intel/src/vad.rs (VadConfig::from_settings: min_speech_ms = 150 - 50 x sensitivity
+' (120 ms at the default 0.6), pre_roll_ms 240, silence_ms from settings (default 700), min_utterance_ms 350,
+' max_utterance_ms 20000; Segmenter::push emits SpeechStarted / Utterance / Discarded),
+' crates/openmeet-engine/src/transcription.rs (SegmenterEvent -> TranscriptionEvent::SpeechStarted / SpeechEnded,
+' transcribe_final), crates/openmeet-engine/src/conversation.rs (handle_final arms TurnTimer,
+' on_integrity_timer, on_turn_timer, SpeechStarted bumps turn.version), crates/openmeet-engine/src/integrity.rs
+' (on_candidate_segment returns Timer with turn_end_silence_ms; on_candidate_speech_started bumps version),
+' crates/openmeet-core/src/settings.rs (turn_end_silence_ms default 1500; silence_ms default 700).
+' Times are illustrative (ASR latency is not drawn); the rules and default values are the code's.
+title Candidate turn in interviewer mode: VAD, transcription and the two turn-end timers (defaults)
+
+concise "Candidate voice" as V
+concise "Segmenter" as S
+concise "Final text" as F
+concise "Turn and integrity timers" as T
+
+@0
+V is speech
+S is idle
+F is none
+T is none
+
+@120
+S is speaking
+
+@2600
+V is silent
+
+@3300
+S is ended
+
+@3800
+F is "text 1"
+T is "armed 1500 ms"
+
+@4200
+V is speech
+
+@4320
+S is speaking
+T is "bumped timer 1 outdated"
+
+@5000
+V is silent
+
+@5700
+S is ended
+
+@6200
+F is "text 2"
+T is "armed 1500 ms"
+
+@7700
+T is "fired no speech"
+S is idle
+
+@8000
+T is "check runs"
+@enduml

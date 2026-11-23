@@ -1,0 +1,179 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/types.rs (AnswerStyle, ResponseLength, Refinement,
+' RequestKind, RequestSlot, AnswerState, SuggestionKind, Suggestion, AnswerSections,
+' FollowUpQuestion, Priority, QuestionCategory).
+title openmeet-core: AI requests, suggestions and follow-ups (types.rs)
+
+hide empty members
+skinparam nodesep 35
+skinparam ranksep 50
+
+class Suggestion <<struct>> {
+  +id: Id  <<= request id>>
+  +meeting_id: Option<Id>
+  +kind: SuggestionKind
+  +question_id: Option<Id>
+  +question_text: Option<String>
+  +category: Option<QuestionCategory>
+  +style: Option<AnswerStyle>
+  +parent_id: Option<Id>
+  +prompt_id: String
+  +prompt_version: u32
+  +content: String
+  +followups: Vec<FollowUpQuestion>
+  +provider: String
+  +model: String
+  +created_at: i64
+  +completed_at: Option<i64>
+  +pinned: bool
+}
+
+enum SuggestionKind {
+  Answer
+  Followups
+  Ask
+  Refinement
+  Clarification
+}
+
+class FollowUpQuestion <<struct>> {
+  +id: Id
+  +request_id: Id
+  +question: String
+  +category: QuestionCategory
+  +reason: String
+  +priority: Priority
+  +trigger: Option<String>
+  +created_at: i64
+}
+
+enum Priority {
+  High
+  Normal  <<default>>
+  Optional
+}
+
+class AnswerSections <<struct>> {
+  +structure: Vec<String>
+  +answer: String
+  +key_points: Vec<String>
+  +example: Option<String>
+  +follow_up: Option<String>
+  +basis: Option<String>
+  +caveat: Option<String>
+}
+
+enum AnswerStyle {
+  Concise  <<default>>
+  Detailed
+  Technical
+  Simple
+  Star
+  ExampleDriven
+  StepByStep
+  --
+  +ALL: [AnswerStyle; 7]
+  +next(): AnswerStyle
+  +label(): &str
+}
+
+enum ResponseLength {
+  Short
+  Medium  <<default>>
+  Long
+}
+
+enum Refinement {
+  Regenerate
+  Shorter
+  Longer
+  MoreTechnical
+  Simplify
+  GiveExample
+  ShowRationale
+}
+
+enum RequestKind {
+  CandidateAnswer
+  InterviewerFollowups
+  AskAi
+  Refinement
+  Clarification
+  Summary
+  Compression
+  QuestionClassification
+  TopicAnalysis
+  ScreenAnalysis
+  IntegrityCheck
+  IntegrityReference
+}
+
+enum RequestSlot {
+  Primary
+  Followups
+  Background
+}
+
+enum AnswerState {
+  Created
+  ContextBuilding
+  Requesting
+  Streaming
+  Complete
+  Failed
+  Cancelled
+  --
+  +is_terminal(): bool
+}
+
+enum QuestionCategory
+
+Suggestion --> "1" SuggestionKind : kind
+Suggestion *-- "0..*" FollowUpQuestion : followups
+Suggestion --> "0..1" AnswerStyle : style
+Suggestion --> "0..1" QuestionCategory : category
+Suggestion --> "0..1" Suggestion : parent_id
+FollowUpQuestion --> "1" Priority : priority
+FollowUpQuestion --> "1" QuestionCategory : category
+AnswerSections ..> Suggestion : parsed from content\n(candidate answers)
+
+RequestKind -[hidden]right- RequestSlot
+RequestSlot -[hidden]right- AnswerState
+AnswerStyle -[hidden]right- ResponseLength
+ResponseLength -[hidden]right- Refinement
+
+note bottom of RequestSlot
+  Logical UI slot a request renders into.
+  Starting a request in a slot cancels
+  whatever was running in that slot.
+  Primary: answers, Ask OpenMeet, refinements
+  Followups: interviewer follow-up suggestions
+  Background: not rendered
+end note
+
+note bottom of RequestKind
+  RequestKind / RequestSlot / AnswerState
+  describe in-flight requests; they are carried
+  by MeetingEvent::AnswerStarted /
+  AnswerStateChanged and ActiveRequestView.
+end note
+
+note bottom of AnswerState
+  Per-request lifecycle.
+  is_terminal(): Complete | Failed | Cancelled
+end note
+
+note bottom of Refinement
+  Overlay answer controls. ShowRationale gives a
+  concise user-facing rationale, never hidden
+  chain-of-thought.
+end note
+
+note left of Suggestion
+  A completed AI suggestion,
+  persisted in ai_suggestions.
+  parent_id: for refinements, the
+  suggestion that was refined.
+end note
+@enduml

@@ -1,0 +1,46 @@
+// Derived from: crates/openmeet-engine/src/assist.rs (answer_question, answer_spec, start_primary, run_primary,
+// build_prompt_context, Builder::build, stream_text, store_suggestion, llm_health),
+// crates/openmeet-engine/src/requests.rs (RequestManager::begin / set_state / emit_if_current),
+// crates/openmeet-engine/src/metrics.rs (record_latency), src-tauri/src/sink.rs (TauriSink::emit),
+// src/overlay/OverlayApp.tsx + src/overlay/store.ts (onMeetingEvent -> useOverlay.applyEvent -> reduceOverlay).
+// UML communication diagram drawn with Graphviz (PlantUML has no native notation):
+// objects are boxes with an underlined "name : Type", each link carries its numbered
+// messages, and the open arrowhead on the link shows the direction of those messages.
+digraph communication02 {
+  graph [fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.45, ranksep=0.7, pad=0.3, bgcolor="#FFFFFF",
+         label=<<B>Communication 02: detected question -&gt; streamed suggested answer (Primary slot)</B>>];
+  node  [fontname="Segoe UI", fontsize=11, shape=box, style="rounded,filled", fillcolor="#F6F7FD", color="#4F5BD5", margin="0.15,0.08"];
+  edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756", arrowhead=vee, arrowsize=0.7];
+
+  engine [label=<<U>engine : Engine</U><BR/><FONT POINT-SIZE="9">run_actions(Action::Answer(q))</FONT>>];
+  assist [label=<<U>assist module</U><BR/><FONT POINT-SIZE="9">start_primary, then the spawned run_primary task</FONT>>, fillcolor="#E6E9FB"];
+  req    [label=<<U>requests : RequestManager</U>>];
+  rt     [label=<<U>rt : MeetingRuntime</U>>];
+  embp   [label=<<U>embedder : dyn EmbeddingProvider</U>>, fillcolor="#FFFFFF"];
+  intel  [label=<<U>openmeet_intel::prompts</U><BR/><FONT POINT-SIZE="9">candidate_answer</FONT>>];
+  llm    [label=<<U>llm : dyn LlmProvider</U>>, fillcolor="#FFFFFF"];
+  lat    [label=<<U>latency : LatencyTracker</U>>];
+  health [label=<<U>health : HealthRegistry</U>>];
+  per    [label=<<U>persist : Persister</U>>, fillcolor="#EEF7F1"];
+  sink   [label=<<U>sink : TauriSink</U>>];
+  ui     [label=<<U>overlay : useOverlay store</U><BR/><FONT POINT-SIZE="9">overlay webview</FONT>>];
+
+  engine -> assist [label="1: answer_question(q, style)\l    -> start_primary(answer_spec(..))\l"];
+  embp -> assist [dir=back, label="2.2: embed([query], cancel)\l      [only if not local_hash; 300 ms timeout]\l"];
+  intel -> assist [dir=back, label="2.4: candidate_answer::build(ctx, question,\l      category, style, length, budget)\l"];
+  llm -> assist [dir=back, label="2.6: stream(LlmRequest, cancel)\l      [latency_sensitive = true]\l"];
+  llm -> assist [label="2.6.1*: LlmChunk::Delta(text)\l2.6.2: LlmChunk::Done\l", style=dashed];
+  assist -> req [label="1.1: begin(Primary, CandidateAnswer, AnswerStarted)\l2.1: set_state(ContextBuilding)\l2.5: set_state(Requesting)\l2.8: set_state(Streaming)   [first delta]\l2.9*: emit_if_current(AnswerDelta)\l2.14: emit_if_current(AnswerComplete)\l2.15: set_state(Complete)\l"];
+  req -> sink [label="1.1.1: emit(AnswerStateChanged Cancelled)\l        [previous Primary request, if any]\l1.1.2: emit(AnswerStarted)\l2.x.1: emit(AnswerStateChanged)   [each set_state, if current or terminal]\l2.9.1*: emit(AnswerDelta)   [only while ticket is current]\l2.14.1: emit(AnswerComplete)   [only while current]\l"];
+  assist -> rt [label="1.2: active_primary = ActiveRequestView\l2.3: lines_since(window_start);\l      memory.retrieve(RetrievalQuery k=6)\l2.9.2*: active_primary.text.push_str(delta)\l2.12: push_suggestion(suggestion)\l"];
+  assist -> lat [label="2.7: record_latency(DetectionToFirstToken)\l      [first delta]\l2.10: record_latency(FirstTokenToComplete)\l"];
+  assist -> health [label="2.11: set(Llm, Active)\l      [llm_health, on success]\l"];
+  assist -> per [label="2.13: persist(store,\l      PersistOp::Suggestion)\l"];
+  sink -> ui [label="3*: app.emit(MEETING_EVENT_CHANNEL, event)\l    -> applyEvent(ev) -> reduceOverlay\l"];
+  {rank=same; engine; embp; intel; llm;}
+  engine -> embp [style=invis];
+
+  note [shape=note, style=filled, fillcolor="#FFF8E1", color="#C9A227", fontsize=10,
+        label="1.3: start_primary spawns run_primary; messages 2.x run in that tokio task.\l* = repeated for every streamed LlmChunk::Delta.\lrecord_latency also emits LatencyRecorded through the sink.\lOn Err(Cancelled): set_state(Cancelled); on another error: set_state(Failed, user_message)\land llm_health marks Llm Error / Degraded. With no LLM configured the request is\lset Failed with \"AI provider unavailable. Check provider settings.\"\l"];
+  per -> note [style=invis];
+}

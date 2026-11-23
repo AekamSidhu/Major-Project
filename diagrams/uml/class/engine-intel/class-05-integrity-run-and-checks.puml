@@ -1,0 +1,132 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-engine/src/integrity.rs (IntegrityRun, IntegrityQuestion, AnswerUnit,
+' OpenAnswer, CheckJob, ReferenceState, IntegrityAction, GazeCmd, spawn_gaze_worker, verify_gaze),
+' crates/openmeet-engine/src/runtime.rs (MeetingRuntime.integrity), crates/openmeet-intel/src/integrity/
+' delivery.rs (DeliveryTracker), crates/openmeet-core/src/integrity.rs (IntegrityFlag).
+title openmeet-engine: per-meeting answer-integrity state, checks and gaze commands (integrity.rs)
+
+hide empty members
+skinparam nodesep 25
+skinparam ranksep 55
+
+class MeetingRuntime <<struct>>
+
+class IntegrityRun <<struct>> {
+  +forced: bool
+  +demo_region: Option<Rect>
+  +question: Option<IntegrityQuestion>
+  +answer: Option<OpenAnswer>
+  +version: u64
+  +delivery: DeliveryTracker
+  +references: VecDeque<(Id, watch::Receiver<ReferenceState>)>
+  +flags: Vec<IntegrityFlag>
+  +gaze_running: bool
+  +gaze_reset_done: bool
+  +sidecar_embedding_model: Option<String>
+  --
+  +active(settings, mode): bool
+  +signal_on(settings, mode, name): bool
+  +region(settings): Option<Rect>
+  +snapshot_flags(): Vec<IntegrityFlag>
+}
+
+class IntegrityQuestion <<struct>> {
+  +id: Id
+  +text: String
+  +end_ms: i64
+}
+
+class OpenAnswer <<struct>> {
+  +id: Id
+  +question: Option<IntegrityQuestion>
+  +units: Vec<AnswerUnit>
+  +checked_units: usize
+  +revision: u32
+  +created_at: i64
+  +running: Option<Id>
+}
+
+class AnswerUnit <<struct>> {
+  +start_ms: i64
+  +end_ms: i64
+  +text: String
+  +words: Option<Vec<WordTiming>>
+}
+
+enum ReferenceState <<enum>> {
+  Pending
+  Ready { answers, model }
+  Failed(String)
+}
+
+class DeliveryTracker <<struct>> {
+  --
+  +commit(features)
+  +score(features, thresholds)
+  +baseline_answers(): u32
+}
+
+class CheckJob <<struct>> {
+  +flag_id: Id
+  +revision: u32
+  +question: Option<IntegrityQuestion>
+  +start_ms: i64
+  +end_ms: i64
+  +text: String
+  +words: u32
+  +delivery: Option<IntegritySignal>
+  +ai_text: bool
+  +echo: bool
+  +reading: bool
+  +region_set: bool
+  +gaze_running: bool
+  +references: Option<watch::Receiver<ReferenceState>>
+  +previous: Option<Id>
+}
+
+enum IntegrityAction <<enum>> {
+  Check(Box<CheckJob>)
+  References { question, tx }
+  Timer { version, delay_ms }
+}
+
+enum GazeCmd <<enum>> {
+  Start { service, region, reset, meeting_id }
+  Stop { service }
+  ResetAfterChecks { service }
+}
+
+class "spawn_gaze_worker" as worker <<async task>>
+class "verify_gaze" as verify <<async task>> {
+  confirms the capture about 2 s after a start
+}
+
+MeetingRuntime *-- "1" IntegrityRun : integrity
+IntegrityRun *-- "0..1" IntegrityQuestion : question
+IntegrityRun *-- "0..1" OpenAnswer : answer
+IntegrityRun *-- "1" DeliveryTracker : delivery
+IntegrityRun o-- "0..*" ReferenceState : references
+OpenAnswer *-- "1..*" AnswerUnit : units
+OpenAnswer o-- "0..1" IntegrityQuestion : question
+CheckJob ..> OpenAnswer : prepare_check(answer)
+IntegrityAction *-- "0..1" CheckJob : Check
+IntegrityAction ..> ReferenceState : References
+IntegrityRun ..> IntegrityAction : on_interviewer_question()\non_candidate_segment()\non_timer() / finalize_answer()
+worker ..> GazeCmd : applies in order
+GazeCmd ..> verify : Start
+worker ..> IntegrityRun : gaze_running
+
+note right of IntegrityRun
+  active: interviewer mode and (forced or settings.integrity.enabled).
+  version: bumped on every utterance start and end; a timer fires
+  only for the latest version, after turn_end_silence_ms of silence.
+  flags: latest revision of each answer, in answer order.
+end note
+
+note bottom of CheckJob
+  Built under the state lock, run after release.
+  previous: the running check of the same answer, cancelled
+  when a newer revision starts (its flag is never stored).
+end note
+@enduml

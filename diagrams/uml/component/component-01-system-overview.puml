@@ -1,0 +1,109 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: src-tauri/src/lib.rs (setup, invoke_handler), src-tauri/src/state.rs, src-tauri/src/sink.rs,
+' src-tauri/src/windows.rs, src-tauri/src/capture.rs, src-tauri/src/local_ai.rs, src-tauri/src/secrets.rs,
+' src-tauri/capabilities/{main,overlay}.json, crates/openmeet-core/src/events.rs (MEETING_EVENT_CHANNEL,
+' UI_EVENT_CHANNEL), crates/openmeet-core/src/settings.rs (DEFAULT_*_URL), src/lib/ipc.ts, local-ai/server.py
+title OpenMeet - system component overview
+
+skinparam nodesep 35
+skinparam ranksep 50
+skinparam linetype polyline
+
+package "Webviews (React + TypeScript + Zustand)" {
+  [Main window\nsrc/main · index.html] as MW
+  [Overlay window\nsrc/overlay · overlay.html] as OV
+  [src/lib/ipc.ts\n(api, onMeetingEvent, onUiCommand)] as IPCTS
+}
+
+interface "Tauri commands\n(invoke, capability-scoped:\nmain.json / overlay.json)" as ICMD
+interface "openmeet://event\n(MeetingEvent)" as IEVT
+interface "openmeet://ui\n(UiCommand)" as IUI
+
+package "src-tauri (desktop app, Rust)" {
+  [commands::*] as CMD
+  [AppState] as AS
+  [TauriSink] as SINK
+  [CaptureManager] as CAP
+  [OverlayController] as OVC
+  [ShortcutManager\n+ tray] as SHT
+  [SecretStore] as SEC
+  [LocalAiManager] as LAI
+  [providers_build] as PB
+  [windows\n(emit_ui, emit_ui_to)] as WIN
+}
+
+package "Rust library crates" {
+  [openmeet-engine\n(Engine)] as ENG
+  [openmeet-intel] as INT
+  [openmeet-providers] as PRV
+  [openmeet-platform] as PLT
+  [openmeet-store\n(Database)] as STO
+  [openmeet-core\n(types, events, traits,\nsettings, IPC DTOs)] as CORE
+}
+
+node "Local AI sidecar\nlocal-ai/server.py (FastAPI)\nfaster-whisper + fastembed\n/v1/integrity/* (echo, gaze, reading)\ndefault http://127.0.0.1:8765" as SIDE
+node "Ollama\ndefault http://127.0.0.1:11434" as OLL
+node "Interview room server (separate process)\nlocal-ai/room_server.py (FastAPI)\nHTTPS 8443 on the interviewer's computer;\nnot started by the desktop app" as ROOM
+cloud "Google Gemini API\n(interview room, online mode only)" as GEM
+node "Browser pages: host.html (interviewer),\nguest.html (candidate); WebRTC between them" as RPAGES
+cloud "Cloud / remote LLM APIs\nhttps://api.openai.com\nhttps://api.anthropic.com\nOpenAI-compatible (user URL)" as CLOUD
+database "openmeet.db (SQLite)" as SQLITE
+node "OS services\n(audio, screen, OCR, window APIs,\ncredential store)" as OS
+
+' IPC boundary (lollipop = provided, socket = required)
+CMD - ICMD
+MW -( ICMD
+OV -( ICMD
+SINK - IEVT
+MW -( IEVT
+OV -( IEVT
+WIN - IUI
+MW -( IUI
+OV -( IUI
+MW ..> IPCTS
+OV ..> IPCTS
+
+' app internals
+CMD --> AS
+SHT --> AS
+AS --> WIN
+OVC --> WIN
+SHT --> WIN
+AS --> CAP
+AS --> OVC
+AS --> LAI
+AS --> SEC
+AS --> PB : rebuild_providers
+AS --> ENG
+AS --> STO : settings, privacy rules,\nhistory, retention
+ENG --> SINK : EventSink::emit
+CAP --> ENG : push_audio /\npush_screen_frame
+CAP --> PLT
+OVC --> PLT : privacy, focus
+PB --> PRV : factory::build_*
+PB --> INT : vision adapters
+PB --> ENG : VadTranscriptionProvider
+
+' library dependencies
+ENG --> INT
+ENG ..> CORE
+INT ..> CORE
+PRV ..> CORE
+PLT ..> CORE
+STO ..> CORE
+
+' externals
+LAI ..> SIDE : spawns child process,\nGET /health
+PRV ..> SIDE : HTTP (loopback)
+PRV ..> OLL : HTTP
+ENG ..> PRV : IntegrityService\n(ai_text, reading, gaze)
+PB ..> PRV : build_integrity (when enabled)
+RPAGES ..> ROOM : HTTPS, WSS /ws/{room}\n(room pages and signaling)
+ROOM ..> OLL : follow-ups, reference answers\n(local mode)
+ROOM ..> GEM : online follow-ups only
+PRV ..> CLOUD : HTTP(S), opt-in
+STO --> SQLITE
+PLT ..> OS
+SEC ..> OS : keyring
+@enduml

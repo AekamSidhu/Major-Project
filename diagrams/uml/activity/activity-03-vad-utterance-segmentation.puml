@@ -1,0 +1,75 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: crates/openmeet-intel/src/vad.rs (VadConfig::from_settings, Segmenter::push,
+' flush, process_frame, is_speech, adapt_floor, idle_frame, start_utterance, speaking_frame,
+' finish_utterance, cut_utterance, SegmenterEvent).
+title VAD utterance segmentation (Segmenter, one per audio source)
+
+start
+:Segmenter::push(AudioFrame);
+note right
+  VadConfig::from_settings(vad_sensitivity,
+  silence_ms, interim_results)
+end note
+if (captured_at_ms jumps > DISCONTINUITY_MS\nfrom the expected sample clock?) then (yes)
+  :process the partial frame alone,
+  restart the sample clock at the new time;
+else (no)
+endif
+repeat :fill an analysis frame (frame_ms);
+  :process_frame: frame_db(), update_level()
+  (smoothed 0..1 meter);
+  :speech = is_speech(db, speaking):
+  db above absolute_floor_dbfs AND
+  above noise floor + threshold_db_above_noise
+  (lower thresholds while speaking = hysteresis);
+  :adapt_floor() (fast down, slow up);
+  if (utterance open?) then (no: idle_frame)
+    :append to history;
+    if (speech?) then (yes)
+      :onset_ms += frame duration;
+    else (no)
+      :onset_ms = 0;
+    endif
+    if (onset_ms >= min_speech_ms?) then (yes)
+      :start_utterance(): onset frames +
+      pre_roll_ms of history;
+      :emit SpeechStarted{utterance_id, at_ms};
+    else (no)
+      :trim history to pre-roll + onset;
+    endif
+  else (yes: speaking_frame)
+    :append frame to the utterance;
+    if (stationary loud sound for a while?) then (yes)
+      :noise_suspect = true,
+      raise the noise floor;
+    else (no)
+    endif
+    if (silence run >= silence_ms?) then (yes)
+      :finish_utterance();
+      if (voiced < min_utterance_ms\nor noise_suspect noise?) then (yes)
+        :emit Discarded{utterance_id};
+      else (no)
+        :build_clip(is_final = true),
+        trailing silence trimmed;
+        :emit Utterance(AudioClip);
+      endif
+    elseif (duration >= max_utterance_ms?) then (yes)
+      :cut_utterance() at the quietest recent frame;
+      :emit Utterance(clip);
+      :emit SpeechStarted for the continuation;
+    elseif (interim_interval_ms set and\ninterval of speech elapsed?) then (yes)
+      :emit Interim(clip, is_final = false);
+    else (no)
+    endif
+  endif
+repeat while (more samples in the input frame?) is (yes) not (no)
+:return Vec<SegmenterEvent>;
+stop
+
+note right
+  Segmenter::flush() (pause / stop):
+  processes the buffered partial frame and
+  force-finishes the open utterance.
+end note
+@enduml

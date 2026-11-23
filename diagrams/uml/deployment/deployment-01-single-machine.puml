@@ -1,0 +1,85 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: src-tauri/src/lib.rs (setup: app_data_dir, openmeet.db), src-tauri/src/windows.rs (MAIN/OVERLAY webviews),
+' src-tauri/src/local_ai.rs (LocalAiManager, venv_python, --host 127.0.0.1 --port), src-tauri/src/secrets.rs (SERVICE, keyring),
+' src-tauri/src/screenshots.rs (ScreenshotStore), src-tauri/src/logging.rs (OPENMEET_LOG), crates/openmeet-core/src/settings.rs
+' (DEFAULT_OLLAMA_URL, DEFAULT_LOCAL_AI_URL, DEFAULT_OPENAI_URL, DEFAULT_ANTHROPIC_URL), crates/openmeet-core/src/events.rs,
+' crates/openmeet-store/src/database.rs (WAL), local-ai/server.py (MODEL_DIR, endpoints), crates/openmeet-providers/src/*.rs (paths)
+
+title OpenMeet deployment on a single user machine (default local-first setup)
+
+skinparam nodesep 40
+skinparam ranksep 50
+
+node "User computer" <<device>> as PC {
+  node "Operating system\n(Windows 10/11 · macOS 12+ · Linux)" <<executionEnvironment>> as OS {
+
+    node "OpenMeet process (openmeet)" <<executionEnvironment>> as APP {
+      artifact "openmeet\n(Rust binary: Tauri 2 +\nopenmeet-core / -engine / -intel /\n-providers / -platform / -store)" <<artifact>> as BIN
+      node "Webview main\nindex.html (src/main)" <<executionEnvironment>> as WVM
+      node "Webview overlay\noverlay.html (src/overlay)" <<executionEnvironment>> as WVO
+    }
+
+    node "Python local-AI sidecar\n(optional, child process)" <<executionEnvironment>> as SIDE {
+      artifact "local-ai/server.py\n(FastAPI + uvicorn;\n/v1/audio, /v1/embeddings,\n/v1/integrity/*)" <<artifact>> as SRV
+      artifact "local-ai/.venv\n(python, faster-whisper,\nfastembed)" <<artifact>> as VENV
+    }
+
+    folder "local-ai/.models (MODEL_DIR)" as MODELS {
+      artifact "whisper/\n(faster-whisper model,\ndefault base.en)" <<artifact>> as WM
+      artifact "embeddings/\n(fastembed model,\nBAAI/bge-small-en-v1.5)" <<artifact>> as EM
+    }
+
+    node "Ollama service\n(installed and run by the user)" <<executionEnvironment>> as OLL {
+      artifact "pulled models\n(e.g. llama3.2)" <<artifact>> as OLM
+    }
+
+    folder "App data dir: <app_data_dir> = .../dev.openmeet.desktop/" as DATA {
+      database "openmeet.db\n(SQLite, WAL journal)" as DB
+      artifact "openmeet.db-wal\nopenmeet.db-shm" <<artifact>> as WAL
+      folder "screenshots/<meeting id>/\n<frame id>.png\n(only if Keep screenshots is on)" as SHOTS
+    }
+
+    node "OS credential store\nservice dev.openmeet.desktop\naccounts: openai · anthropic · openai_compatible" <<executionEnvironment>> as KEYS
+  }
+}
+
+cloud "Optional cloud AI endpoints\n(only when configured)" as CLOUD {
+  node "api.openai.com\n(DEFAULT_OPENAI_URL)" as OAI
+  node "api.anthropic.com\n(DEFAULT_ANTHROPIC_URL)" as ANT
+  node "OpenAI-compatible server\n(user-entered base URL)" as COMP
+}
+OAI -[hidden]down- ANT
+ANT -[hidden]down- COMP
+
+WVM -down- BIN : Tauri IPC invoke +\nevents openmeet:~//event, openmeet:~//ui\n(in-process, no TCP port)
+WVO -down- BIN : Tauri IPC invoke +\nevents (overlay capability)
+
+BIN -down-> SIDE : <<spawn>> .venv python server.py\n~--host 127.0.0.1 ~--port 8765\n(when a meeting needs it or\nstart_local_ai)
+BIN -down-> SRV : HTTP 127.0.0.1:8765\n/health · /v1/audio/transcriptions ·\n/v1/embeddings
+SRV -down-> MODELS : loads models
+BIN -down-> OLL : HTTP 127.0.0.1:11434\n/api/chat · /api/embed · /api/tags
+BIN -down-> DB : rusqlite (in-process)
+DB .. WAL
+BIN -down-> SHOTS : PNG write (opt-in)
+BIN -right-> KEYS : keyring crate\n(get / set / delete)
+BIN -right-> CLOUD : HTTPS (rustls)\nAPI key in header
+
+note right of KEYS
+  API keys live only here.
+  Environment variables
+  (OPENAI_API_KEY, ANTHROPIC_API_KEY,
+  OPENAI_COMPATIBLE_API_KEY) are a
+  development fallback. Never in SQLite.
+end note
+
+note bottom of DATA
+  Logs: tracing_subscriber fmt to the process's
+  standard output (filter OPENMEET_LOG); no log
+  files are written (Windows release builds have
+  no console window).
+  The sidecar's stdout/stderr go to null when
+  OpenMeet starts it. Raw audio is never written.
+end note
+
+@enduml

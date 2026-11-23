@@ -1,0 +1,161 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/types.rs (Meeting, Participant, MeetingState,
+' PauseReason, Mode, MeetingRecord, MeetingListItem, MeetingSummary, InterviewerSummary)
+' and crates/openmeet-core/src/ids.rs (Id, new_id, now_ms).
+title openmeet-core: meeting aggregate (types.rs)
+
+hide empty members
+skinparam nodesep 40
+skinparam ranksep 50
+
+class Meeting <<struct>> {
+  +id: Id
+  +title: String
+  +mode: Mode
+  +state: MeetingState
+  +started_at: i64
+  +ended_at: Option<i64>
+  +participants: Vec<Participant>
+  +persisted: bool
+}
+
+class Participant <<struct>> {
+  +id: String
+  +role: SpeakerRole
+  +label: String
+}
+
+enum Mode {
+  Candidate  <<default>>
+  Interviewer
+  --
+  +toggled(): Mode
+}
+
+enum MeetingState {
+  Idle  <<default>>
+  Starting
+  Active
+  Paused
+  Stopping
+  Summarizing
+  Completed
+  --
+  +can_transition_to(next: MeetingState): bool
+  +is_live(): bool
+}
+
+enum PauseReason {
+  User
+  Emergency
+}
+
+class MeetingRecord <<struct>> {
+  +meeting: Meeting
+  +segments: Vec<TranscriptSegment>
+  +questions: Vec<DetectedQuestion>
+  +answers: Vec<AnswerRecord>
+  +suggestions: Vec<Suggestion>
+  +topics: Vec<Topic>
+  +claims: Vec<Claim>
+  +observations: Vec<ScreenObservation>
+  +action_items: Vec<ActionItem>
+  +summary: Option<MeetingSummary>
+}
+
+class MeetingListItem <<struct>> {
+  +id: Id
+  +title: String
+  +mode: Mode
+  +state: MeetingState
+  +started_at: i64
+  +ended_at: Option<i64>
+  +segment_count: u32
+  +question_count: u32
+  +has_summary: bool
+}
+
+class MeetingSummary <<struct>> {
+  +meeting_id: Id
+  +overview: String
+  +key_topics: Vec<String>
+  +questions_asked: Vec<String>
+  +answers: Vec<String>
+  +decisions: Vec<String>
+  +action_items: Vec<String>
+  +open_questions: Vec<String>
+  +technical_topics: Vec<String>
+  +follow_up_suggestions: Vec<String>
+  +interviewer: Option<InterviewerSummary>
+  +markdown: String
+  +generated_at: i64
+  +generated_by: String
+}
+
+class InterviewerSummary <<struct>> {
+  +question_coverage: Vec<String>
+  +clarification_areas: Vec<String>
+  +claims_to_verify: Vec<String>
+  +unexplored_topics: Vec<String>
+}
+
+class "Id" as Id <<type alias = String>>
+
+' Item types detailed in class-02 .. class-04
+class TranscriptSegment <<struct>>
+class DetectedQuestion <<struct>>
+class AnswerRecord <<struct>>
+class Suggestion <<struct>>
+class Topic <<struct>>
+class Claim <<struct>>
+class ScreenObservation <<struct>>
+class ActionItem <<struct>>
+enum SpeakerRole
+
+MeetingRecord *-- "1" Meeting
+MeetingRecord *-- "0..*" TranscriptSegment : segments
+MeetingRecord *-- "0..*" DetectedQuestion : questions
+MeetingRecord *-- "0..*" AnswerRecord : answers
+MeetingRecord *-- "0..*" Suggestion : suggestions
+MeetingRecord *-- "0..*" Topic : topics
+MeetingRecord *-- "0..*" Claim : claims
+MeetingRecord *-- "0..*" ScreenObservation : observations
+MeetingRecord *-- "0..*" ActionItem : action_items
+MeetingRecord *-- "0..1" MeetingSummary : summary
+
+Meeting *-- "0..*" Participant : participants
+Meeting --> "1" Mode : mode
+Meeting --> "1" MeetingState : state
+Participant --> "1" SpeakerRole : role
+MeetingListItem ..> Mode
+MeetingListItem ..> MeetingState
+MeetingSummary *-- "0..1" InterviewerSummary : interviewer
+MeetingSummary ..> Meeting : meeting_id
+
+note bottom of MeetingSummary
+  Post-meeting summary. The code comment states it
+  never contains hiring recommendations or scores.
+  generated_by = "provider/model" or "extractive".
+end note
+
+note right of Meeting
+  persisted = false when the retention
+  policy keeps the meeting in memory only.
+  Timestamps are Unix ms (i64).
+end note
+
+note bottom of Id
+  UUIDv7, simple hex form (time-ordered).
+  ids::new_id(): Id, ids::now_ms(): i64
+end note
+
+note bottom of MeetingState
+  Legal transitions (can_transition_to):
+  Idle->Starting, Completed->Starting,
+  Starting->Active, Starting->Idle,
+  Active<->Paused, Active|Paused->Stopping,
+  Stopping->Summarizing|Completed,
+  Summarizing->Completed, Completed->Idle
+end note
+@enduml

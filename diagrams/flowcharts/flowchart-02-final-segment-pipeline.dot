@@ -1,0 +1,71 @@
+// Derived from: crates/openmeet-engine/src/conversation.rs
+//   Engine::handle_final(), compression_due(), run_actions(); constants DETECTION_CONTEXT_SEGMENTS,
+//   COMPRESSION_TRIGGER_TOKENS, TOPIC_ANALYSIS_MIN_FINALS, TOPIC_ANALYSIS_INTERVAL_MS
+//   crates/openmeet-engine/src/runtime.rs (accepts_transcript, extend_answer)
+//   crates/openmeet-engine/src/integrity.rs (on_interviewer_question, on_candidate_segment,
+//   run_integrity_actions) for the answer-integrity hooks in interviewer mode
+digraph flowchart_02 {
+  graph [fontname="Segoe UI", fontsize=16, labelloc=t, labeljust=c,
+         label=<<B>Final transcript segment pipeline — Engine::handle_final()</B><BR/><FONT POINT-SIZE="11">runs for every final draft (TranscriptionEvent::Draft from transcription, or ConvInput::Draft injected by demo / simulation); both modes</FONT>>,
+         bgcolor="#FFFFFF", nodesep=0.3, ranksep=0.3, pad=0.3, newrank=true];
+  node  [fontname="Segoe UI", fontsize=11, shape=box, style="filled", fillcolor="#F6F7FD", color="#4F5BD5", penwidth=1.2, margin="0.14,0.05"];
+  edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756", arrowsize=0.7];
+
+  { node [group=main]; start; din; drt; seg; dempty; add; dvoice; claims; items; topics; detect; dacc; dturn; m1; dact; comp; tcount; dtopic; m2; lat; flush; end; }
+
+  start [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="final draft received"];
+  din   [shape=parallelogram, fillcolor="#FFFFFF", color="#3E4756", margin="0,0", label="TranscriptDraft\n(is_final = true)"];
+  drt   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="runtime for this meeting and\naccepts_transcript()?\n(Active / Paused / Stopping)"];
+  drop  [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="ignore"];
+  seg   [label="pending_utterances.remove(utterance_id)\lsegment = segment_from_draft(rt, draft)\l"];
+  dempty[shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="segment text\nempty?"];
+  add   [label="recent = last 8 finals (DETECTION_CONTEXT_SEGMENTS)\lrt.add_final(segment)\lqueue event TranscriptFinal + PersistOp::Segment\lmemory.add(MemoryKind::Segment) + EmbedJob\l"];
+  dvoice[shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="general.voice_commands and\nspeaker role ≠ Remote and\nparse_voice_command() = Some?"];
+  vrec  [label="queue event\nVoiceCommandRecognized"];
+  dvact [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="state =\nActive?"];
+  vact  [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#E6E9FB" COLOR="#4F5BD5"><TR><TD WIDTH="6"></TD><TD>Action::Voice(cmd)<BR/><FONT POINT-SIZE="10">execute_voice_command (flowchart 19)</FONT></TD><TD WIDTH="6"></TD></TR></TABLE>>];
+
+  claims[label="extract_claims(segment) → if any: rt.claims, PersistOp::Claims,\lmemory (MemoryKind::Claim), event ClaimsExtracted\l"];
+  items [label="extract_action_items(segment) → if any: PersistOp::ActionItems,\levent ActionItemsUpdated\l"];
+  topics[label="rt.topics.observe(segment) → if changed: PersistOp::Topics,\levent TopicsUpdated { topics, suggested_next }\l"];
+  detect[shape=plain, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#E6E9FB" COLOR="#4F5BD5"><TR><TD WIDTH="6"></TD><TD>detect() + question acceptance / semantic check<BR/><FONT POINT-SIZE="10">(flowcharts 04 and 05)</FONT></TD><TD WIDTH="6"></TD></TR></TABLE>>];
+  dacc  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="accepted as a\nquestion?"];
+  ext   [label="rt.extend_answer(segment)\l(append to the open AnswerRecord when\lthe speaker role matches or is Unknown)\l"];
+  dturn [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="Interviewer mode, role ≠ User,\nand not (accepted question\nfrom Unknown)?"];
+  turn  [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#E6E9FB" COLOR="#4F5BD5"><TR><TD WIDTH="6"></TD><TD>rt.turn.push(segment);<BR/>integrity::on_candidate_segment (open answer += utterance);<BR/>if Active: Action::TurnTimer { version, turn_end_silence_ms }<BR/><FONT POINT-SIZE="10">(end-of-turn, flowchart 06)</FONT></TD><TD WIDTH="6"></TD></TR></TABLE>>];
+  iq    [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="Interviewer mode and\nasker is the user\n(or role Unknown)?"];
+  iact  [label="integrity::on_interviewer_question\lprevious answer finalized (last check),\lnew question recorded, reference answers\lrequested (Background, IntegrityReference)\l"];
+  m1    [shape=point, width=0.05, label=""];
+
+  dact  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="state =\nActive?"];
+  comp  [label="compression_due(): finals older than the raw window\l(now − context_window_secs) not yet summarised;\lif their estimate_tokens ≥ 900 → Action::Compress\l"];
+  tcount[label="finals_since_topic_analysis += 1"];
+  dtopic[shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="≥ 12 finals and ≥ 180 s\nsince last topic analysis?"];
+  tact  [label="reset counter, stamp time\lAction::TopicAnalysis\l(lines of the last 300 s, current topics)\l"];
+  m2    [shape=point, width=0.05, label=""];
+  lat   [label="record latency: AudioToTranscript (measured drafts,\l0..120 s) and TranscriptToDetection\l"];
+  flush [label="apply PersistOps (store) → emit queued MeetingEvents\l→ send EmbedJobs (embed_tx) → run_actions(actions)\l→ run_integrity_actions (checks, references, timers)\l"];
+  end   [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="done"];
+
+  start -> din -> drt;
+  drt -> drop [label="no"]; drt -> seg [label="yes"];
+  seg -> dempty; dempty -> drop [label="yes"]; dempty -> add [label="no"];
+  add -> dvoice;
+  dvoice -> vrec [label="yes"]; dvoice -> claims [label="no"];
+  vrec -> dvact; dvact -> vact [label="yes"]; dvact -> m1 [label="no", arrowhead=none];
+  vact -> m1 [arrowhead=none];
+  claims -> items -> topics -> detect -> dacc;
+  dacc -> ext [label="no"]; dacc -> iq [label="yes"]; iq -> iact [label="yes"]; iq -> dturn [label="no"]; iact -> dturn; ext -> dturn;
+  dturn -> turn [label="yes"]; dturn -> m1 [label="no", arrowhead=none]; turn -> m1 [arrowhead=none];
+  m1 -> dact;
+  dact -> comp [label="yes"]; dact -> m2 [label="no", arrowhead=none];
+  comp -> tcount -> dtopic;
+  dtopic -> tact [label="yes"]; dtopic -> m2 [label="no", arrowhead=none]; tact -> m2 [arrowhead=none];
+  m2 -> lat -> flush -> end;
+
+  {rank=same; drt; drop;}
+  {rank=same; dvoice; vrec;}
+  {rank=same; dacc; ext;}
+  {rank=same; dturn; turn;}
+  {rank=same; dtopic; tact;}
+}

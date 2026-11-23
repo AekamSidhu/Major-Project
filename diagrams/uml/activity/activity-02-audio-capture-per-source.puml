@@ -1,0 +1,92 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: src-tauri/src/capture.rs (CaptureManager::start_audio),
+' crates/openmeet-platform/src/audio/mod.rs (AudioCapture::start, CaptureWorker::run /
+' event_loop / on_tick / on_stream_error, open_stream), crates/openmeet-platform/src/audio/convert.rs
+' (data_to_mono, FrameAssembler::push), crates/openmeet-engine/src/engine.rs (push_audio, audio_router).
+title Audio capture per source (Microphone or System): device -> 16 kHz AudioFrames -> Engine
+
+|AppState / CaptureManager|
+start
+:start_audio(engine, source, device)
+-> AudioCapture::start(config, on_frame, on_error);
+
+|Capture thread (CaptureWorker)|
+:CaptureWorker::run: open_stream()
+(resolve_device, stream_config,
+build_input_stream_raw, play);
+if (opened within OPEN_TIMEOUT (10 s)?) then (no / error)
+  :ready -> Err(e): start_audio sets the
+  component status Error and shows the notice
+  "<source> unavailable: ... Select another audio source.";
+  stop
+else (yes)
+  :ready -> Ok(device name);
+endif
+|AppState / CaptureManager|
+:component status Active (device name);
+
+|Capture thread (CaptureWorker)|
+fork
+  |cpal data callback|
+  repeat
+    :data_to_mono(data, channels)
+    (any PCM format -> f32 in [-1, 1], downmix);
+    if (convertible?) then (yes)
+      :start_ms = arrival - device latency
+      (or - packet duration);
+      :send Msg::Audio{generation, samples, start_ms};
+    else (non-PCM)
+      :send Msg::Unconvertible (once);
+    endif
+  repeat while (stream alive?)
+  detach
+fork again
+  |Capture thread (CaptureWorker)|
+  repeat
+    :rx.recv_timeout(TICK = 50 ms);
+    switch (message)
+    case (Msg::Audio of current generation)
+      :FrameAssembler::push(samples, start_ms);
+      note right
+        * anchor timeline on first packet
+        * gap 80 ms..5 s -> fill with silence
+        * gap > 5 s or > 500 ms ahead -> flush, re-anchor
+        * Resampler -> 16 kHz (PIPELINE_SAMPLE_RATE)
+        * cut frames of FRAME_SAMPLES (640 = 40 ms)
+          with captured_at_ms
+      end note
+      :emit(frames): on_frame(frame) per frame
+      i.e. Engine::push_audio(frame);
+      note right
+        Engine drops the frame when not
+        accepting_audio or when the
+        AUDIO_QUEUE (1024) is full
+        (counted in dropped_frames);
+        see activity-04
+      end note
+    case (Msg::StreamError)
+      :on_stream_error: ignore Xrun,
+      RealtimeDenied, DeviceChanged;
+      :otherwise drop stream; reopen at once
+      when it lived >= MIN_STREAM_LIFETIME,
+      else retry every RETRY_INTERVAL (2 s)
+      and report error once via on_error;
+    case (Msg::Unconvertible)
+      :drop stream, report Unsupported;
+    case (timeout)
+      :no message;
+    endswitch
+    :on_tick();
+    note right
+      System: no packets for IDLE_FILL_AFTER
+      -> fill_silence_until(now - 100 ms)
+      Microphone: none for MIC_STALL_AFTER (5 s)
+      -> on_error "stopped delivering audio"
+      No stream: reopen() when retry_at is due
+    end note
+  repeat while (Msg::Stop or channel closed?) is (no) not (yes)
+  :drop stream, flush assembler tail, emit;
+end fork
+stop
+@enduml

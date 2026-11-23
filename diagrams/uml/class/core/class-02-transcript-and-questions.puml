@@ -1,0 +1,167 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/types.rs (Mode, AudioSourceKind, SpeakerRole,
+' TranscriptSegment, TranscriptDraft, QuestionCategory, DetectionMethod, DetectedQuestion,
+' AnswerRecord, VoiceCommand, WordTiming).
+title openmeet-core: transcript, speakers and detected questions (types.rs)
+
+hide empty members
+skinparam nodesep 35
+skinparam ranksep 55
+
+class TranscriptDraft <<struct>> {
+  +utterance_id: Id
+  +source: AudioSourceKind
+  +start_ms: i64  <<Unix ms>>
+  +end_ms: i64  <<Unix ms>>
+  +text: String
+  +is_final: bool
+  +confidence: Option<f32>
+  +speaker_role: Option<SpeakerRole>
+  +words: Option<Vec<WordTiming>>  <<Unix ms; from word timestamps>>
+}
+
+class WordTiming <<struct>> {
+  +word: String
+  +start_ms: i64  <<Unix ms in a draft>>
+  +end_ms: i64
+}
+
+class TranscriptSegment <<struct>> {
+  +id: Id
+  +meeting_id: Id
+  +utterance_id: Id
+  +speaker_id: Option<String>
+  +speaker_role: SpeakerRole
+  +source: AudioSourceKind
+  +start_time: i64  <<ms since meeting start>>
+  +end_time: i64  <<ms since meeting start>>
+  +text: String
+  +is_final: bool
+  +confidence: Option<f32>
+}
+
+enum AudioSourceKind {
+  Microphone
+  System
+}
+
+enum SpeakerRole {
+  User
+  Remote
+  Unknown
+  --
+  +label(mode: Mode): &str
+}
+
+enum Mode {
+  Candidate  <<default>>
+  Interviewer
+}
+
+class DetectedQuestion <<struct>> {
+  +id: Id
+  +meeting_id: Id
+  +segment_ids: Vec<Id>
+  +is_question: bool
+  +confidence: f32
+  +question: String
+  +parts: Vec<String>
+  +category: QuestionCategory
+  +speaker_id: Option<String>
+  +speaker_role: SpeakerRole
+  +requires_response: bool
+  +method: DetectionMethod
+  +supersedes: Option<Id>
+  +detected_at: i64
+}
+
+enum QuestionCategory {
+  Technical
+  Coding
+  SystemDesign
+  Behavioral
+  Experience
+  Product
+  Leadership
+  Clarification
+  Architecture
+  Tradeoff
+  Culture
+  General  <<default>>
+  FollowUp
+  --
+  +ALL: [QuestionCategory; 13]
+  +as_str(): &str
+  +parse_lenient(s: &str): Option<QuestionCategory>
+  +label(): &str
+}
+
+enum DetectionMethod {
+  Heuristic
+  Semantic
+  Manual
+  Voice
+  Simulated
+}
+
+class AnswerRecord <<struct>> {
+  +id: Id
+  +meeting_id: Id
+  +question_id: Option<Id>
+  +speaker_role: SpeakerRole
+  +text: String
+  +segment_ids: Vec<Id>
+  +created_at: i64
+}
+
+enum VoiceCommand <<serde tag="kind", content="text">> {
+  Explain
+  FollowUp
+  Answer
+  Concise
+  Detailed
+  {field} Ask(String)
+}
+
+TranscriptDraft ..> TranscriptSegment : attached to a meeting as >
+TranscriptSegment --> "1" SpeakerRole : speaker_role
+TranscriptSegment --> "1" AudioSourceKind : source
+TranscriptDraft --> "1" AudioSourceKind : source
+TranscriptDraft --> "0..1" SpeakerRole : speaker_role
+TranscriptDraft o-- "0..*" WordTiming : words
+SpeakerRole ..> Mode : label(mode)
+
+DetectedQuestion "0..*" o-- "1..*" TranscriptSegment : segment_ids >
+DetectedQuestion --> "1" QuestionCategory : category
+DetectedQuestion --> "1" DetectionMethod : method
+DetectedQuestion --> "1" SpeakerRole : speaker_role
+DetectedQuestion --> "0..1" DetectedQuestion : supersedes
+
+AnswerRecord --> "0..1" DetectedQuestion : question_id
+AnswerRecord o-- "0..*" TranscriptSegment : segment_ids
+AnswerRecord --> "1" SpeakerRole : speaker_role
+
+note bottom of SpeakerRole
+  label(): User -> "You"; Unknown -> "Speaker";
+  Remote -> "Interviewer" (Mode::Candidate)
+  or "Candidate" (Mode::Interviewer)
+end note
+
+note right of TranscriptSegment
+  Partial and final versions of one utterance
+  share utterance_id, so the UI replaces the
+  partial with the final text.
+end note
+
+note bottom of AnswerRecord
+  What someone said in reply to a detected question:
+  the user's own answer in candidate mode,
+  the candidate's answer in interviewer mode.
+end note
+
+note bottom of VoiceCommand
+  Optional spoken commands
+  ("OpenMeet, explain that").
+end note
+@enduml

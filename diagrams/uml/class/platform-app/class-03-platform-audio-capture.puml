@@ -1,0 +1,146 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-platform/src/audio/mod.rs, audio/convert.rs, error.rs,
+' crates/openmeet-core/src/audio.rs (AudioFrame, Resampler), openmeet-core/src/ipc.rs
+' (AudioDevices, AudioDeviceInfo, SystemAudioSupport), openmeet-core/src/types.rs (AudioSourceKind)
+title openmeet-platform: audio capture (cpal on a dedicated thread, 16 kHz mono frames)
+
+hide empty members
+skinparam nodesep 35
+skinparam ranksep 45
+
+package "openmeet_platform::audio" {
+  class audio <<module>> {
+    +list_devices(): Result<AudioDevices, PlatformError>
+    +system_audio_support(): SystemAudioSupport
+    -resolve_device(host, source, wanted): Result<(cpal::Device, String)>
+    -open_stream(..): Result<OpenStream>
+    -loopback_on_output_devices(): bool
+    -macos_supports_process_tap(): bool <<cfg(target_os = "macos")>>
+    -map_cpal_error(error, source): PlatformError
+  }
+  class AudioCaptureConfig <<struct>> {
+    +source: AudioSourceKind
+    +device: Option<String>
+  }
+  class AudioCapture {
+    -device_name: String
+    -source: AudioSourceKind
+    -tx: mpsc::Sender<Msg>
+    {field} -thread: Option<JoinHandle<()>>
+    +start(config, on_frame, on_error): Result<AudioCapture, PlatformError>
+    +stop()
+    +device_name(): &str
+    +source(): AudioSourceKind
+    ..
+    Drop: sends Msg::Stop, joins the thread
+  }
+  class CaptureWorker <<private>> {
+    config: AudioCaptureConfig
+    {field} on_frame: Box<dyn FnMut(AudioFrame)>
+    {field} on_error: Box<dyn FnMut(PlatformError)>
+    assembler: FrameAssembler
+    generation: u64
+    current: Option<OpenStream>
+    retry_at: Option<Instant>
+    error_reported / stall_reported: bool
+    run(..)
+    event_loop(rx)
+    on_tick()
+    on_stream_error(error)
+    reopen(): Result<()>
+    emit(frames)
+  }
+  enum Msg <<private>> {
+    Audio { generation, samples, start_ms }
+    StreamError { generation, error }
+    Unconvertible { generation, format }
+    Stop
+  }
+  class OpenStream <<private>> {
+    _stream: cpal::Stream
+    name: String
+    sample_rate: u32
+    opened_at: Instant
+  }
+  class FrameAssembler <<pub(crate), convert>> {
+    source: AudioSourceKind
+    input_rate: u32
+    resampler: Resampler
+    pending: Vec<f32>
+    pending_start_ms: Option<f64>
+    push(mono, packet_start_ms): Vec<AudioFrame>
+    fill_silence_until(until_ms): Vec<AudioFrame>
+    flush(): Vec<AudioFrame>
+    set_input_rate(input_rate)
+  }
+}
+
+package "openmeet_platform::error" {
+  enum PlatformError {
+    {field} DeviceNotFound(String)
+    {field} DeviceUnavailable(String)
+    {field} PermissionDenied(String)
+    {field} Unsupported(String)
+    {field} Capture(String)
+    {field} Other(String)
+  }
+}
+
+package "openmeet_core" {
+  class AudioFrame <<struct>> {
+    +source: AudioSourceKind
+    +samples: Vec<f32>
+    +captured_at_ms: i64
+    +duration_ms(): i64
+  }
+  enum AudioSourceKind {
+    Microphone
+    System
+  }
+  class Resampler
+  class AudioDevices <<struct, ipc>> {
+    +inputs: Vec<AudioDeviceInfo>
+    +outputs: Vec<AudioDeviceInfo>
+    +system_audio: SystemAudioSupport
+  }
+  class AudioDeviceInfo <<struct, ipc>> {
+    +id / name: String
+    +is_default: bool
+    +channels: u16
+    +sample_rate: u32
+  }
+  class SystemAudioSupport <<struct, ipc>> {
+    +supported: bool
+    +mechanism: String
+    +note: String
+  }
+}
+
+AudioCapture ..> AudioCaptureConfig : start(config)
+AudioCapture ..> CaptureWorker : spawns thread\n"openmeet-audio-<source>"
+AudioCapture --> Msg : sends Stop
+CaptureWorker *-- AudioCaptureConfig
+CaptureWorker *-- FrameAssembler
+CaptureWorker *-- "0..1" OpenStream : current
+CaptureWorker ..> Msg : receives (cpal callbacks)
+CaptureWorker ..> AudioFrame : on_frame
+CaptureWorker ..> PlatformError : on_error
+CaptureWorker ..> audio : resolve_device / open_stream
+FrameAssembler *-- Resampler
+FrameAssembler ..> AudioFrame : 640-sample (40 ms) frames
+AudioFrame --> AudioSourceKind
+audio ..> AudioDevices : list_devices()
+AudioDevices *-- "*" AudioDeviceInfo
+AudioDevices *-- SystemAudioSupport
+
+note right of audio
+  <b>system_audio_support() per platform</b>
+  <<cfg(windows)>> "WASAPI loopback": input stream on the output device
+  <<cfg(target_os = "macos")>> "Core Audio process tap" on 14.6+;
+     otherwise unsupported ("Virtual audio device", e.g. BlackHole selectable)
+  <<cfg(target_os = "linux")>> "PulseAudio monitor source" when the cpal
+     host is PulseAudio (incl. pipewire-pulse); unsupported on plain ALSA
+  other OS: supported = false, mechanism "none"
+end note
+@enduml

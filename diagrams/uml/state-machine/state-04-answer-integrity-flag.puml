@@ -1,0 +1,49 @@
+@startuml
+!include ../../_style.iuml
+' Derived from crates/openmeet-engine/src/integrity.rs (OpenAnswer, on_candidate_segment, on_candidate_speech_started,
+' on_timer, finalize_answer, prepare_check, spawn_integrity_check, run_integrity_check, store_integrity_flag),
+' crates/openmeet-engine/src/conversation.rs (IntegrityTimer), crates/openmeet-core/src/integrity.rs (IntegrityFlag,
+' IntegrityLevel). The state belongs to the open answer; the stored IntegrityFlag is its latest revision.
+title State of one candidate answer's integrity flag (interviewer mode)
+
+[*] --> Collecting : first candidate utterance\n(on_candidate_segment creates OpenAnswer)
+
+state Collecting {
+  [*] --> Speaking
+  Speaking : candidate speaking; timer version bumped\non each speech start (old timer outdated)
+}
+
+state "Pausing" as Pausing : turn-end timer armed\n(turn_end_silence_ms, default 1500 ms)\nfires only for the latest version
+
+Collecting --> Pausing : utterance final\n(timer armed with version)
+Pausing --> Collecting : candidate speaks again\n(on_candidate_speech_started)
+
+state "Checking (revision n)" as Checking : Background request IntegrityCheck\nfour signals run in parallel\n(delivery computed before)
+Pausing --> Checking : timer fires, candidate silent,\nunits not yet checked\n(on_timer -> CheckJob)
+
+Checking --> Checked : fused and stored\nIntegrityChecked emitted
+Checking --> Checking : newer revision starts\n(previous ticket cancelled,\nits flag is never stored)
+Checking --> Cancelled : emergency stop or\nmeeting closed while running
+
+state "Checked (revision n)" as Checked : flag stored and shown\nlevel low / possible / high / unavailable
+Checked --> Collecting : candidate continues\n(same answer id, next revision)
+
+state Final : closed answer: last check done;\nthe answer joins the delivery baseline\n(first 3 answers with at least 10 words)
+
+Collecting --> Final : next interviewer question\nor meeting ends (finalize_answer)
+Pausing --> Final : finalize_answer, unchecked units:\nlast check (last = true) first
+Checked --> Final : finalize_answer, all units checked:\nbaseline commit only
+Cancelled --> Final : answer closed
+Final --> [*]
+
+note right of Checked
+  A flag is a signal for the interviewer,
+  never a verdict. Revisions only grow;
+  a stale revision never replaces a newer one.
+end note
+
+note bottom of Final
+  The flag row in integrity_flags keeps the
+  last stored revision (replaced by id).
+end note
+@enduml

@@ -1,0 +1,31 @@
+@startuml
+!include ../../_style.iuml
+' Derived from the sequence diagrams it references (uml/sequence/live-meeting, uml/sequence/integrity) and their code:
+' crates/openmeet-engine/src/conversation.rs (handle_final, run_actions, on_interviewer_question branch,
+' on_integrity_timer, on_turn_timer), crates/openmeet-engine/src/integrity.rs,
+' crates/openmeet-engine/src/assist.rs (spawn_semantic_check, answer_question), crates/openmeet-intel/src/detect/mod.rs
+' (heuristic detect -> ambiguous flag). Each [ref] node is an interaction use of the named diagram.
+title Interaction overview: one candidate turn in interviewer mode (references to the sequence diagrams)
+
+start
+:[ref] Audio to transcript\n(sequence-02-audio-to-transcript);
+:[ref] Final segment tracking\n(sequence-03-final-segment-tracking);
+if (heuristic says ambiguous and\nsemantic detection is on?) then (yes)
+  :[ref] Semantic question check\n(sequence-04-semantic-question-check);
+else (no)
+endif
+if (interviewer question detected?) then (yes)
+  :[ref] Integrity: reference answers\nand previous answer's last check\n(sequence-01-answer-integrity-check,\n"When the interviewer's question is detected");
+else (no: candidate speech)
+  :candidate utterance joins the open answer;
+  :arm turn-end timer and integrity timer\n(turn_end_silence_ms);
+endif
+fork
+  :[ref] Integrity check after the pause\n(sequence-01-answer-integrity-check);
+fork again
+  :turn-end timer fires with at least\nfollowup_min_words words and\nthe candidate silent:\nstart follow-up questions\n(auto_followups);
+fork again
+  :meeting ends: finalize the open answer\n(last check, baseline commit);
+end fork
+stop
+@enduml

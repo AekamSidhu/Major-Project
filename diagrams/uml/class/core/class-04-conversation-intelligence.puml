@@ -1,0 +1,142 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/types.rs (ClaimKind, ExtractionSource, Claim,
+' TopicStatus, Topic, ActionItem, ScreenObservation, ScreenFrame, UserProfile, SpeakerRole).
+title openmeet-core: claims, topics, action items and screen context (types.rs)
+
+hide empty members
+skinparam nodesep 40
+skinparam ranksep 55
+
+class Claim <<struct>> {
+  +id: Id
+  +meeting_id: Id
+  +text: String
+  +kind: ClaimKind
+  +segment_id: Option<Id>
+  +speaker_role: SpeakerRole
+  +source: ExtractionSource
+  +created_at: i64
+}
+
+enum ClaimKind {
+  Claim
+  Technology
+  Decision
+  Tradeoff
+  Metric
+  Ownership
+  Implementation
+  Risk
+  Unknown
+  --
+  +parse_lenient(s: &str): ClaimKind
+}
+
+enum ExtractionSource {
+  Heuristic
+  Llm
+}
+
+class Topic <<struct>> {
+  +id: String  <<stable slug>>
+  +meeting_id: Id
+  +name: String
+  +status: TopicStatus
+  +mentions: u32
+  +first_mentioned_at: Option<i64>
+  +last_mentioned_at: Option<i64>
+  +planned: bool
+  +summary: Option<String>
+}
+
+enum TopicStatus {
+  Pending
+  Current
+  Covered
+}
+
+class ActionItem <<struct>> {
+  +id: Id
+  +meeting_id: Id
+  +text: String
+  +owner: Option<String>
+  +source_segment_id: Option<Id>
+  +created_at: i64
+}
+
+class ScreenObservation <<struct>> {
+  +id: Id
+  +meeting_id: Option<Id>
+  +timestamp: i64
+  +source: String
+  +application: Option<String>
+  +title: Option<String>
+  +description: String
+  +visible_text: Option<String>
+  +entities: Vec<String>
+  +content_type: Option<String>
+  +frame_hash: Option<String>
+}
+
+class ScreenFrame <<struct, in-memory only>> {
+  +id: Id
+  +captured_at: i64
+  +source_label: String
+  +application: Option<String>
+  +window_title: Option<String>
+  +width: u32
+  +height: u32
+  +png: Vec<u8>
+  +hash: u64
+  +change_score: f32
+  +manual: bool
+}
+
+class UserProfile <<struct>> {
+  +background: String
+  +role_context: String
+  +planned_topics: String
+  +custom_instructions: String
+  --
+  +planned_topic_list(): Vec<String>
+}
+
+class TranscriptSegment <<struct>>
+enum SpeakerRole
+
+Claim --> "1" ClaimKind : kind
+Claim --> "1" ExtractionSource : source
+Claim --> "1" SpeakerRole : speaker_role
+Claim --> "0..1" TranscriptSegment : segment_id
+ActionItem --> "0..1" TranscriptSegment : source_segment_id
+Topic --> "1" TopicStatus : status
+UserProfile ..> Topic : planned_topic_list()\nfeeds planned topics
+ScreenFrame ..> ScreenObservation : analysed into\n(OCR / vision)
+
+note bottom of TopicStatus
+  Pending: not discussed yet (planned or suggested)
+  Current: being discussed right now
+  Covered: discussed earlier
+end note
+
+note bottom of ScreenObservation
+  Structured screen observation.
+  Raw screenshots are never part of it.
+  content_type: "code" | "diagram" | "document" |
+  "slides" | "browser" | "terminal" | "other"
+end note
+
+note bottom of ScreenFrame
+  Captured, privacy-filtered, change-detected
+  frame ready for OCR/vision. Not serialized,
+  lives only in memory. png = downscaled frame,
+  hash = 64-bit perceptual hash,
+  manual = explicit capture (bypasses change detection).
+end note
+
+note bottom of Claim
+  A notable statement (mostly from the
+  candidate in interviewer mode).
+end note
+@enduml

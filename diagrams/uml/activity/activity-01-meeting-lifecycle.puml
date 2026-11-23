@@ -1,0 +1,126 @@
+@startuml
+!include ../../_style.iuml
+' Derived from: src/main/sections/home/StartMeeting.tsx, src/main/sections/home/helpers.ts,
+' src-tauri/src/commands/meeting.rs, src-tauri/src/state.rs (start_meeting, start_capture,
+' pause/resume, stop_meeting), crates/openmeet-engine/src/engine.rs (start_meeting_inner,
+' start_sessions, pause, resume, stop_meeting), crates/openmeet-engine/src/assist.rs
+' (spawn_meeting_summary), crates/openmeet-core/src/types.rs (MeetingState).
+title Meeting lifecycle: setup -> activate -> live -> stop -> summary -> stored
+
+|User / main window|
+start
+:Fill the "Start a meeting" form
+(Mode: Candidate or Interviewer, title,
+microphone / system audio, screen context,
+meeting app);
+if (validateStartForm() returns a problem?) then (yes)
+  :Show the problem;
+  stop
+else (no)
+endif
+:api.startMeeting(buildStartRequest(form));
+
+|AppState (src-tauri)|
+:command start_meeting: validate_start()
+(title length, focus_app_id, screen id);
+:tray tooltip "meeting in progress";
+if (microphone or system audio\nand local_ai::sidecar_in_use?) then (yes)
+  :local_ai.start(settings)
+  (error -> Transcription component Error + notice);
+else (no)
+endif
+
+|Engine|
+:start_meeting_inner(req, demo = false);
+if (a meeting is Starting / Active /\nPaused / Stopping?) then (yes)
+  :Err InvalidState\n"A meeting is already running";
+  |AppState (src-tauri)|
+  :reset tray tooltip;
+  stop
+else (no)
+endif
+|Engine|
+:requests.cancel_all(false);
+if (settings.privacy.retention.persists()?) then (yes)
+  :store = db_store (SQLite);
+else (no: retention None)
+  :store = NullStore
+  (nothing is written);
+endif
+:new MeetingRuntime
+transition -> **Starting**;
+:emit MeetingStateChanged, ModeChanged;
+:spawn_conversation(trans_rx, conv_rx);
+:start_sessions(Microphone / System)
+(one TranscriptionSession per source);
+:transition -> **Active**;
+:persist PersistOp::Meeting
+accepting_audio = true;
+:emit MeetingStarted;
+
+|AppState (src-tauri)|
+:capture.start_audio() per selected source;
+if (screen source selected?) then (yes)
+  :start_screen(spec) with privacy rules;
+else (no)
+endif
+if (overlay.show_on_meeting_start?) then (yes)
+  :overlay.show();
+else (no)
+endif
+if (focus_app_id set?) then (yes)
+  :focus::focus_window(id)
+  then minimize the main window;
+else (no)
+endif
+
+|Engine|
+repeat
+  :Live loop (see activity-02 to 06):
+  audio, transcripts, question detection,
+  suggestions / follow-ups, screen frames;
+  if (user pauses (pause_meeting / toggle_pause)?) then (yes)
+    :transition -> **Paused** (PauseReason::User)
+    accepting_audio = false
+    AudioControl::Flush(None), cancel_all(false);
+    |AppState (src-tauri)|
+    :capture.stop_all() (devices released);
+    :... resume_meeting: engine.resume()
+    -> **Active**, restart sessions and capture;
+    |Engine|
+  else (no)
+  endif
+repeat while (stop_meeting requested?) is (no) not (yes)
+
+|AppState (src-tauri)|
+:capture.stop_all(); capture.set_sources(None);
+
+|Engine|
+:stop_meeting(): transition -> **Stopping**
+accepting_audio = false;
+:AudioControl::Flush(ack)
+wait for pending_utterances
+(bounded by STOP_DRAIN_TIMEOUT);
+:AudioControl::Stop; requests.cancel_all(false);
+:close_answer(), ended_at = now
+transition -> **Summarizing**;
+:persist Answer, Topics, Meeting;
+:emit MeetingStopped, MeetingStateChanged;
+:spawn_meeting_summary(meeting_id);
+
+|Background summary task|
+:summarize_with(): LLM summary
+or extractive fallback;
+if (meeting deleted meanwhile?) then (yes)
+  :transition -> **Completed**
+  (nothing saved or shown);
+  stop
+else (no)
+endif
+:rt.summary = summary
+transition -> **Completed**;
+:persist PersistOp::Summary, PersistOp::Meeting;
+:emit SummaryReady, notice
+"Meeting summary is ready.";
+stop
+@enduml

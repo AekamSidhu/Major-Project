@@ -1,0 +1,77 @@
+// Derived from: crates/openmeet-intel/src/detect/mod.rs
+//   detect(), requires_response(), is_lead_in(), split_parts(), classify_category(),
+//   constants LEAD_IN_GAP_MS, FRAGMENT_GAP_MS, CONTINUATION_GAP_MS, QUESTION_THRESHOLD
+digraph flowchart_04 {
+  graph [fontname="Segoe UI", fontsize=16, labelloc=t, labeljust=c,
+         label=<<B>Question detection (2/3): detect() — rhetorical check, lead-ins, fragments, continuations, speaker role</B><BR/><FONT POINT-SIZE="11">intel::detect::detect(&amp;DetectionInput) → DetectionResult ; QUESTION_THRESHOLD = 0.5</FONT>>,
+         bgcolor="#FFFFFF", nodesep=0.3, ranksep=0.3, pad=0.3, newrank=true];
+  node  [fontname="Segoe UI", fontsize=11, shape=box, style="filled", fillcolor="#F6F7FD", color="#4F5BD5", penwidth=1.2, margin="0.14,0.05"];
+  edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756", arrowsize=0.7];
+
+  { node [group=main]; start; inp; split; score; drh; conf; dq; qtext; dprev; v1; v2; mrg; dcont; role; isq; parts; out; end; }
+  { node [group=ctx]; dlead; dfrag; dmerg; }
+
+  start [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="detect(input)"];
+  inp   [shape=parallelogram, fillcolor="#FFFFFF", color="#3E4756", margin="0,0", label="DetectionInput { segment (new final),\nrecent (earlier finals), mode, last_question }"];
+  split [label="text = clean(segment.text)\lsentences(text): split on . ! ? …\l(a '.' only ends a sentence before whitespace)\l"];
+  score [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#E6E9FB" COLOR="#4F5BD5"><TR><TD WIDTH="6"></TD><TD>score_sentence() for every sentence<BR/><FONT POINT-SIZE="10">(see flowchart 03)</FONT></TD><TD WIDTH="6"></TD></TR></TABLE>>];
+
+  drh   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="last sentence ≥ 0.5 is followed\nonly by sentences < 0.3, one of them\nanswer-like (≥3 words, starts we / i /\nit / the / so …) and the question\ncontains 'we' or 'i'?"];
+  rh    [fillcolor="#FFF8E1", color="#C9A227", label="rhetorical = true\nnegative:rhetorical\n(confidence ×0.2 below)"];
+
+  conf  [label="confidence = max sentence score\l(× 0.2 when rhetorical)\lsignals = union of sentence signals\l"];
+  dq    [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="any sentence\n≥ 0.5 ?"];
+  qall  [label="question = whole text"];
+  qsel  [label="question = one preceding lead-in /\l≥4-word context sentence + every\lnon-negative sentence from the first\lquestion sentence on\l"];
+  qtext [shape=point, width=0.05, label=""];
+  mrg   [shape=point, width=0.05, label=""];
+  v1    [shape=point, width=0.001, height=0.001, peripheries=0, label=""];
+  v2    [shape=point, width=0.001, height=0.001, peripheries=0, label=""];
+
+  dprev [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="previous segment of the\nSAME speaker role in recent?"];
+  dlead [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="gap ≤ 4 s (LEAD_IN_GAP_MS)\nand is_lead_in(prev) and\nconfidence ≥ 0.5 ?"];
+  lead  [label="prepend previous text\lsegment_ids.insert(0, prev.id)\lconfidence = combine([confidence, 0.2])\llead_in_merged\l"];
+  dfrag [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="gap ≤ 2.5 s (FRAGMENT_GAP_MS),\nprev has no . ? ! ending, prev score < 0.5\nand prev ≤ 12 words?"];
+  dmerg [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="score of merged\n'prev + text' > confidence\nand ≥ 0.5 ?"];
+  frag  [label="question = merged text\lconfidence = merged score\lprepend prev.id ; fragment_merged\l"];
+
+  dcont [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="last_question from same speaker role,\nconfidence ≥ 0.5 and its last segment\nended ≤ 3 s ago (CONTINUATION_GAP_MS)?"];
+  cont  [label="supersedes = last_question.id\lquestion = last.question + question\lprepend last.segment_ids\lcontinuation\l"];
+
+  role  [label="(requires, factor) = requires_response(mode, speaker_role)\lconfidence = clamp(confidence × factor, 0, 1)\l"];
+  roletab [shape=note, fillcolor="#FFF8E1", color="#C9A227", label="requires_response(mode, role)\lCandidate   + Remote  → (true, 1.0)\lCandidate   + Unknown → (true, 0.85)\lCandidate   + User    → (false, 1.0)\lInterviewer + User    → (false, 1.0)\lInterviewer + Remote  → (true, 1.0)\lInterviewer + Unknown → (true, 0.85)\l"];
+  isq   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="confidence ≥ 0.5 ?"];
+  pyes  [label="is_question = true\lparts = split_parts(question)\l(or [question + '?'] when empty)\l"];
+  pno   [label="is_question = false\lparts = []\l"];
+  parts [label="category = classify_category(question)\lambiguous = 0.35 ≤ confidence < 0.65 and not rhetorical\lrequires_response = is_question and requires\l"];
+  out   [shape=parallelogram, fillcolor="#FFFFFF", color="#3E4756", margin="0,0", label="DetectionResult { is_question, confidence, question, parts,\ncategory, requires_response, segment_ids, supersedes,\nambiguous, signals }"];
+  end   [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="return"];
+
+  start -> inp -> split -> score -> drh;
+  drh -> rh [label="yes"]; drh -> conf [label="no"]; rh -> conf;
+  conf -> dq;
+  dq -> qall [label="no"]; dq -> qsel [label="yes"];
+  qsel -> qtext [arrowhead=none]; qall -> qtext [arrowhead=none];
+  qtext -> dprev;
+  dprev -> dlead [label="yes", tailport=e]; dprev -> v1 [label="no", arrowhead=none]; v1 -> v2 [arrowhead=none]; v2 -> mrg [arrowhead=none];
+  dlead -> lead [label="yes"]; dlead -> dfrag [label="no"];
+  dfrag -> dmerg [label="yes"]; dfrag -> mrg [label="no", arrowhead=none];
+  dmerg -> frag [label="yes"]; dmerg -> mrg [label="no", arrowhead=none];
+  lead -> mrg [arrowhead=none]; frag -> mrg [arrowhead=none]; mrg -> dcont;
+  dcont -> cont [label="yes"]; dcont -> role [label="no"]; cont -> role;
+  role -> roletab [style=dashed, arrowhead=none, color="#C9A227"];
+  role -> isq;
+  isq -> pyes [label="yes"]; isq -> pno [label="no"];
+  pyes -> parts; pno -> parts;
+  parts -> out -> end;
+
+  {rank=same; drh; rh;}
+  {rank=same; dq; qall; qsel;}
+  {rank=same; dlead; lead;}
+  {rank=same; dfrag; v1;}
+  {rank=same; dmerg; v2; frag;}
+
+  {rank=same; dcont; cont;}
+  {rank=same; role; roletab;}
+  {rank=same; pyes; pno;}
+}

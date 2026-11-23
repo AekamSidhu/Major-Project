@@ -1,3 +1,5 @@
+// Derived from: crates/openmeet-engine/src (engine.rs, conversation.rs, assist.rs, integrity.rs, screen.rs, persist.rs),
+//   crates/openmeet-intel/src (detect, vad, topics, claims, integrity), crates/openmeet-store/src (records.rs, history.rs, settings.rs).
 // DFD Level 1: the main processes inside OpenMeet, the data stores they use
 // and the flows between them. Yourdon–DeMarco notation: rectangle = external
 // entity, circle = process, open-ended box = data store. External entities

@@ -1,3 +1,5 @@
+// Derived from: src-tauri/src/secrets.rs, crates/openmeet-core/src/settings.rs, crates/openmeet-store/src (records.rs,
+//   history.rs, settings.rs, privacy.rs), crates/openmeet-engine/src/conversation.rs (summary), crates/openmeet-intel/src/prompts/meeting_summary.rs.
 // DFD Level 2 for processes 8.0 (Manage settings & keys), 9.0 (Persist &
 // export) and 10.0 (Summarize meeting). Entities and stores marked * are
 // drawn more than once to keep flows short.

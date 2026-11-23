@@ -1,7 +1,9 @@
-// DFD Level 2 for process 11.0 (Assess answer integrity): two independent
-// cheating signals, AI-echo answer analysis (text + delivery) and
-// reading-gaze detection (video), fused into one flag with evidence. Flags
-// are signals for the interviewer, never automatic verdicts.
+// Derived from: crates/openmeet-engine/src/integrity.rs, crates/openmeet-intel/src/integrity (delivery, echo, evidence, fusion),
+//   crates/openmeet-providers/src/integrity.rs, local-ai/integrity, spec/integrity/README.md (11.8 added for ai_text).
+// DFD Level 2 for process 11.0 (Assess answer integrity): four signals
+// (AI-written text, echo of an LLM answer, delivery timing, reading gaze)
+// fused into one flag with evidence. The flag is a signal for the
+// interviewer, never an automatic verdict.
 digraph dfd2_integrity {
   graph [rankdir=LR, fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.45, ranksep=0.85,
          label="DFD Level 2 — 11.0 Assess answer integrity", pad=0.3];
@@ -26,22 +28,27 @@ digraph dfd2_integrity {
   p115 [label="11.5\nTrack\ngaze"];
   p116 [label="11.6\nDetect\nreading\npattern"];
   p117 [label="11.7\nFuse signals\n& flag"];
+  p118 [label="11.8\nScore\nAI-written\ntext"];
 
   node [shape=none, width=0, style="", penwidth=1];
   d2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D2</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Settings (thresholds, gaze on / off)</TD></TR></TABLE>>];
   d3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5"><TR><TD SIDES="TBR" BGCOLOR="#EEF7F1">D3</TD><TD SIDES="TB" BGCOLOR="#EEF7F1">Conversation memory (baseline, flags)</TD></TR></TABLE>>];
 
   // AI-echo: delivery
-  p2 -> p111   [label="candidate small-talk\nsegments (first minutes)"];
+  p2 -> p111   [label="the candidate's first answers\n(3 with 10+ words)"];
   p111 -> d3   [label="baseline: speech rate,\npause and filler profile"];
   p2 -> p112   [label="answer segments\n+ word timestamps"];
   p3 -> p112   [label="question end time"];
   d3 -> p112   [label="baseline"];
-  p112 -> p117 [label="delivery anomaly\n(start delay, rate evenness,\nfillers, mid-sentence pauses)"];
+  p112 -> p117 [label="delivery index\n(latency, speaking rate,\npauses, fillers; uncalibrated:\nat most possible)"];
+
+  // AI-written text: sidecar classifier on the transcript
+  p2 -> p118   [label="answer transcript"];
+  p118 -> p117 [label="ai_text level\n(sidecar, calibrated)"];
 
   // AI-echo: content
   p3 -> p113   [label="interviewer question"];
-  p113 -> llm  [dir=both, label="reference-answer prompt /\n3–4 sampled answers"];
+  p113 -> llm  [dir=both, label="reference-answer prompt /\n2 answers (thresholds.json)"];
   p113 -> p114 [label="reference answers"];
   p3 -> p114   [label="candidate answer text"];
   p114 -> emb  [dir=both, label="texts / vectors"];
@@ -52,10 +59,10 @@ digraph dfd2_integrity {
   p115 -> gaze [dir=both, label="face crop /\niris + eye landmarks"];
   p115 -> p116 [label="gaze direction\ntime series"];
   p3 -> p116   [label="answer start / end"];
-  p116 -> p117 [label="reading score\n(line sweeps, off-screen\nfixation while answering)"];
+  p116 -> p117 [label="reading probability\n(1-D CNN, 10 s windows;\nlevel low / possible / high)"];
 
   // Fusion
-  d2 -> p117   [label="thresholds,\nsignal weights"];
+  d2 -> p117   [label="thresholds,\nfusion rule (spec)"];
   p117 -> d3   [label="integrity flag"];
   p117 -> p7   [label="flag + evidence\n(timestamps, scores)"];
   p117 -> p9   [label="integrity flag"];

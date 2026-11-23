@@ -1,0 +1,188 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/integrity.rs (IntegritySignalName, IntegrityLevel,
+' DeliveryEvidence, IntegritySignal, IntegrityFlag, IntegrityServiceView, GazeStatus,
+' IntegrityServiceStatus, AiTextResult, ReadingResult, IntegrityService),
+' crates/openmeet-intel/src/integrity/fusion.rs (FusionInput, FusedFlag, fuse),
+' crates/openmeet-core/src/events.rs (MeetingEvent::IntegrityChecked).
+title openmeet-core / openmeet-intel: answer-integrity flag, signals and the sidecar contract
+
+hide empty members
+skinparam nodesep 30
+skinparam ranksep 60
+
+enum IntegritySignalName <<enum>> {
+  AiText
+  EchoSimilarity
+  Delivery
+  Reading
+  --
+  +as_str(): &str
+  +label(): &str
+}
+
+enum IntegrityLevel <<enum>> {
+  Low
+  Possible
+  High
+  TooShort
+  Baseline
+  NoGaze
+  Unavailable
+  --
+  +is_scored(): bool
+  +is_elevated(): bool
+}
+
+class IntegrityFlag <<struct>> {
+  +id: Id
+  +meeting_id: Id
+  +question_id: Option<Id>
+  +question_text: Option<String>
+  +answer_start_ms: i64
+  +answer_end_ms: i64
+  +answer_words: u32
+  +level: IntegrityLevel
+  +elevated: Vec<IntegritySignalName>
+  +headline: String
+  +revision: u32
+  +spec_version: u32
+  +created_at: i64
+  +updated_at: i64
+}
+
+class IntegritySignal <<struct>> {
+  +name: IntegritySignalName
+  +level: IntegrityLevel
+  +calibrated: bool
+  +score: Option<f64>
+  +evidence: Vec<String>
+  +note: Option<String>
+}
+
+class DeliveryEvidence <<struct>> {
+  +granularity: String
+  +word_count: u32
+  +latency_s: Option<f64>
+  +baseline_latency_s: Option<f64>
+  +rate_wpm: Option<f64>
+  +baseline_rate_wpm: Option<f64>
+  +pause_per_min: Option<f64>
+  +baseline_pause_per_min: Option<f64>
+  +filler_per_100w: Option<f64>
+  +baseline_filler_per_100w: Option<f64>
+  +baseline_answers: u32
+}
+
+class IntegrityServiceView <<struct>> {
+  note: built by the Tauri command get_integrity_status, not by the trait
+  +reachable: bool
+  +ai_text_ready: bool
+  +reading_ready: bool
+  +embedding_model: Option<String>
+  +required_embedding_model: String
+  +echo_calibrated: bool
+  +echo_reference_model: String
+  +delivery_calibrated: bool
+  +message: String
+}
+
+interface IntegrityService <<trait>> {
+  +info(): ProviderInfo
+  +status(cancel): IntegrityServiceStatus
+  +ai_text(text, cancel): AiTextResult
+  +start_gaze(region: Rect, cancel): GazeStatus
+  +stop_gaze(cancel): GazeStatus
+  +reset_gaze(cancel): GazeStatus
+  +reading(start_epoch_s, end_epoch_s, cancel): ReadingResult
+}
+
+class AiTextResult <<struct>> {
+  +probability: f64
+  +level: IntegrityLevel
+  +words: u32
+  +model: String
+}
+
+class ReadingResult <<struct>> {
+  +probability: Option<f64>
+  +level: IntegrityLevel
+  +valid_fraction: Option<f64>
+  +windows: u32
+  +seconds: f64
+}
+
+class GazeStatus <<struct>> {
+  +source: String
+  +capturing_screen: bool
+  +frames_per_second: f64
+  +face_found_fraction: f64
+  +tracked_fraction: f64
+  +error: Option<String>
+}
+
+class IntegrityServiceStatus <<struct>> {
+  +ai_text_ready: bool
+  +reading_ready: bool
+  +ai_text_error: Option<String>
+  +reading_error: Option<String>
+  +embedding_model: Option<String>
+}
+
+class FusionInput <<struct>> {
+  +name: IntegritySignalName
+  +level: IntegrityLevel
+  +calibrated: bool
+}
+
+class FusedFlag <<struct>> {
+  +level: IntegrityLevel
+  +elevated: Vec<IntegritySignalName>
+}
+
+class "fuse(signals: &[FusionInput]) -> FusedFlag" as fuse <<function>>
+
+class "MeetingEvent::IntegrityChecked" as evt <<event>> {
+  +flag: IntegrityFlag
+}
+
+IntegrityFlag *-- "0..*" IntegritySignal : signals
+IntegrityFlag --> "1" IntegrityLevel : level
+IntegrityFlag o-- "0..*" IntegritySignalName : elevated
+IntegrityFlag ..> evt : emitted as
+IntegritySignal --> "1" IntegritySignalName : name
+IntegritySignal --> "1" IntegrityLevel : level
+IntegritySignal *-- "0..1" DeliveryEvidence : delivery
+IntegrityServiceStatus *-- "1" GazeStatus : gaze
+IntegrityService ..> AiTextResult : ai_text()
+IntegrityService ..> ReadingResult : reading()
+IntegrityService ..> GazeStatus : start / stop / reset gaze
+IntegrityService ..> IntegrityServiceStatus : status()
+FusionInput --> "1" IntegritySignalName
+FusionInput --> "1" IntegrityLevel
+fuse ..> FusionInput : input
+fuse ..> FusedFlag : output
+IntegrityFlag ..> fuse : level and elevated\ncome from fuse()
+
+note bottom of IntegrityLevel
+  Scored levels: low, possible, high.
+  Not scored: too_short, baseline, no_gaze, unavailable.
+  Only the scored ones take part in the combined flag.
+end note
+
+note bottom of fuse
+  high: a calibrated signal is high AND at least
+  one other signal is possible or high.
+  possible: any signal possible or high.
+  low: every scored signal low.
+  unavailable: no signal scored.
+  An uncalibrated signal counts at most as possible.
+end note
+
+note bottom of IntegrityFlag
+  A signal for the interviewer, never a verdict.
+  headline is one plain line; signals carry the evidence.
+  One flag per checked answer; a re-check replaces it
+  (revision grows).
+end note
+@enduml

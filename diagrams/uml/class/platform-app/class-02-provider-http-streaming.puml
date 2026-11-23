@@ -1,0 +1,175 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-providers/src/http.rs, sse.rs, stream.rs, think.rs, lines.rs,
+' local_ai.rs, and the decoder structs in ollama.rs, openai.rs, anthropic.rs
+title openmeet-providers: shared HTTP plumbing, stream decoding and the sidecar status client
+
+hide empty members
+skinparam nodesep 40
+skinparam ranksep 50
+
+package "providers::http" {
+  class Endpoint <<struct>> {
+    +base_url: String
+    +api_key: Option<String>
+    +timeouts: Timeouts
+    +new(base_url): Endpoint
+    +with_api_key(Option<String>): Self
+    +with_timeouts(Timeouts): Self
+    +location(): ProviderLocation
+    +host(): String
+  }
+  class Timeouts <<struct>> {
+    +connect: Duration
+    +response: Duration
+    +stream_idle: Duration
+    +request: Duration
+    +health: Duration
+  }
+  class HttpFailure <<struct>> {
+    +status: StatusCode
+    +message: Option<String>
+    +retry_after_secs: Option<u64>
+    ~read(...): HttpFailure
+    +into_error(): ProviderError
+  }
+  class LoopbackOnlyResolver <<private>> {
+    resolve(name): Resolving
+  }
+  class "http fns" as HttpFns <<module>> {
+    +client_builder(location, connect_timeout): ClientBuilder
+    +build_client(location, connect_timeout): Result<Client>
+    +validate_endpoint_url(url, what): Result<()>
+    +normalize_base_url(url) / root_url(url) / openai_api_base(url)
+    +sanitize_message(raw, secret): String
+    +parse_retry_after(headers, now): Option<u64>
+    ~send(request, cancel, timeout, host): Result<Response>
+    ~read_body(..) / read_json(..)
+    ~transport_error(error, host): ProviderError
+  }
+}
+
+package "providers::stream" {
+  interface ChunkDecoder <<trait, pub(crate)>> {
+    +decode(bytes: &[u8], out: &mut ChunkQueue)
+    +finish(out: &mut ChunkQueue)
+  }
+  class "State<D>" as StreamState <<private>> {
+    response: Option<Response>
+    decoder: D
+    queue: ChunkQueue
+    cancel: CancellationToken
+    idle: Duration
+    meta: StreamMeta
+    next_item(): Option<Result<LlmChunk>>
+  }
+  class StreamMeta <<struct>> {
+    +provider: &str
+    +request_id: String
+    +host: String
+    +started: Instant
+  }
+  class "stream fns" as StreamFns <<module>> {
+    ~into_llm_stream(response, decoder: D, cancel, idle, meta): LlmStream
+    ~from_items(items): LlmStream
+  }
+}
+
+package "providers::sse" {
+  class SseParser {
+    +new(): SseParser
+    +push(bytes): Vec<SseEvent>
+    +finish(): Vec<SseEvent>
+  }
+  class SseEvent <<struct>> {
+    +event: Option<String>
+    +data: String
+    +id: Option<String>
+  }
+}
+
+package "think / lines" {
+  class ThinkFilter <<pub(crate)>> {
+    state: State
+    buf: String
+    trim_leading: bool
+    +push(text): String
+    +finish(): String
+  }
+  enum "think::State" as ThinkState {
+    Start
+    Thinking
+    Pass
+  }
+  class LineSplitter <<pub(crate)>> {
+    buf: Vec<u8>
+    discarding: bool
+    +push(bytes): Vec<String>
+    +finish(): Option<String>
+  }
+}
+
+package "decoders (private)" {
+  class OpenAiDecoder <<openai>> {
+    sse: SseParser
+    think: Option<ThinkFilter>
+    finish_reason: Option<String>
+    usage: Option<TokenUsage>
+    refusal: bool
+  }
+  class AnthropicDecoder <<anthropic>> {
+    sse: SseParser
+    input_tokens / output_tokens: Option<u32>
+    stop_reason: Option<String>
+  }
+  class OllamaDecoder <<ollama>> {
+    lines: LineSplitter
+    think: ThinkFilter
+    skipped_lines: usize
+  }
+}
+
+package "providers::local_ai" {
+  class LocalAiClient {
+    -base_url: String
+    -host: String
+    -timeout: Duration
+    -client: Result<reqwest::Client, ProviderError>
+    +new(base_url): LocalAiClient
+    +with_timeout(Duration): Self
+    +health(cancel): Result<LocalAiHealth>
+  }
+  class LocalAiHealth <<struct>> {
+    +ok: bool
+    +transcription_model: Option<String>
+    +embedding_model: Option<String>
+  }
+}
+
+Endpoint *-- Timeouts
+HttpFns ..> LoopbackOnlyResolver : local endpoints:\nno_proxy + loopback-only DNS
+HttpFns ..> HttpFailure
+
+OpenAiDecoder ..|> ChunkDecoder
+AnthropicDecoder ..|> ChunkDecoder
+OllamaDecoder ..|> ChunkDecoder
+StreamFns ..> StreamState : unfold
+StreamState o-- "1" ChunkDecoder : decoder
+StreamState *-- StreamMeta
+
+OpenAiDecoder *-- SseParser
+AnthropicDecoder *-- SseParser
+OpenAiDecoder *-- "0..1" ThinkFilter
+OllamaDecoder *-- ThinkFilter
+OllamaDecoder *-- LineSplitter
+SseParser ..> SseEvent : emits
+ThinkFilter --> ThinkState
+
+LocalAiClient ..> LocalAiHealth : GET /health
+LocalAiClient ..> HttpFns : build_client
+
+note bottom of ThinkFilter
+  strips <think>...</think> reasoning blocks
+  from streamed text (tags may be split across chunks)
+end note
+@enduml

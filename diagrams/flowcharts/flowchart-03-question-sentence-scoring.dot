@@ -1,0 +1,107 @@
+// Derived from: crates/openmeet-intel/src/detect/mod.rs
+//   score_sentence(), combine(), is_cleft_statement(), strip_fillers(),
+//   constants FALSE_POSITIVE_PHRASES, REPORTED_SPEECH, FILLER_QUESTIONS, SHORT_CLARIFICATIONS
+digraph flowchart_03 {
+  graph [fontname="Segoe UI", fontsize=16, labelloc=t, labeljust=c,
+         label=<<B>Question detection (1/3): heuristic sentence scoring — score_sentence()</B><BR/><FONT POINT-SIZE="11">intel::detect — one call per sentence of a final segment; each matched cue appends a weight and a signal</FONT>>,
+         bgcolor="#FFFFFF", nodesep=0.3, ranksep=0.28, pad=0.3, newrank=true];
+  node  [fontname="Segoe UI", fontsize=11, shape=box, style="filled", fillcolor="#F6F7FD", color="#4F5BD5", penwidth=1.2, margin="0.14,0.05"];
+  edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756", arrowsize=0.7];
+
+  // main spine kept in one vertical column
+  { node [group=main]; start; prep; dq; dq2; dwh; dwa; dwd; daux; dimp; demb; dtag; dyou; comb; dfp; drep; dcl; dfil; dtc; dshort; dclar; dneg; end; }
+
+  start [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="score_sentence(sentence)"];
+  prep  [label="words = strip_fillers(words_of(sentence))\l(leading discourse markers removed, ≥1 word kept)\lnorm = phrase_norm(sentence); weights = []\l"];
+
+  dq    [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="ends with\n'?' ?"];
+  wq    [label="+0.60  question_mark"];
+  dq2   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="'?' inside\nsentence?"];
+  wq2   [label="+0.30  inner_question_mark"];
+
+  dwh   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="WH start?\n(WH word, 'and'+WH,\nwhat's / how's …)"];
+  wwh   [label="+0.45  wh_start"];
+  dwa   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="2nd word is aux verb\nor about/if/much/many/…,\nor WH ends 's / 're?"];
+  wwa   [label="+0.35  wh_aux"];
+  dwd   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="word after WH is\nnot a CLEFT_SUBJECT?"];
+  wwd   [label="+0.25  wh_direct"];
+
+  daux  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="aux inversion?\n(AUX_VERB + subject,\ne.g. 'can you')"];
+  waux  [label="+0.55  aux_inversion"];
+
+  dimp  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="IMPERATIVE_PROMPT\nwith an object?\n('tell me' alone = no)"];
+  wimp  [label="+0.60  imperative_request\l+0.30 more for 'tell me about a time',\l'walk me through', 'give me an example',\l'how would you design'\l"];
+
+  demb  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="EMBEDDED_PROMPT\nphrase?"];
+  wemb  [label="+0.55  embedded_question"];
+
+  dtag  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="tag question?\n(ends '?' and ' right' /\n' correct' / ' isn't it' …)"];
+  wtag  [label="signal tag_question\n(only if not WH / aux start)"];
+
+  dyou  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="any weight and\nyou / your / you've /\nyou'd / you're ?"];
+  wyou  [label="+0.15  addressed_to_listener"];
+
+  comb  [label="score = combine(weights)\l      = 1 − Π (1 − w)\l"];
+
+  dfp   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="FALSE_POSITIVE_PHRASES\n('good question', …) and no\nexplicit '?' WH/aux question?"];
+  ffp   [fillcolor="#FFF8E1", color="#C9A227", label="score ×0.10, negative\nnegative:meta_question"];
+  drep  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="REPORTED_SPEECH\n('he asked', 'wanted to know' …)\nand not (aux start + '?')"];
+  frep  [fillcolor="#FFF8E1", color="#C9A227", label="score ×0.15, negative\nnegative:reported"];
+  dcl   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="cleft statement\n('how we did it was…'),\nno '?', not embedded?"];
+  fcl   [fillcolor="#FFF8E1", color="#C9A227", label="score ×0.10, negative\nnegative:cleft_statement"];
+  dfil  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="whole sentence is a\nFILLER_QUESTION\n('you know', 'right' …)?"];
+  ffil  [fillcolor="#FFF8E1", color="#C9A227", label="score ×0.05, negative\nnegative:filler"];
+  dtc   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="tag question only?\n(no WH / aux /\nimperative / embedded)"];
+  ftc   [label="score = min(score, 0.45)\n(confirmation check)"];
+
+  dshort [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="fewer than\n3 words?"];
+  dclar  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="SHORT_CLARIFICATION\nand ('?' or starts\nwhy / how)?"];
+  fclar  [label="score = max(score, 0.55)\nshort_clarification"];
+  dneg   [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="already\nnegative?"];
+  fshort [label="score = min(score, '?' ? 0.45 : 0.20)\ntoo_short"];
+
+  end   [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="return SentenceScore\n{ text, score clamped 0..1, signals, negative }"];
+
+  start -> prep -> dq;
+  dq -> wq [label="yes"]; dq -> dq2 [label="no"];
+  dq2 -> wq2 [label="yes"]; dq2 -> dwh [label="no"];
+  wq -> dwh; wq2 -> dwh;
+  dwh -> wwh [label="yes"]; dwh -> daux [label="no"];
+  wwh -> dwa;
+  dwa -> wwa [label="yes"]; dwa -> dwd [label="no"];
+  dwd -> wwd [label="yes"]; dwd -> daux [label="no"];
+  wwa -> daux; wwd -> daux;
+  daux -> waux [label="yes"]; daux -> dimp [label="no"]; waux -> dimp;
+  dimp -> wimp [label="yes"]; dimp -> demb [label="no"]; wimp -> demb;
+  demb -> wemb [label="yes"]; demb -> dtag [label="no"]; wemb -> dtag;
+  dtag -> wtag [label="yes"]; dtag -> dyou [label="no"]; wtag -> dyou;
+  dyou -> wyou [label="yes"]; dyou -> comb [label="no"]; wyou -> comb;
+  comb -> dfp;
+  dfp -> ffp [label="yes"]; dfp -> drep [label="no"]; ffp -> drep;
+  drep -> frep [label="yes"]; drep -> dcl [label="no"]; frep -> dcl;
+  dcl -> fcl [label="yes"]; dcl -> dfil [label="no"]; fcl -> dfil;
+  dfil -> ffil [label="yes"]; dfil -> dtc [label="no"]; ffil -> dtc;
+  dtc -> ftc [label="yes"]; dtc -> dshort [label="no"]; ftc -> dshort;
+  dshort -> dclar [label="yes"]; dshort -> end [label="no"];
+  dclar -> fclar [label="yes"]; dclar -> dneg [label="no"];
+  dneg -> fshort [label="no"]; dneg -> end [label="yes"];
+  fclar -> end; fshort -> end;
+
+  {rank=same; dq; wq;}
+  {rank=same; dq2; wq2;}
+  {rank=same; dwh; wwh;}
+  {rank=same; dwa; wwa;}
+  {rank=same; dwd; wwd;}
+  {rank=same; daux; waux;}
+  {rank=same; dimp; wimp;}
+  {rank=same; demb; wemb;}
+  {rank=same; dtag; wtag;}
+  {rank=same; dyou; wyou;}
+  {rank=same; dfp; ffp;}
+  {rank=same; drep; frep;}
+  {rank=same; dcl; fcl;}
+  {rank=same; dfil; ffil;}
+  {rank=same; dtc; ftc;}
+  {rank=same; dclar; fclar;}
+  {rank=same; dneg; fshort;}
+}

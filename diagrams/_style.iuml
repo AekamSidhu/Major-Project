@@ -46,3 +46,5 @@ skinparam ObjectBackgroundColor #F6F7FD
 skinparam ObjectBorderColor #4F5BD5
 skinparam EntityBackgroundColor #F6F7FD
 skinparam EntityBorderColor #4F5BD5
+skinparam dpi 144
+

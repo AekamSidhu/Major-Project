@@ -1,0 +1,149 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/types.rs (Component, ComponentStatus, ComponentHealth,
+' LatencyStage, LatencySample, LatencyStats, PrivacyRuleType, PrivacyAction, PrivacyRule,
+' ProviderLocation, ProviderInfo).
+title openmeet-core: component health, latency, privacy rules, provider info (types.rs)
+
+hide empty members
+skinparam nodesep 40
+skinparam ranksep 50
+
+package "Health" {
+  class ComponentHealth <<struct>> {
+    +component: Component
+    +status: ComponentStatus
+    +message: Option<String>
+    +updated_at: i64
+  }
+  enum Component {
+    Meeting
+    Microphone
+    SystemAudio
+    Transcription
+    QuestionDetector
+    Llm
+    Vision
+    Screen
+    Embeddings
+    Database
+    Overlay
+    CapturePrivacy
+    Hotkeys
+    Integrity
+    --
+    +label(): &str
+  }
+  enum ComponentStatus {
+    Inactive
+    Starting
+    Active
+    Streaming
+    Paused
+    Degraded
+    Error
+    Unsupported
+    Disabled
+  }
+}
+
+package "Latency" {
+  class LatencySample <<struct>> {
+    +stage: LatencyStage
+    +ms: f64
+    +request_id: Option<Id>
+    +at: i64
+  }
+  class LatencyStats <<struct>> {
+    +stage: LatencyStage
+    +count: u32
+    +last_ms: f64
+    +p50_ms: f64
+    +p95_ms: f64
+    +max_ms: f64
+  }
+  enum LatencyStage {
+    AudioToTranscript
+    TranscriptToDetection
+    DetectionToFirstToken
+    FirstTokenToComplete
+    ScreenProcessing
+    OverlayRender
+  }
+}
+
+package "Privacy rules" {
+  class PrivacyRule <<struct>> {
+    +id: Id
+    +rule_type: PrivacyRuleType  <<json "type">>
+    +value: String
+    +action: PrivacyAction
+    +created_at: i64
+  }
+  enum PrivacyRuleType {
+    Application
+    Window
+    Domain
+    Region
+  }
+  enum PrivacyAction {
+    Exclude  <<default>>
+  }
+}
+
+package "Provider info" {
+  class ProviderInfo <<struct>> {
+    +id: String
+    +display_name: String
+    +model: String
+    +location: ProviderLocation
+    +endpoint: Option<String>
+  }
+  enum ProviderLocation {
+    Local
+    Remote
+    Mock
+  }
+}
+
+ComponentHealth --> "1" Component : component
+ComponentHealth --> "1" ComponentStatus : status
+LatencySample --> "1" LatencyStage : stage
+LatencyStats --> "1" LatencyStage : stage
+LatencyStats ..> LatencySample : aggregates
+PrivacyRule --> "1" PrivacyRuleType : rule_type
+PrivacyRule --> "1" PrivacyAction : action
+ProviderInfo --> "1" ProviderLocation : location
+
+note bottom of LatencyStage
+  AudioToTranscript: end of speech -> final transcript
+  TranscriptToDetection: final transcript -> question detected
+  DetectionToFirstToken: request start -> first streamed token
+  FirstTokenToComplete: first token -> response complete
+  ScreenProcessing: frame captured -> observation produced
+  OverlayRender: event received -> rendered (reported by the UI)
+end note
+
+note bottom of PrivacyRuleType
+  Application: process / app name
+  Window: window-title substring
+  Domain: matched against browser window titles
+  Region: "x,y,width,height" rectangle
+  (source pixels) that is blacked out
+end note
+
+note bottom of ProviderLocation
+  Where a provider processes data;
+  drives the privacy / data-flow UI.
+  Local: on this device (in-process or localhost)
+  Remote: sends data to a remote endpoint
+  Mock: tests / demo, never sends data
+end note
+
+note bottom of ProviderInfo
+  id e.g. "openai", "anthropic",
+  "ollama", "local_ai".
+  endpoint = host only, never a URL
+  with credentials.
+end note
+@enduml

@@ -1,0 +1,186 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-core/src/settings.rs (Settings, AiSettings, LlmSettings,
+' VisionSettings, EmbeddingSettings, TranscriptionSettings, AssistantSettings and their
+' provider-kind enums, ReasoningEffort, default_llm_model, default_transcription_model)
+' and types.rs (Mode, AnswerStyle, ResponseLength).
+title openmeet-core: Settings root, AI providers and assistant behaviour (settings.rs)
+
+hide empty members
+skinparam nodesep 30
+skinparam ranksep 50
+
+class Settings <<struct>> {
+  +version: u32  <<SETTINGS_VERSION = 1>>
+  +mode: Mode
+  +ai: AiSettings
+  +transcription: TranscriptionSettings
+  +assistant: AssistantSettings
+  +audio: AudioSettings
+  +screen: ScreenSettings
+  +privacy: PrivacySettings
+  +overlay: OverlaySettings
+  +shortcuts: ShortcutSettings
+  +general: GeneralSettings
+  +profile: UserProfile
+  +integrity: IntegritySettings
+  --
+  +sanitized(): Settings
+  +validate(): Result<(), Vec<String>>
+}
+
+class AiSettings <<struct>> {
+  +llm: LlmSettings
+  +vision: VisionSettings
+  +embeddings: EmbeddingSettings
+}
+
+class LlmSettings <<struct>> {
+  +provider: LlmProviderKind = Ollama
+  +model: String = "llama3.2"
+  +base_url: Option<String> = DEFAULT_OLLAMA_URL
+  +temperature: f32 = 0.3
+  +max_output_tokens: u32 = 1200
+  +reasoning_effort: ReasoningEffort = Low
+  +fast_model: Option<String> = None
+}
+
+enum LlmProviderKind {
+  Openai
+  Anthropic
+  Ollama  <<default>>
+  OpenaiCompatible
+}
+
+enum ReasoningEffort {
+  Low  <<default>>
+  Medium
+  High
+  --
+  +as_str(): &str
+}
+
+class VisionSettings <<struct>> {
+  +provider: VisionProviderKind = OcrOnly
+  +model: String
+  +base_url: Option<String>
+  +use_ocr: bool = true
+}
+
+enum VisionProviderKind {
+  Disabled
+  OcrOnly  <<default>>
+  Openai
+  Anthropic
+  Ollama
+  OpenaiCompatible
+}
+
+class EmbeddingSettings <<struct>> {
+  +provider: EmbeddingProviderKind = LocalHash
+  +model: String
+  +base_url: Option<String>
+}
+
+enum EmbeddingProviderKind {
+  LocalHash  <<default>>
+  LocalAi
+  Openai
+  Ollama
+}
+
+class TranscriptionSettings <<struct>> {
+  +provider: TranscriptionProviderKind = LocalAi
+  +model: String = "base.en"
+  +base_url: Option<String> = DEFAULT_LOCAL_AI_URL
+  +language: Option<String> = "en"
+  +interim_results: bool = false
+  +vocabulary: String
+}
+
+enum TranscriptionProviderKind {
+  LocalAi  <<default>>
+  Openai
+  OpenaiCompatible
+}
+
+class AssistantSettings <<struct>> {
+  +answer_style: AnswerStyle = Concise
+  +response_length: ResponseLength = Medium
+  +auto_answer: bool = true
+  +auto_followups: bool = true
+  +semantic_detection: bool = true
+  +detection_threshold: f32 = 0.6
+  +followup_min_words: u32 = 20
+  +turn_end_silence_ms: u32 = 1500
+  +context_window_secs: u32 = 180
+  +context_token_budget: u32 = 3500
+}
+
+enum Mode {
+  Candidate  <<default>>
+  Interviewer
+}
+enum AnswerStyle
+enum ResponseLength
+
+' Sections detailed in class-07 / class-08
+class AudioSettings <<struct>>
+class ScreenSettings <<struct>>
+class PrivacySettings <<struct>>
+class OverlaySettings <<struct>>
+class ShortcutSettings <<struct>>
+class GeneralSettings <<struct>>
+class UserProfile <<struct>>
+class IntegritySettings <<struct>>
+
+Settings --> "1" Mode : mode
+Settings *-- "1" AiSettings : ai
+Settings *-- "1" TranscriptionSettings : transcription
+Settings *-- "1" AssistantSettings : assistant
+Settings *-- "1" AudioSettings : audio
+Settings *-- "1" ScreenSettings : screen
+Settings *-- "1" PrivacySettings : privacy
+Settings *-- "1" OverlaySettings : overlay
+Settings *-- "1" ShortcutSettings : shortcuts
+Settings *-- "1" GeneralSettings : general
+Settings *-- "1" UserProfile : profile
+Settings *-- "1" IntegritySettings : integrity
+
+AiSettings *-- "1" LlmSettings : llm
+AiSettings *-- "1" VisionSettings : vision
+AiSettings *-- "1" EmbeddingSettings : embeddings
+LlmSettings --> LlmProviderKind : provider
+LlmSettings --> ReasoningEffort : reasoning_effort
+VisionSettings --> VisionProviderKind : provider
+EmbeddingSettings --> EmbeddingProviderKind : provider
+TranscriptionSettings --> TranscriptionProviderKind : provider
+AssistantSettings --> AnswerStyle : answer_style
+AssistantSettings --> ResponseLength : response_length
+
+note right of Settings
+  Every field has a serde default, so settings
+  written by older versions keep loading.
+  sanitized() clamps numbers into safe ranges,
+  trims models and normalizes URLs; it is applied
+  to every update coming from the UI.
+  validate(): base URLs must be http(s), no
+  whitespace, no embedded credentials; LLM and
+  transcription model non-empty; base URL required
+  for Ollama / OpenaiCompatible; no duplicate shortcuts.
+  API keys are NOT part of Settings.
+end note
+
+note bottom of LlmProviderKind
+  default_llm_model(kind):
+  Openai "gpt-5-mini", Anthropic "claude-opus-5-5",
+  Ollama "llama3.2", OpenaiCompatible "local-model"
+end note
+
+note bottom of TranscriptionProviderKind
+  default_transcription_model(kind):
+  LocalAi "base.en",
+  Openai "gpt-4o-mini-transcribe",
+  OpenaiCompatible "whisper-1"
+end note
+@enduml

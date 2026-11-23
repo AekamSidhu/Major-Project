@@ -1,0 +1,156 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-engine/src/runtime.rs (MeetingRuntime, CandidateTurn, MAX_SUGGESTIONS),
+' state.rs (MeetingStateMachine, AnswerStateMachine, answer_transition_allowed), memory.rs (ContextMemory),
+' conversation.rs (ConvInput), crates/openmeet-intel/src/topics.rs (TopicTracker),
+' crates/openmeet-core/src/types.rs (MeetingState, AnswerState, PauseReason, MeetingRecord ..).
+title openmeet-engine: per-meeting runtime and explicit state machines
+
+hide empty members
+skinparam nodesep 40
+skinparam ranksep 50
+
+class MeetingRuntime {
+  + meeting: Meeting
+  + machine: MeetingStateMachine
+  + paused_reason: Option<PauseReason>
+  + store: Arc<dyn MeetingStore>
+  + system_audio_active / microphone_active: bool
+  + demo: bool
+  + sessions_running: bool
+  + segments: Vec<TranscriptSegment>
+  + questions: Vec<DetectedQuestion>
+  + answers: Vec<AnswerRecord>
+  + open_answer: Option<AnswerRecord>
+  + suggestions: VecDeque<Suggestion>
+  + latest_followups / all_followups: Vec<FollowUpQuestion>
+  + claims: Vec<Claim>
+  + gaps: Vec<String>
+  + action_items: Vec<ActionItem>
+  + observations: Vec<ScreenObservation>
+  + topics: TopicTracker
+  + memory: ContextMemory
+  + turn: CandidateTurn
+  + pending_utterances: HashSet<String>
+  + speaking: HashSet<AudioSourceKind>
+  + summary: Option<MeetingSummary>
+  + active_primary: Option<ActiveRequestView>
+  + conv_tx: UnboundedSender<ConvInput>
+  + trans_tx: UnboundedSender<TranscriptionEvent>
+  + vision_calls: VecDeque<i64>
+  ..
+  --
+  + new(meeting, store, planned_topics, system_audio_active,
+         microphone_active, demo, conv_tx, trans_tx)
+  + state(): MeetingState
+  + transition(next): Result<(), String>
+  + accepts_transcript(): bool
+  + role_for(source: AudioSourceKind): SpeakerRole
+  + answerer_for(asker: SpeakerRole): SpeakerRole
+  + {static} participants_for(mode, system_audio): Vec<Participant>
+  + add_final(segment) / lines_since(since_ms)
+  + latest_open_question(max_age_ms) / asked_questions()
+  + push_suggestion(s) / suggestion(id) / suggestion_mut(id)
+  + open_answer_for(question) / extend_answer(segment) / close_answer()
+  + to_record(): MeetingRecord
+  ..
+}
+note right of MeetingRuntime::role_for
+  System -> Remote; Microphone -> User when
+  system audio is active, otherwise Unknown
+end note
+note right of MeetingRuntime::push_suggestion
+  keeps at most MAX_SUGGESTIONS = 200
+  in memory; never evicts pinned ones
+end note
+
+class CandidateTurn {
+  + segment_ids: Vec<Id>
+  + text: String
+  + version: u64
+  --
+  + push(segment)
+  + reset()
+}
+note bottom of CandidateTurn
+  Interviewer mode: candidate speech since the last
+  interviewer question / follow-up generation.
+  version guards the turn-end timer (ConvInput::TurnTimer).
+end note
+
+class MeetingStateMachine {
+  - state: MeetingState
+  --
+  + new()
+  + state(): MeetingState
+  + transition(next): Result<MeetingState, String>
+}
+
+class AnswerStateMachine {
+  - state: AnswerState
+  --
+  + state(): AnswerState
+  + advance(to: AnswerState): bool
+}
+class answer_transition_allowed <<fn>> {
+  (from: AnswerState, to: AnswerState): bool
+}
+
+enum MeetingState <<core>> {
+  Idle
+  Starting
+  Active
+  Paused
+  Stopping
+  Summarizing
+  Completed
+  --
+  can_transition_to(next): bool
+  is_live(): bool
+}
+enum AnswerState <<core>> {
+  Created
+  ContextBuilding
+  Requesting
+  Streaming
+  Complete
+  Failed
+  Cancelled
+}
+enum PauseReason <<core>> {
+  User
+  Emergency
+}
+
+class ContextMemory
+class TopicTracker <<intel>>
+class MeetingRecord <<core>>
+interface MeetingStore <<core trait>>
+enum ConvInput {
+  Draft : TranscriptDraft
+  TurnTimer : { version: u64 }
+}
+class RequestManager
+
+MeetingRuntime *-- "1" MeetingStateMachine : machine
+MeetingRuntime *-- "1" CandidateTurn : turn
+MeetingRuntime *-- "1" ContextMemory : memory
+MeetingRuntime *-- "1" TopicTracker : topics
+MeetingRuntime o-- "1" MeetingStore : store
+MeetingRuntime --> "0..1" PauseReason
+MeetingRuntime ..> ConvInput : conv_tx
+MeetingRuntime ..> MeetingRecord : to_record()
+MeetingStateMachine ..> MeetingState : can_transition_to
+AnswerStateMachine --> AnswerState
+AnswerStateMachine ..> answer_transition_allowed
+RequestManager *-- "*" AnswerStateMachine : one per request entry
+
+note bottom of answer_transition_allowed
+  same state -> allowed; terminal -> nothing
+  any -> Failed / Cancelled
+  Created -> ContextBuilding
+  Created / ContextBuilding -> Requesting
+  Requesting -> Streaming
+  Requesting / Streaming -> Complete
+end note
+@enduml
