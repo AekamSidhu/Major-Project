@@ -130,7 +130,8 @@ Three views of the same pipeline:
   (speech cut into pieces by a Python copy of its segmenter, a video frame 10
   times a second, the answer closed when the interviewer speaks again, then echo
   similarity and follow-ups requested together, as `host.html` does). Whisper
-  `base.en` on the CPU (the room's default), follow-ups and reference answers
+  `base.en` on the CPU (the benchmark's setting; the room's own default is
+  `small.en`, see `local-ai/room/README.md`), follow-ups and reference answers
   from llama3.2.
 
 <!-- tables:engine -->
