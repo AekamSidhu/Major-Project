@@ -1,0 +1,44 @@
+@startuml
+!include ../_style.iuml
+' C4 level 1 (system context), drawn with plain PlantUML (no remote includes, so it renders offline).
+' Derived from README.md (overlay, candidate and interviewer modes, local-first, no telemetry),
+' src-tauri/src/local_ai.rs (sidecar spawned locally), crates/openmeet-providers/src/factory.rs and
+' anthropic.rs / openai.rs / ollama.rs (remote and local LLM providers), local-ai/room/__init__.py and
+' room_server.py (interview room served from the interviewer's computer), local-ai/room/followups.py and
+' room.js (Google Gemini in online mode, Google STUN for ICE), src-tauri/src/secrets.rs (OS keyring).
+title C4 level 1: OpenMeet system context
+
+skinparam rectangle {
+  BackgroundColor #F6F7FD
+  BorderColor #4F5BD5
+  RoundCorner 12
+}
+
+actor "Candidate\n(answers; uses the desktop overlay)" as Cand
+actor "Interviewer\n(asks; uses the desktop app or the room)" as Iv
+
+rectangle "OpenMeet\n[software system]\nLocal-first meeting copilot: transcription,\nsuggestions, follow-ups, answer-integrity flag" as OM #E6E9FB
+
+rectangle "Meeting app\n[external]\nZoom, Teams, Google Meet, Slack, Discord ...\n(audio and screen are read locally, never sent by the app)" as Meet #FFFFFF
+rectangle "Local LLM server\n[external, on this computer]\nOllama (127.0.0.1:11434) or an\nOpenAI-compatible server" as OLLAMA #FFFFFF
+rectangle "Remote LLM / transcription APIs\n[external, optional]\nOpenAI, Anthropic (only when chosen\nand local_only is off)" as Remote #FFFFFF
+rectangle "Google Gemini\n[external, optional]\nonly in the interview room's\nonline follow-up mode" as Gemini #FFFFFF
+rectangle "Google STUN\n[external]\nfinds a network route for the\nroom's video (no media passes)" as Stun #FFFFFF
+
+Cand --> Meet : takes the call
+Iv --> Meet : runs the meeting
+Cand --> OM : sees suggestions in the overlay
+Iv --> OM : sees follow-ups and integrity flags
+Iv ..> OM : hosts a browser interview room\n(room_server.py, local network)
+OM --> Meet : captures system audio and\nscreen (Windows loopback, screen capture)
+OM --> OLLAMA : suggestions, embeddings
+OM ..> Remote : suggestions (if configured;\nkeys in the OS keyring)
+OM ..> Gemini : room follow-ups (online mode)
+OM ..> Stun : room connection only
+
+note bottom of OM
+  Nothing is sent to a project server: there is no
+  telemetry. Remote providers receive only what the
+  user's chosen provider needs, and local_only refuses them.
+end note
+@enduml

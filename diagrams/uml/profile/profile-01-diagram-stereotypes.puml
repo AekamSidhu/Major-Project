@@ -1,0 +1,134 @@
+@startuml
+!include ../../_style.iuml
+' The stereotypes used across the diagrams in this folder, as a UML profile: each stereotype
+' extends the UML metaclass it is written on. Derived from the stereotypes in the .puml/.dot sources
+' (grep of <<...>>) and from the conventions the sources state (e.g. er-01: <<PK>>, <<FK>>, <<UK1>>;
+' class diagrams: <<struct>>, <<enum>>, <<trait>>, <<default>>; deployment: <<device>>, <<executionEnvironment>>,
+' <<artifact>>, <<browser>>, <<external>>; engine: <<async task>>, <<tokio task>>, <<writer thread>>).
+title OpenMeet diagram profile: stereotypes, the metaclass each one extends, and its tagged values
+
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "UML metaclasses (standard)" <<metaclass>> {
+  class Class <<metaclass>>
+  class Interface <<metaclass>>
+  class Component <<metaclass>>
+  class Node <<metaclass>>
+  class Artifact <<metaclass>>
+  class Property <<metaclass>>
+  class Dependency <<metaclass>>
+  class Lifeline <<metaclass>>
+  class Event <<metaclass>>
+}
+
+package "openmeet diagram profile (this folder)" <<profile>> {
+
+  package "Class and interface diagrams (Rust types)" {
+    class "struct" as S <<stereotype>> {
+      a Rust struct (pub fields listed as +name: Type)
+    }
+    class "enum" as E <<stereotype>> {
+      a Rust enum; <<default>> marks #[default]
+    }
+    class "trait" as T <<stereotype>> {
+      a Rust trait, drawn as an interface
+    }
+    class "function" as F <<stereotype>> {
+      a free function or method (signature in the name)
+    }
+    class "event" as EV <<stereotype>> {
+      a MeetingEvent variant sent to the UI
+    }
+    class "default" as D <<stereotype>> {
+      the value used when a setting is not given
+    }
+  }
+
+  package "Runtime (concurrency)" {
+    class "async task" as AT <<stereotype>> {
+      tokio::spawn or a spawned worker loop
+    }
+    class "writer thread" as WT <<stereotype>> {
+      std::thread owned by the store (persistence)
+    }
+    class "module" as M <<stereotype>> {
+      one Python module or file of local-ai
+    }
+  }
+
+  package "Deployment" {
+    class "device" as DV <<stereotype>> {
+      a computer or phone that the user owns
+    }
+    class "executionEnvironment" as EX <<stereotype>> {
+      a runtime: a process, a browser, Ollama
+    }
+    class "browser" as BR <<stereotype>> {
+      a web page run by a browser (host.html, guest.html)
+    }
+    class "artifact-store" as AS <<stereotype>> {
+      files on disk (model files)
+    }
+    class "external" as EXT <<stereotype>> {
+      a service outside the device; sends data only when enabled
+    }
+    class "memory" as MEM <<stereotype>> {
+      kept in process memory only
+    }
+  }
+
+  package "Storage (ER diagrams)" {
+    class "PK" as PK <<stereotype>> {
+      primary key (tagged: PRIMARY KEY (a, b) when composite)
+    }
+    class "FK" as FK <<stereotype>> {
+      FOREIGN KEY ... REFERENCES ... ON DELETE CASCADE
+    }
+    class "UK1" as UK <<stereotype>> {
+      UNIQUE (...) group 1
+    }
+  }
+
+  package "Relationships" {
+    class "use" as U <<stereotype>> {
+      a dependency: calls or reads
+    }
+    class "spawn" as SP <<stereotype>> {
+      starts a process or task
+    }
+    class "import" as IM <<stereotype>> {
+      a Python import or a Rust use of another module
+    }
+  }
+}
+
+S ..|> Class : <<extends>>
+E ..|> Class : <<extends>>
+T ..|> Interface : <<extends>>
+F ..|> Class : <<extends>>
+EV ..|> Class : <<extends>>
+D ..|> Property : <<extends>>
+AT ..|> Component : <<extends>>
+WT ..|> Component : <<extends>>
+M ..|> Component : <<extends>>
+DV ..|> Node : <<extends>>
+EX ..|> Node : <<extends>>
+BR ..|> Artifact : <<extends>>
+AS ..|> Artifact : <<extends>>
+EXT ..|> Node : <<extends>>
+MEM ..|> Node : <<extends>>
+PK ..|> Property : <<extends>>
+FK ..|> Property : <<extends>>
+UK ..|> Property : <<extends>>
+U ..|> Dependency : <<extends>>
+SP ..|> Dependency : <<extends>>
+IM ..|> Dependency : <<extends>>
+EV ..|> Event : <<extends>>
+
+note bottom of S
+  Tagged values written in braces after a name, for example
+  {SETTINGS_VERSION = 1} or {field} (field defined by cfg!(...)).
+  Default values are written after '=' in the attribute list.
+end note
+@enduml
