@@ -1,7 +1,7 @@
 @startuml
 !include ../_style.iuml
 ' C4 level 1 (system context), drawn with plain PlantUML (no remote includes, so it renders offline).
-' Derived from README.md (overlay, candidate and interviewer modes, local-first, no telemetry),
+' Derived from README.md (overlay, candidate, interviewer and workplace modes, local-first, no telemetry),
 ' src-tauri/src/local_ai.rs (sidecar spawned locally), crates/openmeet-providers/src/factory.rs and
 ' anthropic.rs / openai.rs / ollama.rs (remote and local LLM providers), local-ai/room/__init__.py and
 ' room_server.py (interview room served from the interviewer's computer), local-ai/room/followups.py and
@@ -16,6 +16,7 @@ skinparam rectangle {
 
 actor "Candidate\n(answers; uses the desktop overlay)" as Cand
 actor "Interviewer\n(asks; uses the desktop app or the room)" as Iv
+actor "Team member\n(workplace meetings: board, catch me up, minutes)" as Wp
 
 rectangle "OpenMeet\n[software system]\nLocal-first meeting copilot: transcription,\nsuggestions, follow-ups, answer-integrity flag" as OM #E6E9FB
 
@@ -29,6 +30,7 @@ Cand --> Meet : takes the call
 Iv --> Meet : runs the meeting
 Cand --> OM : sees suggestions in the overlay
 Iv --> OM : sees follow-ups and integrity flags
+Wp --> OM : sees the live board, catch-up and minutes
 Iv ..> OM : hosts a browser interview room\n(room_server.py, local network)
 OM --> Meet : captures system audio and\nscreen (Windows loopback, screen capture)
 OM --> OLLAMA : suggestions, embeddings
