@@ -6,7 +6,7 @@ an AI assistant? The other signal, reading gaze, lives in
 `training/gaze-detection`. All signals are defined once in `spec/integrity/`
 and combined into one flag per answer.
 
-> Status (2026-11-17): three signals are built and run in the interview
+> Status (2026-11-23): three signals are built and run in the interview
 > room (`local-ai/room`): the AI-written-text model (TF-IDF + logistic
 > regression), echo similarity (thresholds measured on HC3) and delivery
 > (hand-set, measured on SpiCE, where it barely works). None is calibrated
@@ -178,8 +178,8 @@ answers when the machine ran low on memory; it has no result yet.
 
 The collection kit (protocol, consent form with the cloud choice, question
 bank, the four conditions, randomisation, label sheet, data card and
-`calibrate.py`) is in `training/data-collection`, shared with the gaze
-branch. Sessions run in the interview room's study mode
+`calibrate.py`) is in `training/data-collection`, shared with `training/gaze-detection`.
+Sessions run in the interview room's study mode
 (`room_server.py --study DIR`).
 
 ## How we measure
@@ -224,9 +224,9 @@ Run the tests from this folder with Python 3.11 (`numpy`, `pandas`,
 - [x] Phase 1: AI-written-text model trained and shipped (HC3); echo similarity measured on HC3 and its thresholds set
 - [ ] Phase 1: robustness to other models and paraphrasing (RAID)
 - [x] Phase 2: sidecar word timestamps; delivery measured on SpiCE (hand timings)
-- [ ] Phase 2: delivery with Whisper timings on SpiCE (run stopped, see above); filler recall
+- [ ] Phase 2: delivery with Whisper timings on SpiCE (run stopped at 400 of 839 files; see PROGRESS.md); filler recall
 - [x] Phase 3: collection kit and room study mode ready
-- [ ] Phase 3: own dataset collected (with the gaze branch)
+- [ ] Phase 3: own dataset collected (shared with `training/gaze-detection`)
 - [ ] Phase 4: thresholds from own data (`training/data-collection/calibrate.py`), bias check
-- [x] Phase 5: integrated into the interview room (desktop app: Rust side, separate work)
+- [x] Phase 5: integrated into the interview room and the desktop app (`docs/INTEGRITY.md`)
 - [x] Phase 6: fused with the gaze signal (spec fusion, one flag per answer)
