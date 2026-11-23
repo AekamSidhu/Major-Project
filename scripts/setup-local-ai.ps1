@@ -18,8 +18,9 @@ function Find-Python {
     param([string]$Requested)
     $candidates = @()
     if ($Requested) { $candidates += , @("py", "-$Requested") }
-    # faster-whisper / onnxruntime wheels are most reliable on 3.10 - 3.12.
-    foreach ($v in @("3.12", "3.11", "3.10")) { $candidates += , @("py", "-$v") }
+    # faster-whisper / onnxruntime wheels are most reliable on 3.10 - 3.12, and
+    # MediaPipe (the optional gaze packages) is tested on 3.11, so prefer 3.11.
+    foreach ($v in @("3.11", "3.12", "3.10")) { $candidates += , @("py", "-$v") }
     $candidates += , @("python")
     foreach ($c in $candidates) {
         try {

@@ -159,6 +159,20 @@ views) are in [diagrams/](diagrams/README.md).
 
 Windows is the primary development platform and the only one verified on real hardware so far (capture, loopback audio, OCR, capture exclusion, hotkeys). CI compiles and runs the test suites on Windows, macOS and Linux; platform-specific behaviour on macOS and Linux still needs hands-on testing — reports are welcome.
 
+## Quick start
+
+On Windows 11, from a clone of this repository:
+
+```powershell
+npm ci
+powershell -ExecutionPolicy Bypass -File scripts\setup-local-ai.ps1   # once: local AI sidecar
+npx tauri build                                                        # builds target\release\openmeet.exe
+powershell -ExecutionPolicy Bypass -File scripts\start-openmeet.ps1    # starts the sidecar and the app
+```
+
+The full guide (prerequisites, the interview room, troubleshooting and where
+files go) is in [docs/RUNNING.md](docs/RUNNING.md).
+
 ## Installation
 
 Pre-built installers are published on the Releases page (Windows NSIS/MSI,
