@@ -1,9 +1,11 @@
 # Start the OpenMeet Room. A shareable link is created automatically.
 #   .\start-room.ps1                       # tunnel + simple-rules follow-ups
 #   .\start-room.ps1 -Followups local      # tunnel + Ollama follow-ups
+#   .\start-room.ps1 -Transcription groq   # Groq cloud transcription (fast, accurate)
 #   .\start-room.ps1 -NoTunnel             # LAN only (same Wi-Fi)
 param(
     [ValidateSet("rules", "local", "online")] [string]$Followups = "rules",
+    [ValidateSet("local", "groq")] [string]$Transcription = "local",
     [int]$Port = 8443,
     [switch]$NoTunnel
 )
@@ -29,7 +31,7 @@ if ($existing) {
 }
 
 # Build the argument list: the tunnel is on by default, --no-tunnel disables it.
-$pyArgs = @("room_server.py", "--followups", $Followups, "--port", $Port)
+$pyArgs = @("room_server.py", "--followups", $Followups, "--transcription", $Transcription, "--port", $Port)
 if ($NoTunnel) { $pyArgs += "--no-tunnel" }
 
 $env:PYTHONUNBUFFERED = "1"
