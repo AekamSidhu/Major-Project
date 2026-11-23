@@ -233,6 +233,8 @@ pub struct EngineSnapshot {
     pub processing_stopped: bool,
     /// Answer-integrity flags of the current meeting (latest first).
     pub integrity_flags: Vec<IntegrityFlag>,
+    /// Workplace mode: the live board of the current meeting.
+    pub workplace: Option<WorkplaceBoard>,
 }
 
 /// Developer tools: inject synthetic events without joining a meeting.

@@ -15,6 +15,8 @@
 //! * [`demo`] – scripted demo scenarios.
 //! * [`integrity`] – answer-integrity signals (delivery, echo similarity) and
 //!   their fusion into one flag, per `spec/integrity`.
+//! * [`workplace`] – team meetings: the live board (decisions, action items,
+//!   open questions), vagueness and clarifying questions, meeting minutes.
 //!
 //! Privacy: nothing in this crate logs transcript text, prompts, model output,
 //! OCR text or screenshots. Logs only carry ids, sizes, counts and durations.
@@ -33,6 +35,7 @@ pub mod text;
 pub mod topics;
 pub mod vad;
 pub mod vision;
+pub mod workplace;
 
 mod json;
 mod lexicon;

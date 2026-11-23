@@ -44,10 +44,14 @@ pub(crate) struct ContextOptions {
 
 impl ContextOptions {
     /// Defaults for a context: asked questions only matter in interviewer
-    /// mode (duplicate avoidance).
+    /// mode (duplicate avoidance). Workplace prompts that need the meeting's
+    /// questions get them from the board instead.
     pub(crate) fn for_mode(mode: Mode) -> Self {
         ContextOptions {
-            include_asked: mode == Mode::Interviewer,
+            include_asked: match mode {
+                Mode::Interviewer => true,
+                Mode::Candidate | Mode::Workplace => false,
+            },
             include_claims: true,
             include_topics: true,
         }
@@ -437,10 +441,14 @@ fn render_profile(ctx: &PromptContext, max_tokens: usize) -> Option<String> {
             "About the user, in their own words (the only source for personal facts such as employers, projects, metrics and skills):"
         }
         Mode::Interviewer => "The user's notes:",
+        Mode::Workplace => {
+            "About the user and their work, in their own words (the only source for the user's own status, projects and commitments besides the transcript):"
+        }
     };
     let role_label = match ctx.mode {
         Mode::Candidate => "Role / job description / meeting context:",
         Mode::Interviewer => "Role being interviewed for / agenda:",
+        Mode::Workplace => "Team / meeting agenda:",
     };
     let render = |bg: &str, rl: &str, pr: &str| -> String {
         let mut parts: Vec<String> = Vec::new();

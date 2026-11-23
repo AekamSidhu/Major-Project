@@ -1208,7 +1208,83 @@ pub fn split_parts(text: &str) -> Vec<String> {
 // Detection
 // ---------------------------------------------------------------------------
 
-fn requires_response(mode: Mode, role: SpeakerRole) -> (bool, f32) {
+/// Words that start a sentence followed by a comma without being a name
+/// ("Okay, can you…", "Team, can you…").
+const NOT_A_NAME: &[&str] = &[
+    "okay", "ok", "so", "well", "right", "yes", "no", "yeah", "yep", "sure", "thanks", "hi",
+    "hey", "hello", "alright", "now", "also", "actually", "quick", "folks", "everyone", "everybody",
+    "guys", "team", "all", "and", "but", "then", "anyway", "great", "cool", "perfect", "good",
+    "sorry", "honestly", "basically", "first", "second", "next", "last", "finally", "otherwise",
+    "meanwhile", "listen", "look", "please", "i", "you",
+];
+
+/// The question starts by naming someone ("Priya, can you…"): it is addressed
+/// to that person. OpenMeet does not know the user's name, so a named
+/// question is treated as addressed to someone else.
+fn starts_with_vocative_name(text: &str) -> bool {
+    let t = text.trim_start();
+    let Some((first, rest)) = t.split_once(',') else {
+        return false;
+    };
+    let mut words: Vec<&str> = first.split_whitespace().collect();
+    // "Hey Priya, …" / "So Priya, …"
+    if words.len() == 2 && NOT_A_NAME.contains(&words[0].to_lowercase().as_str()) {
+        words.remove(0);
+    }
+    if words.len() != 1 || rest.trim().is_empty() {
+        return false;
+    }
+    let w = words[0];
+    let mut chars = w.chars();
+    chars.next().is_some_and(char::is_uppercase)
+        && chars.all(|c| c.is_alphabetic() || c == '\'' || c == '-')
+        && !NOT_A_NAME.contains(&w.to_lowercase().as_str())
+}
+
+/// Workplace mode: whether a question is addressed to the listener (the
+/// OpenMeet user) rather than to the room or a named colleague. True for
+/// second-person questions ("Can you give us an update?", "What do you
+/// think?") and requests to the speaker's audience ("Walk us through…",
+/// "Tell me…"); false for questions to the room ("Does anyone know…?") and
+/// for questions that start with someone's name.
+pub fn addressed_to_listener(question: &str) -> bool {
+    if starts_with_vocative_name(question) {
+        return false;
+    }
+    // "you know" / "you see" are fillers, not address.
+    let norm = phrase_norm(question)
+        .replace(" you know ", " ")
+        .replace(" you see ", " ")
+        .replace(" thank you ", " ");
+    let second_person = [
+        "you", "your", "you're", "you've", "you'd", "you'll", "yours", "yourself", "y'all", "ya",
+    ]
+    .iter()
+    .any(|p| has_phrase(&norm, p));
+    if second_person {
+        return true;
+    }
+    let words = words_of(question);
+    let words = strip_fillers(&words);
+    [
+        "tell us",
+        "tell me",
+        "walk us through",
+        "walk me through",
+        "give us",
+        "give me",
+        "update us",
+        "remind us",
+        "remind me",
+        "share your",
+        "talk us through",
+        "fill us in",
+    ]
+    .iter()
+    .any(|p| starts_with_phrase(words, p))
+}
+
+fn requires_response(mode: Mode, role: SpeakerRole, question: &str) -> (bool, f32) {
     match (mode, role) {
         (Mode::Candidate, SpeakerRole::Remote) => (true, 1.0),
         (Mode::Candidate, SpeakerRole::Unknown) => (true, 0.85),
@@ -1216,6 +1292,11 @@ fn requires_response(mode: Mode, role: SpeakerRole) -> (bool, f32) {
         (Mode::Interviewer, SpeakerRole::User) => (false, 1.0),
         (Mode::Interviewer, SpeakerRole::Remote) => (true, 1.0),
         (Mode::Interviewer, SpeakerRole::Unknown) => (true, 0.85),
+        // A team meeting: only questions addressed to the user need their
+        // answer; every question is still tracked as an open question.
+        (Mode::Workplace, SpeakerRole::User) => (false, 1.0),
+        (Mode::Workplace, SpeakerRole::Remote) => (addressed_to_listener(question), 1.0),
+        (Mode::Workplace, SpeakerRole::Unknown) => (addressed_to_listener(question), 0.85),
     }
 }
 
@@ -1377,10 +1458,10 @@ pub fn detect(input: &DetectionInput) -> DetectionResult {
         }
     }
 
-    let (requires, factor) = requires_response(input.mode, seg.speaker_role);
+    let question = clean(&question);
+    let (requires, factor) = requires_response(input.mode, seg.speaker_role, &question);
     confidence = (confidence * factor).clamp(0.0, 1.0);
     let is_question = confidence >= QUESTION_THRESHOLD;
-    let question = clean(&question);
     let parts = if is_question {
         let p = split_parts(&question);
         if p.is_empty() {

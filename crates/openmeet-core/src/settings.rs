@@ -281,7 +281,8 @@ pub fn default_transcription_model(kind: TranscriptionProviderKind) -> &'static 
 pub struct AssistantSettings {
     pub answer_style: AnswerStyle,
     pub response_length: ResponseLength,
-    /// Candidate mode: generate a suggestion as soon as a question is detected.
+    /// Candidate and workplace modes: generate a suggestion as soon as a
+    /// question to the user is detected.
     pub auto_answer: bool,
     /// Interviewer mode: generate follow-ups when the candidate finishes.
     pub auto_followups: bool,
@@ -606,7 +607,7 @@ impl ShortcutAction {
             ShortcutAction::GenerateAnswer => "Generate answer",
             ShortcutAction::GenerateFollowups => "Generate follow-ups",
             ShortcutAction::AskAi => "Ask OpenMeet",
-            ShortcutAction::ToggleMode => "Toggle candidate / interviewer mode",
+            ShortcutAction::ToggleMode => "Switch mode (candidate / interviewer / workplace)",
             ShortcutAction::ToggleClickThrough => "Toggle click-through",
             ShortcutAction::CaptureScreen => "Capture screen manually",
             ShortcutAction::PauseResume => "Pause / resume processing",

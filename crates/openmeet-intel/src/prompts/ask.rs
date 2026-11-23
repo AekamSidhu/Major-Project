@@ -12,8 +12,8 @@ use crate::text::estimate_tokens;
 
 /// Stable prompt identifier.
 pub const ID: &str = "ask-openmeet";
-/// Prompt template version.
-pub const VERSION: u32 = 1;
+/// Prompt template version (2: workplace mode).
+pub const VERSION: u32 = 2;
 
 fn rules(mode: Mode) -> String {
     let people_rule = match mode {
@@ -26,9 +26,14 @@ fn rules(mode: Mode) -> String {
             "4. Neutrality — you may summarize what the candidate said and point out what is still \
              unclear, but never evaluate the person."
         }
+        Mode::Workplace => {
+            "4. Colleagues — speak as the user (\"I …\") only for facts grounded in <profile> or \
+             the transcript; summarize what colleagues said and decided by their labels, never \
+             judge anyone's performance, and never invent who owns a task or when it is due."
+        }
     };
     let neutrality = match mode {
-        Mode::Candidate => String::new(),
+        Mode::Candidate | Mode::Workplace => String::new(),
         Mode::Interviewer => format!("   {NON_EVALUATIVE_RULE}\n"),
     };
     format!(
@@ -133,5 +138,20 @@ mod tests {
         let c = build(&PromptContext::default(), "What should I say?", 1000);
         assert!(!c.system.contains("hiring recommendation"));
         assert!(c.system.contains("placeholders"));
+    }
+
+    #[test]
+    fn workplace_mode_talks_about_colleagues_not_candidates() {
+        let ctx = PromptContext {
+            mode: Mode::Workplace,
+            ..Default::default()
+        };
+        let p = build(&ctx, "What did we decide?", 1000);
+        assert!(p.system.contains("team meeting"));
+        assert!(p.system.contains("never invent who owns a task"));
+        assert!(p.user.contains("Mode: workplace"));
+        for word in ["the candidate", "Candidate", "hire", "interviewer"] {
+            assert!(!p.system.contains(word), "{word}");
+        }
     }
 }

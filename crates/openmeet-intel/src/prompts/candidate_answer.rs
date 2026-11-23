@@ -1,4 +1,6 @@
-//! Suggested answers for questions the user is asked (candidate mode).
+//! Suggested answers for questions the user is asked (candidate mode, and
+//! workplace mode when a colleague asks the user something — worded for a
+//! colleague, never as an interview answer).
 //!
 //! Output is the line-oriented `[[SECTION]]` format documented in
 //! `docs/INTERNALS.md`, which the overlay renders progressively while it
@@ -7,17 +9,18 @@
 use openmeet_core::types::{AnswerSections, AnswerStyle, Mode, QuestionCategory, ResponseLength};
 
 use super::shared::{
-    ANSWER_FORMAT, ANSWER_RULES, DATA_RULE, QUESTION_LINE_RULE, TRANSCRIPT_NOTE, assemble,
-    category_instruction, clean_question, length_instruction, length_slug, list_items, mode_line,
-    question_line, role_intro, split_sections, style_instruction, style_slug,
+    ANSWER_FORMAT, ANSWER_RULES, DATA_RULE, QUESTION_LINE_RULE, TRANSCRIPT_NOTE,
+    WORKPLACE_ANSWER_RULE, assemble, category_instruction, clean_question, length_instruction,
+    length_slug, list_items, mode_line, question_line, role_intro, split_sections,
+    style_instruction, style_slug,
 };
 use super::{PromptContext, PromptParts, render_context};
 use crate::text::estimate_tokens;
 
 /// Stable prompt identifier.
 pub const ID: &str = "candidate-answer";
-/// Prompt template version.
-pub const VERSION: u32 = 1;
+/// Prompt template version (2: workplace mode wording).
+pub const VERSION: u32 = 2;
 
 /// Builds the answer prompt for `question`.
 ///
@@ -33,12 +36,17 @@ pub fn build(
     budget_tokens: usize,
 ) -> PromptParts {
     let question = clean_question(question);
+    let workplace_rule = match ctx.mode {
+        Mode::Workplace => WORKPLACE_ANSWER_RULE.to_string(),
+        Mode::Candidate | Mode::Interviewer => String::new(),
+    };
     let system = assemble(&[
         role_intro(ctx.mode).to_string(),
         DATA_RULE.to_string(),
         QUESTION_LINE_RULE.to_string(),
         TRANSCRIPT_NOTE.to_string(),
         ANSWER_RULES.to_string(),
+        workplace_rule,
         ANSWER_FORMAT.to_string(),
         format!(
             "For this question:\n- {}\n- {}\n- {}",
@@ -77,13 +85,18 @@ pub fn build(
 /// then not state any personal facts.
 pub(crate) fn missing_profile_note(ctx: &PromptContext) -> Option<&'static str> {
     let p = &ctx.profile;
-    (ctx.mode == Mode::Candidate
-        && p.background.trim().is_empty()
-        && p.role_context.trim().is_empty())
-    .then_some(
-        "Note: the user has not provided a profile, so their background, employers, projects \
-         and results are unknown — use placeholders for personal facts and add the caveat.",
-    )
+    let empty = p.background.trim().is_empty() && p.role_context.trim().is_empty();
+    match ctx.mode {
+        Mode::Candidate if empty => Some(
+            "Note: the user has not provided a profile, so their background, employers, projects \
+             and results are unknown — use placeholders for personal facts and add the caveat.",
+        ),
+        Mode::Workplace if empty => Some(
+            "Note: the user has not provided notes, so their work status is only known from what \
+             they said in this meeting — use placeholders for anything else and add the caveat.",
+        ),
+        Mode::Candidate | Mode::Interviewer | Mode::Workplace => None,
+    }
 }
 
 /// Parses (possibly partial or decorated) sectioned output.
@@ -191,6 +204,40 @@ mod tests {
                 .lines()
                 .any(|l| l == "Question: How would you design a URL shortener?")
         );
+    }
+
+    #[test]
+    fn workplace_answers_are_worded_for_a_colleague() {
+        let mut c = ctx();
+        c.mode = Mode::Workplace;
+        c.recent_transcript[0].speaker = "Others".into();
+        let p = build(
+            &c,
+            "Can you give us an update on the billing export?",
+            QuestionCategory::General,
+            AnswerStyle::Concise,
+            ResponseLength::Short,
+            3500,
+        );
+        assert!(p.system.contains("team meeting"), "{}", p.system);
+        assert!(p.system.contains("one colleague answers another"));
+        assert!(p.system.contains("data captured from the"));
+        assert!(p.user.contains("Mode: workplace"));
+        assert!(p.user.contains("not provided notes"));
+        for word in ["Interviewer", "interview answer:", "hire"] {
+            assert!(!p.user.contains(word), "{word}");
+        }
+        assert!(!p.system.contains("live interview or meeting"));
+        // Candidate mode is unchanged by the workplace rule.
+        let cand = build(
+            &ctx(),
+            "Why?",
+            QuestionCategory::General,
+            AnswerStyle::Concise,
+            ResponseLength::Short,
+            3500,
+        );
+        assert!(!cand.system.contains("one colleague answers another"));
     }
 
     #[test]
