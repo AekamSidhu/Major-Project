@@ -1,0 +1,107 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from crates/openmeet-engine/src/conversation.rs (handle_final, on_integrity_timer, run_integrity_actions),
+' crates/openmeet-engine/src/integrity.rs (on_interviewer_question, on_candidate_segment, on_timer, finalize_answer,
+' prepare_check, spawn_references, spawn_integrity_check, run_integrity_check, ai_text_check, echo_check,
+' reading_check, store_integrity_flag), crates/openmeet-intel/src/integrity/fusion.rs (fuse),
+' crates/openmeet-intel/src/integrity/evidence.rs (fusion_inputs, headline),
+' crates/openmeet-providers/src/integrity.rs (LocalAiIntegrity: /v1/integrity/echo, /v1/integrity/reading),
+' local-ai/integrity/__init__.py (add_routes), crates/openmeet-store/src/records.rs (save_integrity_flag),
+' crates/openmeet-core/src/events.rs (IntegrityChecked).
+title Answer-integrity check in the desktop app: one candidate answer, four signals, one flag
+
+hide footbox
+skinparam maxMessageSize 260
+
+participant "Transcription\n(segmenter + ASR)" as ASR
+participant "ConversationLoop\n(conversation.rs)" as Conv
+participant "integrity.rs\n(Engine, per meeting)" as Int
+participant "RequestManager\n(Background slot)" as Req
+participant "Local AI sidecar\n/v1/integrity/*" as Side
+participant "Configured LLM" as LLM
+participant "Embedder" as Emb
+participant "Persister\n(integrity_flags)" as Per
+participant "EventSink\n(UI windows)" as UI
+
+note over Int
+Interviewer mode, integrity check on (settings.integrity.enabled).
+Each signal runs only when its own setting is on.
+end note
+
+== When the interviewer's question is detected ==
+
+Conv -> Int : on_interviewer_question(rt, settings, question, segment)
+activate Int
+Int -> Int : finalize_answer(previous answer)\n(last check of unchecked units, then baseline commit)
+Int -> Int : IntegrityQuestion { id, text, end_ms } becomes the open question
+Int -> Int : push a (pending) reference slot for this question
+Int -> Req : begin(Background, IntegrityReference)
+activate LLM
+Int -> LLM : complete the question N times\n(N = spec references, thresholds.json)
+LLM --> Int : reference answers + model name
+deactivate LLM
+Int --> Int : watch::send(ReferenceState::Ready { answers, model })
+deactivate Int
+
+== Each candidate utterance (final text) ==
+
+ASR -> Conv : TranscriptFinal (utterance text, word timings)
+activate Conv
+Conv -> Int : on_candidate_segment(rt, settings, segment, words)
+activate Int
+Int -> Int : open answer: append unit (text, start/end, words)\nversion += 1
+Int --> Conv : IntegrityAction::Timer { version, turn_end_silence_ms }
+deactivate Int
+Conv -> Conv : sleep(turn_end_silence_ms) then ConvInput::IntegrityTimer { version }
+deactivate Conv
+
+== The candidate pauses (no newer speech, timer version still current) ==
+
+Conv -> Int : on_timer(rt, settings, version)
+activate Int
+alt candidate still speaking, or version changed
+  Int --> Conv : nothing (a newer timer or speech decides)
+else silent and new units since the last check
+  Int -> Int : prepare_check: revision += 1, checked_units = all\ndelivery signal computed here from timings\n(no network; compared with the baseline)
+  Int --> Conv : CheckJob (flag id, revision, text, flags of the four signals)
+  deactivate Int
+  Conv -> Int : spawn_integrity_check(job)
+  activate Int
+  Int -> Req : cancel(previous running check of this answer), if any
+  Int -> Req : begin(Background, IntegrityCheck)
+  Req --> Int : RequestTicket
+  Int -> Int : answer.running = ticket id
+
+  par ai_text
+    Int -> Side : POST /v1/integrity/echo { text }
+    Side --> Int : probability, level (low / possible / high / too_short)
+  else echo_similarity (only with an embedder of the spec model)
+    Int -> Int : wait for the reference answers (watch, 90 s max)
+    Int -> Emb : embed(answer transcript + reference transcripts)
+    Emb --> Int : vectors
+    Int -> Int : similarity = highest cosine to any reference\n(unavailable if the embedder is not the spec model)
+  else delivery
+    Int -> Int : already computed in prepare_check
+  else reading (only with a candidate region and gaze running)
+    Int -> Side : POST /v1/integrity/reading { start, end } (epoch seconds)
+    Side --> Int : probability, level (or no_gaze)
+  end
+
+  alt ticket cancelled (newer revision started, or emergency stop)
+    Int -> Req : set_state(Cancelled)\n(no flag is stored)
+  else still current
+    Int -> Int : fuse(signals) -> level, elevated\nheadline(level); IntegrityFlag { revision, signals, ... }
+    Int -> Int : store_integrity_flag: keep only the newest revision
+    Int -> Per : PersistOp::IntegrityFlag (replace row by id)
+    Int -> UI : MeetingEvent::IntegrityChecked { flag }
+    Int -> Req : set_state(Complete)
+  end
+  deactivate Int
+end
+
+note over Int
+The flag is a signal for the interviewer, never a verdict.
+Its signals list carries the evidence. Nothing about the
+check reaches the candidate; audio and gaze samples are not stored.
+end note
+@enduml
