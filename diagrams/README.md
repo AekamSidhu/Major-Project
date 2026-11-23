@@ -6,8 +6,7 @@ state is taken from the code named in the first lines of its source file
 is drawn from plans or slides. Each source has a PNG and an SVG render next to
 it, made by `render.sh`.
 
-Workplace mode is not drawn yet, because it is still being built (see the list
-at the end). Everything else describes what is in `main` today.
+Workplace mode (merged in #13) is drawn where it is built: the board, catch me up, the minutes, schema v3 and the workplace DFD branches. Everything describes what is in `main` today.
 
 Shared look: `_style.iuml` (included by every PlantUML source).
 
@@ -15,12 +14,12 @@ Shared look: `_style.iuml` (included by every PlantUML source).
 
 Yourdon–DeMarco notation, Graphviz sources.
 
-- `dfd/dfd-level-0-context.dot`: OpenMeet as one process with its external entities (user, operating system, local AI services, remote providers).
+- `dfd/dfd-level-0-context.dot`: OpenMeet as one process with its external entities (user, operating system, local AI services, remote providers, and the workplace team whose speech comes through the OS).
 - `dfd/dfd-level-1.dot`: processes 1.0 to 11.0, data stores D1 to D4 and the flows between them (engine, intel, store).
 - `dfd/dfd-level-2-audio-transcription.dot`: 1.0 capture audio and 2.0 segment and transcribe (platform audio, `vad.rs`, `transcription.rs`).
 - `dfd/dfd-level-2-screen-context.dot`: 4.0 capture and interpret the selected screen (platform screen, `screen.rs`, vision prompts).
-- `dfd/dfd-level-2-suggestions.dot`: 3.0 analyse the conversation, 5.0 assemble context, 6.0 generate suggestions (`conversation.rs`, `assist.rs`, prompts).
-- `dfd/dfd-level-2-data-management.dot`: 8.0 settings and keys, 9.0 persist and export, 10.0 summary (`store/`, `settings.rs`, keyring).
+- `dfd/dfd-level-2-suggestions.dot`: 3.0 analyse the conversation (with the workplace board), 5.0 assemble context, 6.0 generate suggestions and the catch-up recap (`conversation.rs`, `assist.rs`, `workplace.rs`, prompts).
+- `dfd/dfd-level-2-data-management.dot`: 8.0 settings and keys, 9.0 persist and export, 10.0 summary or workplace minutes (`store/`, `settings.rs`, keyring).
 - `dfd/dfd-level-2-integrity.dot`: 11.0 answer integrity, 11.1 to 11.8 (`engine/integrity.rs`, `intel/integrity/`, sidecar integrity endpoints, `spec/integrity`).
 
 ## UML
@@ -30,7 +29,7 @@ diagrams and one package diagram, which are Graphviz.
 
 ### 1. Activity
 
-- `uml/activity/activity-01-meeting-lifecycle.puml`: setup, activate, live, stop, summary, store (`engine.rs`, `state.rs`, `commands/meeting.rs`).
+- `uml/activity/activity-01-meeting-lifecycle.puml`: setup, activate, live, stop, summary (workplace minutes or the interview summary), store (`engine.rs`, `state.rs`, `commands/meeting.rs`, `assist.rs`).
 - `uml/activity/activity-02-audio-capture-per-source.puml`: device to 16 kHz frames to the engine, per source (`platform/audio`, `capture.rs`).
 - `uml/activity/activity-03-vad-utterance-segmentation.puml`: the segmenter's onset, hangover, discard and cut rules (`intel/vad.rs`).
 - `uml/activity/activity-04-integrity-fusion.puml`: the four signal levels to one flag, rule by rule (`intel/integrity/fusion.rs`, `spec/integrity`).
@@ -55,8 +54,12 @@ Engine and intelligence (`openmeet-engine`, `openmeet-intel`):
 - `uml/class/engine-intel/class-04-request-manager-slots.puml`: `RequestManager`, slots, stale-response suppression (`requests.rs`).
 - `uml/class/engine-intel/class-05-integrity-run-and-checks.puml`: per-meeting integrity state, check jobs, gaze commands (`engine/integrity.rs`).
 
+Workplace mode:
+
+
 Integrity vocabulary:
 
+- `uml/class/workplace/class-01-board-and-minutes.puml`: the workplace board, open and clarifying questions, the minutes types, and the tracker (`types.rs`, `workplace.rs`).
 - `uml/class/integrity/class-01-integrity-flag-and-service.puml`: signals, levels, `IntegrityFlag`, the sidecar `IntegrityService` trait, `fuse` (`core/integrity.rs`, `intel/integrity/fusion.rs`).
 
 Providers and platform (`openmeet-providers`, `openmeet-platform`):
@@ -123,6 +126,10 @@ System (`uml/sequence/system/`):
 - `sequence-03-onboarding-first-run.puml`: first-run onboarding until `onboarding_complete` (`App.tsx`, `commands/`).
 - `sequence-04-save-settings.puml`: sanitise, validate, persist, apply settings (`settings.rs`, `commands/app.rs`).
 
+Workplace (`uml/sequence/workplace/`):
+
+- `sequence-01-workplace-meeting.puml`: a workplace meeting: transcript to board, a question to you and its suggestion, catch me up, and meeting end to minutes, store and export (`conversation.rs`, `assist.rs`, `engine.rs`, `workplace.rs`).
+
 Integrity and room (`uml/sequence/integrity/`, `uml/sequence/room/`):
 
 - `integrity/sequence-01-answer-integrity-check.puml`: in the desktop app, one answer: references, the four signals, fusion, event, store (`conversation.rs`, `integrity.rs`, `fusion.rs`, sidecar client).
@@ -145,13 +152,13 @@ Integrity and room (`uml/sequence/integrity/`, `uml/sequence/room/`):
 
 ## Entity-relationship (ER)
 
-- `er/er-01-physical-schema.puml`: the SQLite schema v2 as tables, columns, keys and foreign keys (`migrations/0001_initial.sql`, `0002_integrity_flags.sql`).
+- `er/er-01-physical-schema.puml`: the SQLite schema v3 as tables, columns, keys and foreign keys (`migrations/0001_initial.sql`, `0002_integrity_flags.sql`, `0003_workplace.sql`).
 - `er/er-02-conceptual-chen-ownership.dot`: Chen conceptual model, meeting ownership by `meeting_id` (same migrations).
 - `er/er-03-conceptual-chen-references.dot`: Chen conceptual model, cross-references held in id columns with no foreign key (same migrations).
 
 ## Flowcharts
 
-- `flowcharts/flowchart-02-final-segment-pipeline.dot`: `Engine::handle_final()` for every final draft, both modes, including the integrity hooks (`conversation.rs`, `integrity.rs`).
+- `flowcharts/flowchart-02-final-segment-pipeline.dot`: `Engine::handle_final()` for every final draft, all three modes, including the workplace board branch and the integrity hooks (`conversation.rs`, `integrity.rs`).
 - `flowcharts/flowchart-03-question-sentence-scoring.dot`: heuristic scoring of one sentence, `score_sentence()` (`intel/detect/mod.rs`).
 - `flowcharts/flowchart-04-question-detection-context-merge.dot`: `detect()` with the rhetorical check, lead-ins, fragments, continuations and speaker role (`intel/detect/mod.rs`).
 
@@ -190,10 +197,3 @@ java -jar plantuml.jar -charset UTF-8 -tsvg diagrams/er/er-01-physical-schema.pu
 dot -Tpng diagrams/dfd/dfd-level-0-context.dot -o diagrams/dfd/dfd-level-0-context.png
 dot -Tsvg diagrams/dfd/dfd-level-0-context.dot -o diagrams/dfd/dfd-level-0-context.svg
 ```
-
-## To add after workplace mode merges
-
-Not drawn here, on purpose. When workplace mode lands, add: the `Mode`
-variant and its state in the class and state diagrams, the workplace use
-cases and the DFD 0 entity ("workplace team", currently removed), and any
-workplace event or settings class.
