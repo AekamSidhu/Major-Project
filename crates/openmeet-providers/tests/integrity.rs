@@ -321,3 +321,53 @@ async fn live_sidecar_round_trip() {
     assert!(!stopped.capturing_screen);
     c.reset_gaze(CancellationToken::new()).await.unwrap();
 }
+
+/// A sidecar scoring a short (3-10 s) answer with its early detector.
+fn early_reading(req: &Recorded, _: usize) -> Reply {
+    match (req.method.as_str(), req.path.as_str()) {
+        ("POST", "/v1/integrity/reading") => Reply::json(
+            200,
+            json!({"reading_probability": 0.7, "level": "possible", "window_probabilities": [0.7],
+                   "valid_fraction": 0.95, "seconds": 6.0, "early": true, "calibrated": false}),
+        ),
+        _ => Reply::json(404, json!({"detail": "not found"})),
+    }
+}
+
+/// An older sidecar: no `calibrated` field, so the result counts as calibrated.
+fn older_reading(req: &Recorded, _: usize) -> Reply {
+    match (req.method.as_str(), req.path.as_str()) {
+        ("POST", "/v1/integrity/reading") => Reply::json(
+            200,
+            json!({"reading_probability": 0.7, "level": "possible", "window_probabilities": [0.7, 0.6],
+                   "valid_fraction": 0.95, "seconds": 20.0}),
+        ),
+        _ => Reply::json(404, json!({"detail": "not found"})),
+    }
+}
+
+#[tokio::test]
+async fn early_reading_is_uncalibrated_and_older_sidecars_default_to_calibrated() {
+    let server = MockServer::start(early_reading).await;
+    let r = client(&server.url)
+        .reading(0.0, 6.0, CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(r.level, IntegrityLevel::Possible);
+    assert!((r.probability.unwrap() - 0.7).abs() < 1e-9);
+    assert!(
+        !r.calibrated,
+        "an early reading must be reported uncalibrated"
+    );
+
+    let server = MockServer::start(older_reading).await;
+    let r = client(&server.url)
+        .reading(0.0, 20.0, CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(
+        r.calibrated,
+        "a sidecar without the field is treated as calibrated"
+    );
+    assert_eq!(r.windows, 2);
+}
