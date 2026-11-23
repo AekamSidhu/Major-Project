@@ -187,14 +187,14 @@ fn parse_text_item(line: &str) -> Option<(String, TopicStatus)> {
         .trim()
         .trim_end_matches(['.', ','])
         .trim();
-    if let Some(open) = t.rfind('(') {
-        if t.ends_with(')') {
-            let inner = &t[open + 1..t.len() - 1];
-            let status = inner
-                .split(',')
-                .find_map(|part| parse_topic_status(part.trim()))?;
-            return Some((t[..open].trim().to_string(), status));
-        }
+    if let Some(open) = t.rfind('(')
+        && t.ends_with(')')
+    {
+        let inner = &t[open + 1..t.len() - 1];
+        let status = inner
+            .split(',')
+            .find_map(|part| parse_topic_status(part.trim()))?;
+        return Some((t[..open].trim().to_string(), status));
     }
     for sep in [":", " — ", " – ", " - ", "=", "->", "→"] {
         if let Some(idx) = t.rfind(sep) {

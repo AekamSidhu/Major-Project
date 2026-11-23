@@ -366,10 +366,10 @@ pub fn parse(
 ) -> Option<MeetingSummary> {
     let mut obj = first_json_object(text)?;
     // Some models wrap the object: {"summary": {...}}.
-    if get(&obj, &["overview"]).is_none() {
-        if let Some(Value::Object(inner)) = get(&obj, &["summary", "meeting_summary", "result"]) {
-            obj = inner.clone();
-        }
+    if get(&obj, &["overview"]).is_none()
+        && let Some(Value::Object(inner)) = get(&obj, &["summary", "meeting_summary", "result"])
+    {
+        obj = inner.clone();
     }
     let overview = match get(&obj, &["overview", "summary"]) {
         Some(Value::String(s)) => strip_evaluative_sentences(&one_line(s)),

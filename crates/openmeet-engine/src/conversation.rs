@@ -38,6 +38,8 @@ pub enum ConvInput {
     Draft(TranscriptDraft),
     /// Interviewer mode: the turn-end timer for `version` fired.
     TurnTimer { version: u64 },
+    /// Interviewer mode, integrity check: the candidate may have paused.
+    IntegrityTimer { version: u64 },
 }
 
 /// Work decided while holding the state lock, executed after releasing it.
@@ -191,6 +193,7 @@ impl Engine {
                     if rt.mode() == Mode::Interviewer && rt.role_for(source) != SpeakerRole::User {
                         // The candidate keeps talking: invalidate the turn-end timer.
                         rt.turn.version += 1;
+                        crate::integrity::on_candidate_speech_started(rt);
                     }
                 }
             }
@@ -301,6 +304,7 @@ impl Engine {
                 }
             }
             ConvInput::TurnTimer { version } => self.on_turn_timer(meeting_id, version),
+            ConvInput::IntegrityTimer { version } => self.on_integrity_timer(meeting_id, version),
         }
     }
 
@@ -325,6 +329,7 @@ impl Engine {
         let mut actions: Vec<Action> = Vec::new();
         let mut embed_jobs: Vec<EmbedJob> = Vec::new();
         let mut persist_ops: Vec<PersistOp> = Vec::new();
+        let mut integrity_actions: Vec<crate::integrity::IntegrityAction> = Vec::new();
         let mut detection_ms: Option<f64> = None;
 
         let store = {
@@ -338,6 +343,16 @@ impl Engine {
             };
             rt.pending_utterances.remove(&d.utterance_id);
             let segment = segment_from_draft(rt, &d);
+            // Word timings on the meeting clock (integrity delivery signal).
+            let words: Option<Vec<WordTiming>> = d.words.as_ref().map(|ws| {
+                ws.iter()
+                    .map(|w| WordTiming {
+                        word: w.word.clone(),
+                        start_ms: rt.rel_ms(w.start_ms),
+                        end_ms: rt.rel_ms(w.end_ms),
+                    })
+                    .collect()
+            });
             if segment.text.is_empty() {
                 return;
             }
@@ -465,14 +480,25 @@ impl Engine {
                             Mode::Candidate => role != SpeakerRole::User,
                             Mode::Interviewer => asker_is_user || role == SpeakerRole::Unknown,
                         };
-                        if answers_question {
-                            if let Some(prev) = rt.open_answer_for(&q) {
-                                remember_answer(rt, &prev, &mut persist_ops, &mut embed_jobs);
-                            }
+                        if answers_question && let Some(prev) = rt.open_answer_for(&q) {
+                            remember_answer(rt, &prev, &mut persist_ops, &mut embed_jobs);
                         }
                         if mode == Mode::Interviewer && asker_is_user {
                             // A new interviewer question starts a new candidate turn.
                             rt.turn.reset();
+                        }
+                        if mode == Mode::Interviewer
+                            && (asker_is_user || role == SpeakerRole::Unknown)
+                        {
+                            // The candidate's previous answer is final; the
+                            // next one answers this question.
+                            integrity_actions.extend(crate::integrity::on_interviewer_question(
+                                rt,
+                                &settings,
+                                &q,
+                                &segment,
+                                words.as_deref(),
+                            ));
                         }
                         if active
                             && mode == Mode::Candidate
@@ -518,6 +544,12 @@ impl Engine {
                     && !(is_accepted_question && role == SpeakerRole::Unknown)
                 {
                     rt.turn.push(&segment);
+                    integrity_actions.extend(crate::integrity::on_candidate_segment(
+                        rt,
+                        &settings,
+                        &segment,
+                        words.clone(),
+                    ));
                     if active {
                         actions.push(Action::TurnTimer {
                             version: rt.turn.version,
@@ -580,6 +612,25 @@ impl Engine {
             let _ = self.inner.embed_tx.send(job);
         }
         self.run_actions(meeting_id, actions);
+        self.run_integrity_actions(meeting_id, integrity_actions);
+    }
+
+    /// The candidate paused: check the answer so far (background).
+    fn on_integrity_timer(&self, meeting_id: &str, version: u64) {
+        let settings = self.settings();
+        let job = {
+            let mut st = self.inner.state.lock();
+            st.runtime
+                .as_mut()
+                .filter(|r| r.meeting.id == meeting_id)
+                .and_then(|rt| crate::integrity::on_timer(rt, &settings, version))
+        };
+        if let Some(job) = job {
+            self.run_integrity_actions(
+                meeting_id,
+                vec![crate::integrity::IntegrityAction::Check(Box::new(job))],
+            );
+        }
     }
 
     fn on_turn_timer(&self, meeting_id: &str, version: u64) {
@@ -611,10 +662,10 @@ impl Engine {
             rt.turn.reset();
             text
         };
-        if settings.assistant.auto_followups {
-            if let Err(e) = crate::assist::start_followups(self, turn_text) {
-                tracing::debug!(error = %e, "automatic follow-ups not started");
-            }
+        if settings.assistant.auto_followups
+            && let Err(e) = crate::assist::start_followups(self, turn_text)
+        {
+            tracing::debug!(error = %e, "automatic follow-ups not started");
         }
     }
 

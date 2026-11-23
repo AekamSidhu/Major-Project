@@ -104,7 +104,9 @@ fn read_wav(path: &str) -> Vec<f32> {
         } else if id == b"data" {
             assert!(format_ok, "{path}: data before fmt");
             return body
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32768.0)
                 .collect();
         }

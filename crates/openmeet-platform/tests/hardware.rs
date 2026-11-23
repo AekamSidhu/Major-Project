@@ -196,6 +196,31 @@ fn lists_screen_sources_and_captures_primary_display() {
 
 #[test]
 #[ignore = "needs a display"]
+fn captures_an_absolute_region_for_the_integrity_preview() {
+    // A 320x200 rectangle near the primary display's top-left corner, in the
+    // absolute coordinates the integrity settings store.
+    let region = openmeet_core::ipc::Rect {
+        x: 40,
+        y: 40,
+        width: 320,
+        height: 200,
+    };
+    let frame = screen::capture_rect(region, &[], 480).expect("capture region");
+    println!("region preview: {}x{} PNG", frame.width, frame.height);
+    assert!(frame.png.starts_with(&[0x89, b'P', b'N', b'G']));
+    assert!(frame.width > 0 && frame.width <= 480);
+    // Off every display: a clear error, no panic.
+    let off = openmeet_core::ipc::Rect {
+        x: -100_000,
+        y: -100_000,
+        width: 320,
+        height: 200,
+    };
+    assert!(screen::capture_rect(off, &[], 480).is_err());
+}
+
+#[test]
+#[ignore = "needs a display"]
 fn sampler_emits_first_frame_then_deduplicates() {
     let frames = Arc::new(AtomicUsize::new(0));
     let statuses = Arc::new(Mutex::new(Vec::<ScreenStatus>::new()));

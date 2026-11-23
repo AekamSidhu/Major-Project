@@ -23,7 +23,7 @@ use crate::error::SqlResultExt;
 
 /// Latest schema version understood by this build of the store. Databases
 /// with a higher `user_version` are refused by [`crate::Database::open`].
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// One schema migration: `sql` upgrades a database from `version - 1` to
 /// `version`.
@@ -34,11 +34,18 @@ pub(crate) struct Migration {
 }
 
 /// All migrations in ascending, contiguous version order starting at 1.
-pub(crate) const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial schema",
-    sql: include_str!("../migrations/0001_initial.sql"),
-}];
+pub(crate) const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial schema",
+        sql: include_str!("../migrations/0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "answer-integrity flags",
+        sql: include_str!("../migrations/0002_integrity_flags.sql"),
+    },
+];
 
 const _: () = assert!(
     MIGRATIONS[MIGRATIONS.len() - 1].version == SCHEMA_VERSION,
@@ -170,6 +177,7 @@ mod tests {
                 "answers",
                 "claims",
                 "embeddings",
+                "integrity_flags",
                 "meeting_summaries",
                 "meetings",
                 "participants",
@@ -181,6 +189,35 @@ mod tests {
                 "transcript_segments",
             ]
         );
+    }
+
+    #[test]
+    fn a_version_1_database_gains_integrity_flags_and_keeps_its_data() {
+        let mut conn = memory();
+        run_migrations(&mut conn, &MIGRATIONS[..1]).unwrap();
+        conn.execute(
+            "INSERT INTO meetings (id, title, mode, state, started_at, created_at, updated_at)              VALUES ('m1', 'Interview', 'interviewer', 'completed', 1, 1, 1)",
+            [],
+        )
+        .unwrap();
+        assert!(!table_names(&conn).contains(&"integrity_flags".to_string()));
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        assert!(table_names(&conn).contains(&"integrity_flags".to_string()));
+        let meetings: i64 = conn
+            .query_row("SELECT COUNT(*) FROM meetings", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(meetings, 1);
+        conn.execute(
+            "INSERT INTO integrity_flags (id, meeting_id, answer_start_ms, answer_end_ms,              answer_words, level, headline, revision, spec_version, created_at, checked_at,              updated_at) VALUES ('f1', 'm1', 0, 1, 1, 'low', 'h', 1, 1, 1, 1, 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute("DELETE FROM meetings WHERE id = 'm1'", [])
+            .unwrap();
+        let flags: i64 = conn
+            .query_row("SELECT COUNT(*) FROM integrity_flags", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(flags, 0, "flags cascade with their meeting");
     }
 
     #[test]
@@ -242,7 +279,7 @@ mod tests {
             .into_iter()
             .filter(|t| !matches!(t.as_str(), "meetings" | "privacy_rules" | "settings"))
             .collect();
-        assert_eq!(owned.len(), 11);
+        assert_eq!(owned.len(), 12);
         for table in &owned {
             let fks: Vec<(String, String, String)> = conn
                 .prepare("SELECT \"table\", \"from\", on_delete FROM pragma_foreign_key_list(?1)")

@@ -19,6 +19,7 @@ mod conversation;
 mod demo;
 mod embedder;
 mod engine;
+mod integrity;
 mod memory;
 mod metrics;
 mod persist;

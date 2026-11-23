@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ids::Id;
+use crate::integrity::IntegrityFlag;
 use crate::types::*;
 
 /// Tauri event name used for [`MeetingEvent`]s.
@@ -149,6 +150,12 @@ pub enum MeetingEvent {
         source: AudioSourceKind,
         level: f32,
     },
+    /// Interviewer mode, answer-integrity check: the (re)checked flag of a
+    /// candidate answer. A later revision of the same `flag.id` replaces the
+    /// earlier one.
+    IntegrityChecked {
+        flag: IntegrityFlag,
+    },
     /// User-visible notice (errors are never silent).
     Notice {
         level: NoticeLevel,
@@ -197,6 +204,7 @@ impl MeetingEvent {
             MeetingEvent::ModeChanged { .. } => "MODE_CHANGED",
             MeetingEvent::StyleChanged { .. } => "STYLE_CHANGED",
             MeetingEvent::AudioLevel { .. } => "AUDIO_LEVEL",
+            MeetingEvent::IntegrityChecked { .. } => "INTEGRITY_CHECKED",
             MeetingEvent::Notice { .. } => "NOTICE",
         }
     }

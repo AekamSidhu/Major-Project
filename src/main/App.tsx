@@ -17,6 +17,7 @@ import { AppearanceSection } from "./sections/settings/Appearance";
 import { ShortcutsSection } from "./sections/settings/Shortcuts";
 import { ProfileSection } from "./sections/settings/Profile";
 import { GeneralSection } from "./sections/settings/General";
+import { IntegritySection } from "./sections/settings/Integrity";
 import { Onboarding } from "./onboarding/Onboarding";
 
 interface NavItem {
@@ -43,6 +44,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<NavItem> }> = [
       { id: "settings/appearance", label: "Overlay & appearance", icon: "palette" },
       { id: "settings/shortcuts", label: "Shortcuts", icon: "keyboard" },
       { id: "settings/profile", label: "Profile & context", icon: "user" },
+      { id: "settings/integrity", label: "Answer integrity", icon: "eye" },
       { id: "settings/general", label: "General", icon: "sliders" },
     ],
   },
@@ -71,6 +73,8 @@ function renderSection(id: SectionId): ReactNode {
       return <ProfileSection />;
     case "settings/general":
       return <GeneralSection />;
+    case "settings/integrity":
+      return <IntegritySection />;
     case "diagnostics":
       return <DiagnosticsSection />;
   }

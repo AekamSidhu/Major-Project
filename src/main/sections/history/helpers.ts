@@ -102,6 +102,11 @@ export const EXPORT_PARTS: ReadonlyArray<{
     description: "Detected questions, spoken answers and AI suggestions",
   },
   { key: "followups", label: "Follow-ups", description: "Suggested follow-up questions" },
+  {
+    key: "integrity",
+    label: "Answer integrity",
+    description: "Answer-check flags with their evidence (interviews with the check on)",
+  },
 ];
 
 export const DEFAULT_EXPORT_PARTS: ExportParts = {
@@ -109,6 +114,7 @@ export const DEFAULT_EXPORT_PARTS: ExportParts = {
   transcript: true,
   questions: true,
   followups: true,
+  integrity: true,
 };
 
 export function buildExportRequest(
@@ -117,7 +123,13 @@ export function buildExportRequest(
   parts: ExportParts,
 ): { request: ExportRequest | null; error: string | null } {
   if (!meetingId) return { request: null, error: "No meeting selected." };
-  if (!parts.summary && !parts.transcript && !parts.questions && !parts.followups) {
+  if (
+    !parts.summary &&
+    !parts.transcript &&
+    !parts.questions &&
+    !parts.followups &&
+    !parts.integrity
+  ) {
     return { request: null, error: "Choose at least one part to export." };
   }
   return { request: { meetingId, format, parts: { ...parts } }, error: null };

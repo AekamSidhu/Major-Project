@@ -11,12 +11,13 @@ use openmeet_store::{Database, SCHEMA_VERSION};
 
 use crate::fixtures::*;
 
-const TABLES: [&str; 14] = [
+const TABLES: [&str; 15] = [
     "action_items",
     "ai_suggestions",
     "answers",
     "claims",
     "embeddings",
+    "integrity_flags",
     "meeting_summaries",
     "meetings",
     "participants",

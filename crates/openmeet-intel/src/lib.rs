@@ -13,6 +13,8 @@
 //! * [`export`] – Markdown / text / JSON export and the extractive summary.
 //! * [`mock`] – deterministic providers for tests, developer tools and demos.
 //! * [`demo`] – scripted demo scenarios.
+//! * [`integrity`] – answer-integrity signals (delivery, echo similarity) and
+//!   their fusion into one flag, per `spec/integrity`.
 //!
 //! Privacy: nothing in this crate logs transcript text, prompts, model output,
 //! OCR text or screenshots. Logs only carry ids, sizes, counts and durations.
@@ -24,6 +26,7 @@ pub mod claims;
 pub mod demo;
 pub mod detect;
 pub mod export;
+pub mod integrity;
 pub mod mock;
 pub mod prompts;
 pub mod text;

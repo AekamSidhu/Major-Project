@@ -25,7 +25,7 @@ use openmeet_core::providers::{
     Transcriber, TranscriptionEvent, TranscriptionProvider, TranscriptionRequest,
     TranscriptionSession, TranscriptionSessionConfig,
 };
-use openmeet_core::types::{AudioSourceKind, ProviderInfo, TranscriptDraft};
+use openmeet_core::types::{AudioSourceKind, ProviderInfo, TranscriptDraft, WordTiming};
 use openmeet_intel::vad::{Segmenter, SegmenterEvent, VadConfig};
 use parking_lot::Mutex;
 use tokio::runtime::Handle;
@@ -238,6 +238,7 @@ impl VadSession {
             clip,
             language: self.config.language.clone(),
             prompt: self.prompt(),
+            word_timestamps: self.config.word_timestamps,
         };
         self.handle.spawn(async move {
             let utterance_id = request.clip.utterance_id.clone();
@@ -266,6 +267,16 @@ impl VadSession {
                             utterance_id: utterance_id.clone(),
                         })
                     } else {
+                        // Word times are relative to the uploaded clip.
+                        let words = out.words.map(|ws| {
+                            ws.into_iter()
+                                .map(|w| WordTiming {
+                                    word: w.word,
+                                    start_ms: clip.start_ms + w.start_ms,
+                                    end_ms: clip.start_ms + w.end_ms,
+                                })
+                                .collect()
+                        });
                         Some(TranscriptionEvent::Draft(TranscriptDraft {
                             utterance_id: utterance_id.clone(),
                             source,
@@ -275,6 +286,7 @@ impl VadSession {
                             is_final: true,
                             confidence: out.confidence,
                             speaker_role: None,
+                            words,
                         }))
                     }
                 }
@@ -311,6 +323,8 @@ impl VadSession {
             clip,
             language: self.config.language.clone(),
             prompt: self.prompt(),
+            // Interim text is never used for timing.
+            word_timestamps: false,
         };
         self.handle.spawn(async move {
             let utterance_id = request.clip.utterance_id.clone();
@@ -342,6 +356,7 @@ impl VadSession {
                     is_final: false,
                     confidence: out.confidence,
                     speaker_role: None,
+                    words: None,
                 }));
             }
         });
@@ -549,6 +564,13 @@ mod tests {
                 text: format!("utterance {n}{final_marker}"),
                 confidence: Some(0.9),
                 language: None,
+                words: request.word_timestamps.then(|| {
+                    vec![WordTiming {
+                        word: " utterance".into(),
+                        start_ms: 10,
+                        end_ms: 200,
+                    }]
+                }),
             })
         }
 
@@ -593,6 +615,7 @@ mod tests {
             interim_results: false,
             vad_sensitivity: 0.6,
             silence_ms: 500,
+            word_timestamps: false,
         }
     }
 
@@ -645,6 +668,38 @@ mod tests {
         if let TranscriptionEvent::Draft(d) = &finals[0] {
             assert!(d.start_ms >= 1_000_000 && d.end_ms > d.start_ms);
             assert_eq!(d.source, AudioSourceKind::System);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn word_timestamps_are_requested_only_when_configured_and_placed_on_the_clock() {
+        for words in [false, true] {
+            let provider = VadTranscriptionProvider::new(Arc::new(ScriptedTranscriber {
+                calls: AtomicUsize::new(0),
+                delays_ms: vec![0],
+                fail_on: None,
+            }));
+            let (tx, mut rx) = mpsc::unbounded_channel();
+            let mut cfg = config();
+            cfg.word_timestamps = words;
+            let mut session = provider.start_session(cfg, tx).unwrap();
+            let mut t = 2_000_000;
+            feed(&mut session, &silence(500), &mut t);
+            feed(&mut session, &tone(1200, 0.3), &mut t);
+            feed(&mut session, &silence(900), &mut t);
+            let finals = collect_finals(&mut rx, 1).await;
+            let TranscriptionEvent::Draft(d) = &finals[0] else {
+                panic!("expected a final draft")
+            };
+            match &d.words {
+                None => assert!(!words),
+                Some(ws) => {
+                    assert!(words);
+                    // The scripted recognizer reports 10–200 ms into the clip.
+                    assert_eq!(ws[0].start_ms, d.start_ms + 10);
+                    assert_eq!(ws[0].end_ms, d.start_ms + 200);
+                }
+            }
         }
     }
 

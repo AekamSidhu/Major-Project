@@ -123,7 +123,7 @@ mod windows_ocr {
             // RGBA → BGRA (premultiplied; screen frames are opaque so the
             // color values are unchanged).
             let mut bgra = image.into_raw();
-            for px in bgra.chunks_exact_mut(4) {
+            for px in bgra.as_chunks_mut::<4>().0 {
                 px.swap(0, 2);
             }
             let writer = DataWriter::new()?;

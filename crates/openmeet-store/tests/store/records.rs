@@ -2,6 +2,7 @@
 //! and ordering, and errors for unknown meetings.
 
 use openmeet_core::StoreError;
+use openmeet_core::integrity::IntegrityLevel;
 use openmeet_core::store::MeetingStore;
 use openmeet_core::types::*;
 use openmeet_store::Database;
@@ -306,6 +307,33 @@ fn summary_is_replaced_on_save() {
     s.decisions = vec![secret("Use Redis")];
     db.save_summary(&s).unwrap();
     assert_eq!(db.load_meeting("m1").unwrap().summary, Some(s));
+}
+
+#[test]
+fn integrity_flags_upsert_by_id_and_keep_the_newest_revision() {
+    let db = db_with_meeting("m1");
+    let mut f = integrity_flag("m1", "f1", 60_000, 1);
+    db.save_integrity_flag(&f).unwrap();
+    f.revision = 3;
+    f.level = IntegrityLevel::High;
+    f.answer_end_ms = 120_000;
+    db.save_integrity_flag(&f).unwrap();
+    // A slower, older re-check finishing last does not win.
+    let stale = integrity_flag("m1", "f1", 60_000, 2);
+    db.save_integrity_flag(&stale).unwrap();
+    db.save_integrity_flag(&integrity_flag("m1", "f0", 10_000, 1))
+        .unwrap();
+    let rec = db.load_meeting("m1").unwrap();
+    assert_eq!(rec.integrity_flags.len(), 2);
+    assert_eq!(rec.integrity_flags[0].id, "f0", "answer order");
+    assert_eq!(
+        rec.integrity_flags[1], f,
+        "round trip of the newest revision"
+    );
+    assert!(matches!(
+        db.save_integrity_flag(&integrity_flag("nope", "f9", 0, 1)),
+        Err(StoreError::NotFound(_))
+    ));
 }
 
 #[test]

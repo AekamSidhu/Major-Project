@@ -574,7 +574,7 @@ async fn stream_text(
 }
 
 /// Collects a full response (background work).
-async fn complete(
+pub(crate) async fn complete(
     ticket: &RequestTicket,
     llm: Arc<dyn LlmProvider>,
     request: LlmRequest,
@@ -723,6 +723,7 @@ async fn run_primary(
         temperature: Some(settings.ai.llm.temperature),
         json_output: false,
         latency_sensitive: true,
+        seed: None,
     };
     set(AnswerState::Requesting, None);
     let info = llm.info();
@@ -926,6 +927,7 @@ async fn run_followups(
         temperature: Some(settings.ai.llm.temperature),
         json_output: true,
         latency_sensitive: true,
+        seed: None,
     };
     rm.set_state(&ticket, AnswerState::Requesting, None);
     let info = llm.info();
@@ -960,10 +962,10 @@ async fn run_followups(
                     });
                     {
                         let mut st = engine.inner.state.lock();
-                        if let Some(rt) = st.runtime.as_mut() {
-                            if rt.latest_followups_request.as_deref() == Some(ticket.id.as_str()) {
-                                rt.latest_followups = accepted.clone();
-                            }
+                        if let Some(rt) = st.runtime.as_mut()
+                            && rt.latest_followups_request.as_deref() == Some(ticket.id.as_str())
+                        {
+                            rt.latest_followups = accepted.clone();
                         }
                     }
                     rm.emit_if_current(
@@ -1148,6 +1150,7 @@ pub(crate) fn spawn_semantic_check(
             temperature: Some(0.0),
             json_output: true,
             latency_sensitive: true,
+            seed: None,
         };
         engine
             .inner
@@ -1279,6 +1282,7 @@ pub(crate) fn spawn_compression(
                     temperature: Some(0.1),
                     json_output: false,
                     latency_sensitive: false,
+                    seed: None,
                 };
                 engine
                     .inner
@@ -1302,11 +1306,11 @@ pub(crate) fn spawn_compression(
         let summary = llm_summary.unwrap_or_else(|| extractive_compress(&previous, &lines));
         {
             let mut st = engine.inner.state.lock();
-            if let Some(rt) = st.runtime.as_mut().filter(|r| r.meeting.id == meeting_id) {
-                if until_ms > rt.memory.summarized_until_ms {
-                    rt.memory.long_term_summary = summary;
-                    rt.memory.summarized_until_ms = until_ms;
-                }
+            if let Some(rt) = st.runtime.as_mut().filter(|r| r.meeting.id == meeting_id)
+                && until_ms > rt.memory.summarized_until_ms
+            {
+                rt.memory.long_term_summary = summary;
+                rt.memory.summarized_until_ms = until_ms;
             }
         }
         engine
@@ -1377,6 +1381,7 @@ pub(crate) fn spawn_topic_analysis(
             temperature: Some(0.1),
             json_output: true,
             latency_sensitive: false,
+            seed: None,
         };
         let result = complete(&ticket, llm, request, Duration::from_secs(60)).await;
         engine.inner.requests.set_state(
@@ -1602,6 +1607,7 @@ async fn summarize_with(
         temperature: Some(0.2),
         json_output: true,
         latency_sensitive: false,
+        seed: None,
     };
     engine
         .inner

@@ -509,6 +509,7 @@ export const COMPONENT_LABELS: Record<Component, string> = {
   overlay: "Overlay",
   capture_privacy: "Capture privacy",
   hotkeys: "Global shortcuts",
+  integrity: "Answer integrity",
 };
 
 export interface LanguageOption {

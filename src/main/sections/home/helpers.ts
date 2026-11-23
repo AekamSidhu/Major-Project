@@ -218,6 +218,7 @@ const COMPONENT_LABELS: Record<Component, string> = {
   overlay: "Overlay",
   capture_privacy: "Capture privacy",
   hotkeys: "Global shortcuts",
+  integrity: "Answer integrity",
 };
 
 export function componentLabel(c: Component): string {
@@ -243,6 +244,8 @@ export function componentSection(c: Component): SectionId {
       return "settings/shortcuts";
     case "overlay":
       return "settings/appearance";
+    case "integrity":
+      return "settings/integrity";
     case "meeting":
     case "question_detector":
     case "database":

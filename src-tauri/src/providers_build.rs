@@ -84,6 +84,15 @@ pub fn build(settings: &Settings, secrets: &dyn SecretResolver) -> ProviderSet {
             message: format!("{} Using built-in local embeddings.", e.user_message()),
         }),
     }
+
+    // The answer-integrity check (only when the user turned it on).
+    match factory::build_integrity(&ctx) {
+        Ok(i) => set.integrity = i,
+        Err(e) => set.issues.push(ProviderIssue {
+            component: Component::Integrity,
+            message: e.user_message(),
+        }),
+    }
     set
 }
 
@@ -234,7 +243,7 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
         },
         endpoint: None,
     };
-    let nodes = vec![
+    let mut nodes = vec![
         mic,
         system,
         transcription,
@@ -245,6 +254,7 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
         embeddings,
         database,
     ];
+    nodes.extend(integrity_nodes(settings, providers));
     let remote: Vec<&DataFlowNode> = nodes
         .iter()
         .filter(|n| n.location == DataLocation::Remote)
@@ -271,6 +281,60 @@ pub fn data_flow(settings: &Settings, providers: &ProviderSet) -> DataFlowReport
         all_local,
         statement,
     }
+}
+
+/// Where the answer-integrity check sends what (only while it is on): the
+/// sidecar scores the transcript and the gaze, the LLM writes reference
+/// answers and the embedder compares them (echo similarity).
+fn integrity_nodes(settings: &Settings, providers: &ProviderSet) -> Vec<DataFlowNode> {
+    let i = &settings.integrity;
+    if !i.enabled {
+        return Vec::new();
+    }
+    let sidecar = providers.integrity.as_ref().map(|p| p.info());
+    let mut nodes = Vec::new();
+    if i.ai_text || i.reading {
+        nodes.push(node(
+            Component::Integrity,
+            "Integrity: AI-text and reading check",
+            sidecar.clone(),
+            (DataLocation::Disabled, "Local AI not available"),
+        ));
+    }
+    if i.reading {
+        nodes.push(DataFlowNode {
+            component: Component::Integrity,
+            label: "Integrity: candidate video region (gaze)".into(),
+            location: match (&i.candidate_region, &sidecar) {
+                (Some(_), Some(info)) => location_of(info),
+                _ => DataLocation::Disabled,
+            },
+            provider: if i.candidate_region.is_some() {
+                "Captured by Local AI; frames are turned into gaze and dropped".into()
+            } else {
+                "Region not set".into()
+            },
+            endpoint: sidecar.as_ref().and_then(|s| s.endpoint.clone()),
+        });
+    }
+    if i.echo_similarity {
+        nodes.push(node(
+            Component::Integrity,
+            "Integrity: reference answers (AI provider)",
+            providers.llm.as_ref().map(|p| p.info()),
+            (DataLocation::Disabled, "Not configured"),
+        ));
+        nodes.push(node(
+            Component::Integrity,
+            "Integrity: answer embeddings",
+            providers.embeddings.as_ref().map(|e| e.info()),
+            (
+                DataLocation::Local,
+                "Built-in hashing embeddings (echo check unavailable)",
+            ),
+        ));
+    }
+    nodes
 }
 
 #[cfg(test)]
@@ -304,6 +368,49 @@ mod tests {
         assert!(!report.all_local);
         assert!(report.statement.contains("AI provider"));
         assert!(!report.statement.contains("No meeting data leaves"));
+    }
+
+    #[test]
+    fn integrity_nodes_appear_only_when_on_and_name_cloud_parts() {
+        let mut s = Settings::default();
+        let report = data_flow(&s, &build(&s, &StaticSecrets::default()));
+        assert!(
+            !report
+                .nodes
+                .iter()
+                .any(|n| n.component == Component::Integrity)
+        );
+
+        s.integrity.enabled = true;
+        let set = build(&s, &StaticSecrets::default());
+        assert!(set.integrity.is_some());
+        let report = data_flow(&s, &set);
+        let integrity: Vec<&DataFlowNode> = report
+            .nodes
+            .iter()
+            .filter(|n| n.component == Component::Integrity)
+            .collect();
+        assert_eq!(integrity.len(), 4);
+        assert!(integrity.iter().all(|n| n.location != DataLocation::Remote));
+        assert!(report.all_local);
+
+        // A cloud LLM writing the reference answers is reported as such.
+        s.ai.llm.provider = LlmProviderKind::Openai;
+        s.ai.llm.base_url = None;
+        s.ai.llm.model = "gpt-5-mini".into();
+        let secrets = StaticSecrets(vec![(
+            openmeet_core::ipc::SecretProvider::Openai,
+            "sk-test".into(),
+        )]);
+        let report = data_flow(&s, &build(&s, &secrets));
+        assert!(!report.all_local);
+        assert!(
+            report
+                .statement
+                .contains("Integrity: reference answers (AI provider)"),
+            "{}",
+            report.statement
+        );
     }
 
     #[test]

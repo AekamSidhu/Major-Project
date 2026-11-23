@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { onMeetingEvent, onUiCommand } from "@/lib/ipc";
 import { parseAnswer } from "@/lib/answer";
+import { isElevated } from "@/lib/integrity";
 import { applyAppearance, watchSystemTheme } from "@/lib/theme";
 import {
   generateAnswer,
@@ -17,7 +18,7 @@ import {
   setPinned,
   submitAsk,
 } from "./actions";
-import { FollowupsCard, ListeningActions, PrimaryCard, TopicsStrip } from "./cards";
+import { FollowupsCard, IntegrityCard, ListeningActions, PrimaryCard, TopicsStrip } from "./cards";
 import { useAutoSize, useDragSave, useHotkey, withHotkey } from "./hooks";
 import {
   CollapseIcon,
@@ -43,6 +44,7 @@ import {
   speakerLabel,
   suggestionTitle,
   tickerText,
+  visibleIntegrity,
   worstComponent,
 } from "./state";
 import { useOverlay } from "./store";
@@ -398,6 +400,12 @@ function Body() {
   const p = core.primary;
   const f = core.followups;
   const interviewer = core.mode === "interviewer";
+  const flag = visibleIntegrity(core);
+  const dispatch = useOverlay((s) => s.dispatch);
+  const integrityCard = flag && (
+    <IntegrityCard flag={flag} onDismiss={() => dispatch({ type: "LOCAL_DISMISS_INTEGRITY" })} />
+  );
+  const flagRaised = !!flag && isElevated(flag.level);
 
   return (
     <div
@@ -432,7 +440,9 @@ function Body() {
         </div>
       )}
 
+      {flagRaised && integrityCard}
       {interviewer && f && <FollowupsCard f={f} />}
+      {!flagRaised && integrityCard}
       {p && <PrimaryCard p={p} style={core.style} mode={core.mode} />}
 
       {!p && !(interviewer && f) && !core.pendingQuestion && !core.processingStopped && (

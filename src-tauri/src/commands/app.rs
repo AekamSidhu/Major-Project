@@ -46,14 +46,13 @@ pub async fn get_snapshot(state: AppStateRef<'_>) -> CmdResult<EngineSnapshot> {
 
 #[tauri::command]
 pub async fn open_main_window(app: AppHandle, section: Option<String>) -> CmdResult<()> {
-    if let Some(s) = &section {
-        if s.len() > 64
+    if let Some(s) = &section
+        && (s.len() > 64
             || !s
                 .chars()
-                .all(|c| c.is_ascii_lowercase() || c == '/' || c == '-')
-        {
-            return Err(CoreError::InvalidInput("Invalid section.".into()));
-        }
+                .all(|c| c.is_ascii_lowercase() || c == '/' || c == '-'))
+    {
+        return Err(CoreError::InvalidInput("Invalid section.".into()));
     }
     windows::show_main(&app, section.as_deref());
     Ok(())

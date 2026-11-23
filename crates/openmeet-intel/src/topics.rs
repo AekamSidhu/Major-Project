@@ -505,17 +505,17 @@ impl TopicTracker {
             }
         }
         totals.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)));
-        if let Some(&(idx, hits, _)) = totals.first() {
-            if hits >= CURRENT_MIN_HITS {
-                // Keep the current topic on ties to avoid flapping.
-                let current_hits = self
-                    .current
-                    .and_then(|c| totals.iter().find(|(i, _, _)| *i == c))
-                    .map(|e| e.1)
-                    .unwrap_or(0);
-                if Some(idx) != self.current && hits > current_hits {
-                    changed |= self.set_current(idx);
-                }
+        if let Some(&(idx, hits, _)) = totals.first()
+            && hits >= CURRENT_MIN_HITS
+        {
+            // Keep the current topic on ties to avoid flapping.
+            let current_hits = self
+                .current
+                .and_then(|c| totals.iter().find(|(i, _, _)| *i == c))
+                .map(|e| e.1)
+                .unwrap_or(0);
+            if Some(idx) != self.current && hits > current_hits {
+                changed |= self.set_current(idx);
             }
         }
         changed

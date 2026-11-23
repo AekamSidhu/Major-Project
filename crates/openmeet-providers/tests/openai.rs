@@ -588,6 +588,7 @@ async fn transcription_multipart_and_confidence() {
                 clip: clip(500),
                 language: Some("EN".into()),
                 prompt: Some("Kafka, PostgreSQL".into()),
+                word_timestamps: false,
             },
             CancellationToken::new(),
         )
@@ -639,6 +640,7 @@ async fn transcription_without_optional_fields_and_with_key() {
                 clip: clip(300),
                 language: None,
                 prompt: Some("   ".into()),
+                word_timestamps: false,
             },
             CancellationToken::new(),
         )
@@ -658,6 +660,7 @@ async fn transcription_without_optional_fields_and_with_key() {
                 clip: clip(50),
                 language: None,
                 prompt: None,
+                word_timestamps: false,
             },
             CancellationToken::new(),
         )
@@ -665,6 +668,158 @@ async fn transcription_without_optional_fields_and_with_key() {
         .unwrap();
     assert_eq!(empty.text, "");
     assert_eq!(server.requests().len(), 1);
+}
+
+fn words_request() -> TranscriptionRequest {
+    TranscriptionRequest {
+        clip: clip(800),
+        language: None,
+        prompt: None,
+        word_timestamps: true,
+    }
+}
+
+fn form_fields(req: &support::Recorded) -> Vec<(String, String)> {
+    req.multipart()
+        .into_iter()
+        .filter(|p| p.name != "file")
+        .map(|p| (p.name, String::from_utf8_lossy(&p.data).to_string()))
+        .collect()
+}
+
+#[tokio::test]
+async fn transcription_requests_word_timestamps_when_asked() {
+    let server = MockServer::with_reply(Reply::json(
+        200,
+        json!({
+            "task": "transcribe",
+            "language": "en",
+            "duration": 0.8,
+            "text": "so we cached it",
+            "words": [
+                {"word": " so", "start": 0.12, "end": 0.3},
+                {"word": " we", "start": 0.31, "end": 0.42},
+                {"word": "", "start": 0.43, "end": 0.44},
+                {"word": " cached", "start": 0.5, "end": 0.4},
+                {"word": " it", "start": 0.61, "end": 0.7}
+            ]
+        }),
+    ))
+    .await;
+    let t = OpenAiTranscriber::new(OpenAiFlavor::LocalAi, Endpoint::new(&server.url), "base.en")
+        .unwrap();
+    let out = t
+        .transcribe(words_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(out.text, "so we cached it");
+    let words = out.words.expect("words");
+    // Malformed entries (empty word, end before start) are skipped.
+    let got: Vec<(&str, i64, i64)> = words
+        .iter()
+        .map(|w| (w.word.as_str(), w.start_ms, w.end_ms))
+        .collect();
+    assert_eq!(
+        got,
+        vec![(" so", 120, 300), (" we", 310, 420), (" it", 610, 700)]
+    );
+    assert_eq!(
+        form_fields(&server.request(0)),
+        vec![
+            ("model".to_string(), "base.en".to_string()),
+            ("response_format".to_string(), "verbose_json".to_string()),
+            ("timestamp_granularities[]".to_string(), "word".to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn transcription_without_words_in_the_response_still_works() {
+    // An older sidecar answers verbose_json without `words`.
+    let server = MockServer::with_reply(Reply::json(
+        200,
+        json!({"text": "hello there", "language": "en", "duration": 0.8}),
+    ))
+    .await;
+    let t = OpenAiTranscriber::new(OpenAiFlavor::LocalAi, Endpoint::new(&server.url), "base.en")
+        .unwrap();
+    let out = t
+        .transcribe(words_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(out.text, "hello there");
+    assert_eq!(out.words, None);
+    assert!(t.word_timestamps_supported());
+}
+
+#[tokio::test]
+async fn transcription_falls_back_when_word_timestamps_are_rejected() {
+    let server = MockServer::start(|req, _| {
+        let fields = form_fields(req);
+        if fields
+            .iter()
+            .any(|(k, v)| k == "response_format" && v == "verbose_json")
+        {
+            Reply::json(
+                400,
+                json!({"error": {"message": "response_format verbose_json is not supported"}}),
+            )
+        } else {
+            Reply::json(200, json!({"text": "plain"}))
+        }
+    })
+    .await;
+    let t = OpenAiTranscriber::new(
+        OpenAiFlavor::Compatible,
+        Endpoint::new(&server.url),
+        "whisper-large",
+    )
+    .unwrap();
+    let out = t
+        .transcribe(words_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(out.text, "plain");
+    assert_eq!(out.words, None);
+    assert!(!t.word_timestamps_supported(), "remembered");
+    assert_eq!(server.requests().len(), 2);
+    // Later requests go straight to the plain form.
+    t.transcribe(words_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(server.requests().len(), 3);
+    assert!(
+        form_fields(&server.request(2))
+            .iter()
+            .any(|(k, v)| k == "response_format" && v == "json")
+    );
+}
+
+#[tokio::test]
+async fn openai_models_without_verbose_json_are_not_asked_for_words() {
+    let server = MockServer::with_reply(Reply::json(200, json!({"text": "hi"}))).await;
+    let t = OpenAiTranscriber::new(
+        OpenAiFlavor::OpenAi,
+        Endpoint::new(&server.url).with_api_key(Some("sk-x".into())),
+        "gpt-4o-mini-transcribe",
+    )
+    .unwrap();
+    assert!(!t.word_timestamps_supported());
+    t.transcribe(words_request(), CancellationToken::new())
+        .await
+        .unwrap();
+    let names: Vec<String> = form_fields(&server.request(0))
+        .into_iter()
+        .map(|(k, _)| k)
+        .collect();
+    assert_eq!(names, vec!["model", "response_format"]);
+    let whisper = OpenAiTranscriber::new(
+        OpenAiFlavor::OpenAi,
+        Endpoint::new(&server.url).with_api_key(Some("sk-x".into())),
+        "whisper-1",
+    )
+    .unwrap();
+    assert!(whisper.word_timestamps_supported());
 }
 
 #[tokio::test]
@@ -680,6 +835,7 @@ async fn transcription_errors_and_cancellation() {
         clip: clip(400),
         language: None,
         prompt: None,
+        word_timestamps: false,
     };
     let err = t
         .transcribe(req(), CancellationToken::new())

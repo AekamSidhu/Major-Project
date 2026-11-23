@@ -644,11 +644,12 @@ fn resolve_device(
             // An explicitly selected input device (BlackHole, Stereo Mix, a
             // monitor source) works wherever inputs work.
             if let Some(w) = wanted {
-                if loopback_on_output_devices() && support.supported {
-                    if let Some(d) = find_device(output_list(host)?, w) {
-                        let name = device_name(&d);
-                        return Ok((d, name));
-                    }
+                if loopback_on_output_devices()
+                    && support.supported
+                    && let Some(d) = find_device(output_list(host)?, w)
+                {
+                    let name = device_name(&d);
+                    return Ok((d, name));
                 }
                 if let Some(d) = find_device(input_list(host)?, w) {
                     let name = device_name(&d);
@@ -721,10 +722,10 @@ fn output_list(host: &cpal::Host) -> Result<Vec<cpal::Device>, PlatformError> {
 fn find_device(devices: Vec<cpal::Device>, wanted: &str) -> Option<cpal::Device> {
     let mut by_name = None;
     for d in devices {
-        if let Some(id) = device_id(&d) {
-            if id_matches(&id, wanted) {
-                return Some(d);
-            }
+        if let Some(id) = device_id(&d)
+            && id_matches(&id, wanted)
+        {
+            return Some(d);
         }
         if by_name.is_none() && device_name(&d).eq_ignore_ascii_case(wanted) {
             by_name = Some(d);
