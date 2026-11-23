@@ -25,6 +25,11 @@ export function generateAnswer(question: string | null, style: AnswerStyle | nul
   return attempt("Couldn't generate an answer", () => api.generateAnswer({ question, style }));
 }
 
+/** Workplace mode: a summary of the last `minutes` minutes. */
+export function catchUp(minutes = 5) {
+  return attempt("Couldn't catch you up", () => api.catchUp(minutes));
+}
+
 export function generateFollowups() {
   return attempt("Couldn't suggest follow-ups", () => api.generateFollowups());
 }

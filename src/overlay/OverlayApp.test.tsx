@@ -65,6 +65,7 @@ function snapshot(patch: Partial<EngineSnapshot> = {}): EngineSnapshot {
     demoRunning: false,
     processingStopped: false,
     integrityFlags: [],
+    workplace: null,
     ...patch,
   };
 }

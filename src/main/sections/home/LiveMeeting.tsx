@@ -34,6 +34,7 @@ import { useNow, useUiCommands } from "./hooks";
 import { Icon, type IconName } from "./icons";
 import { LiveTranscript } from "./LiveTranscript";
 import { ScreenSourcePicker } from "./ScreenSourcePicker";
+import { WorkplaceBoardView } from "./WorkplaceBoard";
 
 type Action = "pause" | "end" | "emergency" | "overlay" | "screen" | "capture" | "assist";
 
@@ -266,7 +267,10 @@ function QuestionItem({
     <li className="om-fade-in relative px-5 py-3 transition-colors hover:bg-surface-2/60">
       <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.74rem] text-muted">
         <Badge tone="accent">{categoryLabel(q.category)}</Badge>
-        {q.requiresResponse && mode === "candidate" && <Badge tone="warn">Needs your answer</Badge>}
+        {q.requiresResponse &&
+          (mode === "candidate" || (mode === "workplace" && q.speakerRole !== "user")) && (
+            <Badge tone="warn">Needs your answer</Badge>
+          )}
         <span>{speakerLabel(q.speakerRole, mode)}</span>
         <span className="tabular-nums">{formatOffset(segmentOffset(q.detectedAt, startedAt))}</span>
       </div>
@@ -405,6 +409,10 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
     const ok = await run("assist", () => api.generateFollowups());
     if (ok) notify("info", "Follow-up questions are streaming in the overlay.");
   };
+  const catchUp = async () => {
+    const ok = await run("assist", () => api.catchUp(5));
+    if (ok) notify("info", "The last five minutes are streaming in the overlay.");
+  };
 
   return (
     <div>
@@ -515,6 +523,17 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
             Suggest follow-ups
           </Button>
         )}
+        {mode === "workplace" && (
+          <Button
+            variant="ghost"
+            className="h-10"
+            disabled={busy === "assist" || state !== "active"}
+            onClick={() => void catchUp()}
+          >
+            <Icon name="sparkle" />
+            Catch me up
+          </Button>
+        )}
       </div>
       {error && <InlineError className="-mt-3 mb-4">{error}</InlineError>}
 
@@ -578,12 +597,28 @@ export function LiveMeeting({ live, settings }: { live: LiveState; settings: Set
                     mode={mode}
                     startedAt={meeting.startedAt}
                     busy={busy === "assist" || state !== "active"}
-                    onSuggest={mode === "candidate" ? (x) => void suggest(x) : null}
+                    onSuggest={
+                      mode === "candidate" || mode === "workplace" ? (x) => void suggest(x) : null
+                    }
                   />
                 ))}
               </ul>
             )}
           </Card>
+
+          {mode === "workplace" && live.workplace && (
+            <Card
+              title="Board"
+              count={
+                live.workplace.decisions.length +
+                live.workplace.actionItems.length +
+                live.workplace.openQuestions.filter((q) => !q.answered).length
+              }
+              bodyClassName="max-h-[28rem] overflow-y-auto"
+            >
+              <WorkplaceBoardView board={live.workplace} />
+            </Card>
+          )}
 
           {mode === "interviewer" &&
             (settings.integrity.enabled || live.integrityFlags.length > 0) && (

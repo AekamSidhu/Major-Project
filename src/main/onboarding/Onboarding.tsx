@@ -23,6 +23,7 @@ import {
 } from "../components/settingsMeta";
 import { TranscriptionProviderForm } from "../components/TranscriptionProviderForm";
 import { useSettings } from "../components/useSettings";
+import { modeLabel } from "../sections/home/helpers";
 import { ScreenSourcePicker } from "../sections/home/ScreenSourcePicker";
 import { useMain } from "../store";
 import { Banner, Button, Field, Select, ToggleField, cx } from "../ui";
@@ -270,7 +271,7 @@ function PrivacyStep() {
 function Finish() {
   const s = useSettings();
   const rows: Array<[string, string]> = [
-    ["Mode", s.mode === "candidate" ? "Candidate" : "Interviewer"],
+    ["Mode", modeLabel(s.mode)],
     ["AI provider", `${choiceFor(LLM_PROVIDERS, s.ai.llm.provider).label} · ${s.ai.llm.model}`],
     [
       "Transcription",

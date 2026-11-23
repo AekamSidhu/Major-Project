@@ -41,6 +41,12 @@ const MODES: ReadonlyArray<{ value: Mode; title: string; description: string }> 
     description:
       "You’re interviewing. OpenMeet suggests follow-up questions grounded in what the candidate said.",
   },
+  {
+    value: "workplace",
+    title: "Workplace",
+    description:
+      "A team meeting. OpenMeet keeps the decisions, action items and open questions, and writes the minutes and a follow-up message.",
+  },
 ];
 
 function Step({
@@ -521,7 +527,9 @@ export function StartMeeting({ settings }: { settings: Settings }) {
               placeholder={
                 form.mode === "candidate"
                   ? "e.g. Acme — system design round"
-                  : "e.g. Backend engineer — J. Doe"
+                  : form.mode === "workplace"
+                    ? "e.g. Sprint 14 planning"
+                    : "e.g. Backend engineer — J. Doe"
               }
               onChange={(e) => update({ title: e.target.value })}
               className="max-w-md"

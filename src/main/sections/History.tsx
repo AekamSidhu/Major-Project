@@ -7,6 +7,7 @@ import type { MeetingListItem, MeetingRecord, MeetingSummary } from "@/bindings"
 import { api, errorMessage } from "@/lib/ipc";
 import { formatDateTime, formatDuration } from "@/lib/format";
 import { useLoader } from "../components/useLoader";
+import { modeLabel } from "./home/helpers";
 import { useMain } from "../store";
 import { Badge, Banner, Button, ConfirmDialog, EmptyState, PageHeader, Spinner, Tabs } from "../ui";
 import {
@@ -89,7 +90,7 @@ function MeetingList() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[0.9rem] font-medium text-fg">{m.title}</span>
-                      <Badge>{m.mode === "candidate" ? "Candidate" : "Interviewer"}</Badge>
+                      <Badge>{modeLabel(m.mode)}</Badge>
                       {badge && <Badge tone={badge.tone}>{badge.label}</Badge>}
                       {m.hasSummary && <Badge tone="accent">Summary</Badge>}
                     </div>
@@ -213,7 +214,7 @@ function MeetingDetail({ meetingId }: { meetingId: string }) {
         description={
           <>
             {formatDateTime(m.startedAt)} · {formatDuration(m.startedAt, m.endedAt)} ·{" "}
-            {m.mode === "candidate" ? "Candidate mode" : "Interviewer mode"}
+            {`${modeLabel(m.mode)} mode`}
             {!m.persisted && " · not saved to disk (retention: do not retain)"}
           </>
         }

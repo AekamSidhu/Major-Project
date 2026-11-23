@@ -130,6 +130,8 @@ export const api = {
   generateAnswer: (request: GenerateAnswerRequest) =>
     invoke<string>("generate_answer", { request }),
   generateFollowups: () => invoke<string>("generate_followups"),
+  /** Workplace mode: a summary of the last `minutes` minutes. */
+  catchUp: (minutes: number) => invoke<string>("catch_up", { minutes }),
   askOpenMeet: (prompt: string) => invoke<string>("ask_openmeet", { prompt }),
   clarifyQuestion: () => invoke<string>("clarify_question"),
   refineAnswer: (requestId: string, refinement: Refinement) =>

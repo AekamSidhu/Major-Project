@@ -431,7 +431,9 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
     case "QUESTION_DETECTED": {
       const q = ev.question;
       if (state.meetingId && q.meetingId !== state.meetingId) return state;
-      if (state.mode !== "candidate" || !q.requiresResponse || !q.isQuestion) return state;
+      const answerable =
+        state.mode === "candidate" || (state.mode === "workplace" && q.speakerRole !== "user");
+      if (!answerable || !q.requiresResponse || !q.isQuestion) return state;
       if (state.primary && state.primary.questionId === q.id) return state;
       return { ...state, pendingQuestion: q };
     }
@@ -604,6 +606,10 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
       return state.pendingQuestion ? { ...state, pendingQuestion: null } : state;
 
     // -- answer integrity (interviewer mode) ----------------------------------
+    case "WORKPLACE_UPDATED":
+      // The workplace board is shown in the main window, not the overlay.
+      return state;
+
     case "INTEGRITY_CHECKED": {
       const f = ev.flag;
       if (state.meetingId && f.meetingId !== state.meetingId) return state;

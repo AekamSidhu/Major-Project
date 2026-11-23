@@ -3,7 +3,14 @@
 // topic tracker.
 
 import { useMemo, useState } from "react";
-import type { AnswerStyle, FollowUpQuestion, IntegrityFlag, Refinement, Topic } from "@/bindings";
+import type {
+  AnswerStyle,
+  FollowUpQuestion,
+  IntegrityFlag,
+  Mode,
+  Refinement,
+  Topic,
+} from "@/bindings";
 import { answerToPlainText, parseAnswer, type ParsedAnswer } from "@/lib/answer";
 import { IntegrityFlagView } from "@/lib/IntegrityFlagView";
 import { answerRangeLabel, flagSummary, isElevated } from "@/lib/integrity";
@@ -13,6 +20,7 @@ import {
   copyText,
   dismiss,
   generateAnswer,
+  catchUp,
   generateFollowups,
   openMainWindow,
   refine,
@@ -79,6 +87,8 @@ function useCopied(): [boolean, (text: string) => void] {
 
 function headerFor(p: PrimaryRequest): { label: string; text: string | null } {
   switch (p.kind) {
+    case "catch_up":
+      return { label: "Catch-up", text: null };
     case "ask_ai":
       return { label: "Ask OpenMeet", text: p.questionText };
     case "clarification":
@@ -227,7 +237,7 @@ export function PrimaryCard({
 }: {
   p: PrimaryRequest;
   style: AnswerStyle;
-  mode: "candidate" | "interviewer";
+  mode: Mode;
 }) {
   const parsed = useMemo(() => parseAnswer(p.text), [p.text]);
   const [copied, copy] = useCopied();
@@ -492,7 +502,7 @@ export function TopicsStrip({
 }
 
 /** Empty state while listening, with manual triggers (spec §93). */
-export function ListeningActions({ mode }: { mode: "candidate" | "interviewer" }) {
+export function ListeningActions({ mode }: { mode: Mode }) {
   const answerKey = useHotkey("generate_answer");
   const followKey = useHotkey("generate_followups");
   return (
@@ -503,6 +513,10 @@ export function ListeningActions({ mode }: { mode: "candidate" | "interviewer" }
           onClick={() => void generateAnswer(null)}
         >
           Answer latest question
+        </ActionButton>
+      ) : mode === "workplace" ? (
+        <ActionButton title="Summarize the last five minutes" onClick={() => void catchUp(5)}>
+          Catch me up
         </ActionButton>
       ) : (
         <ActionButton
