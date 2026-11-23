@@ -551,3 +551,110 @@ def test_followup_parsing_and_rules_handle_odd_input():
     assert len(only) == 1 and "example" in only[0]["question"]
     asked = rule_followups("", ANSWER, ["Which part of this did you build or decide yourself?"])
     assert all("yourself" not in f["question"] for f in asked)
+
+
+# --- cloudflared download: pinned version, checksum before anything runs (no network) ---
+
+def _as_platform(monkeypatch, system: str, machine: str) -> None:  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    monkeypatch.setattr(tunnel.platform, "system", lambda: system)
+    monkeypatch.setattr(tunnel.platform, "machine", lambda: machine)
+
+
+def _fake_fetch(monkeypatch, payload: bytes, urls: list | None = None) -> None:  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    def fetch(url, filename):  # type: ignore[no-untyped-def]
+        if urls is not None:
+            urls.append(url)
+        Path(filename).write_bytes(payload)
+        return str(filename), None
+
+    monkeypatch.setattr(tunnel, "urlretrieve", fetch)
+
+
+def test_cloudflared_download_is_kept_only_when_its_checksum_matches(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    import hashlib
+
+    from room import tunnel
+
+    payload = b"pinned cloudflared"
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(payload).hexdigest(), False))
+    urls: list = []
+    _fake_fetch(monkeypatch, payload, urls)
+    exe = tunnel.download_cloudflared(tmp_path)
+    assert exe.read_bytes() == payload
+    assert urls == [f"{tunnel._RELEASE_URL}/cloudflared-linux-amd64"]
+    assert tunnel.CLOUDFLARED_VERSION in str(exe)  # the cache is named for the pinned version
+    tunnel.download_cloudflared(tmp_path)  # verified copy already there: no second download
+    assert len(urls) == 1
+
+
+def test_a_cloudflared_download_that_fails_its_checksum_is_deleted_and_refused(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", "0" * 64, False))
+    _fake_fetch(monkeypatch, b"tampered binary")
+    with pytest.raises(RuntimeError, match="checksum"):
+        tunnel.download_cloudflared(tmp_path)
+    bin_dir = tmp_path / "bin"
+    assert not any(bin_dir.iterdir())  # neither the download nor an executable copy is left behind
+
+
+def test_a_cached_cloudflared_that_fails_its_checksum_is_replaced(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    import hashlib
+
+    from room import tunnel
+
+    good = b"pinned cloudflared"
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setattr(tunnel.shutil, "which", lambda name: None)  # no cloudflared on PATH
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(good).hexdigest(), False))
+    cached = tmp_path / "bin" / tunnel._exe_name()
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"something else entirely")
+    assert tunnel.find_cloudflared(tmp_path) is None  # refused and deleted, not run
+    assert not cached.exists()
+    _fake_fetch(monkeypatch, good)
+    assert tunnel.download_cloudflared(tmp_path).read_bytes() == good
+
+
+def test_darwin_archive_is_verified_before_it_is_extracted(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    import hashlib
+    import io
+    import tarfile
+
+    from room import tunnel
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = b"darwin cloudflared"
+        info = tarfile.TarInfo("cloudflared")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    archive = buf.getvalue()
+    _as_platform(monkeypatch, "Darwin", "arm64")
+    monkeypatch.setattr(tunnel.shutil, "which", lambda name: None)
+    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", hashlib.sha256(archive).hexdigest(), True))
+    _fake_fetch(monkeypatch, archive)
+    assert tunnel.download_cloudflared(tmp_path).read_bytes() == b"darwin cloudflared"
+
+    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", "0" * 64, True))
+    other = tmp_path / "other"
+    _fake_fetch(monkeypatch, archive)
+    with pytest.raises(RuntimeError, match="checksum"):
+        tunnel.download_cloudflared(other)
+    assert not (other / "bin" / tunnel._exe_name()).exists()
+
+
+def test_a_cloudflared_on_the_path_is_preferred(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setattr(tunnel.shutil, "which", lambda name: "/usr/local/bin/cloudflared")
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / tunnel._exe_name()).write_bytes(b"cached")
+    assert tunnel.find_cloudflared(tmp_path) == Path("/usr/local/bin/cloudflared")
