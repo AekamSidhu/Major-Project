@@ -19,6 +19,7 @@ mss (screen capture); without them the matching endpoints answer 503.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
@@ -138,8 +139,10 @@ def add_routes(
             rgb = decode_image(data)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"could not decode frame: {type(exc).__name__}") from exc
+        def run() -> tuple[float, float, bool]:
+            return monitor.add_frame(rgb, source="browser")
         try:
-            x, y, found = monitor.add_frame(rgb, source="browser")
+            x, y, found = await asyncio.get_running_loop().run_in_executor(None, run)
         except Exception as exc:  # mediapipe missing or failing
             raise HTTPException(status_code=503, detail=f"gaze tracking unavailable: {type(exc).__name__}: {exc}"[:300]) from exc
         return {"face_found": found, "tracked": x == x}

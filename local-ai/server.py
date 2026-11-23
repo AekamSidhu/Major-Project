@@ -222,6 +222,77 @@ class WhisperTranscriber:
         return self._last
 
 
+class GroqTranscriber:
+    """Transcription via Groq's hosted Whisper API (whisper-large-v3).
+
+    Much faster and more accurate than running small.en on a CPU.  Needs
+    OPENMEET_GROQ_API_KEY (environment or ~/.openmeet/room.env).
+    """
+
+    ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+    def __init__(self, api_key: str, model: str = "whisper-large-v3") -> None:
+        if not api_key:
+            raise RuntimeError("GroqTranscriber needs OPENMEET_GROQ_API_KEY")
+        self._key = api_key
+        self._model = model
+
+    def _audio_to_wav(self, audio: np.ndarray) -> bytes:
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes((audio * 32767).astype(np.int16).tobytes())
+        return buf.getvalue()
+
+    def transcribe(
+        self, audio: np.ndarray, model: str, language: str | None, prompt: str | None,
+        word_timestamps: bool = False,
+    ) -> TranscriptionResult:
+        import httpx
+
+        wav = self._audio_to_wav(audio)
+        fields: dict[str, Any] = {
+            "model": (None, self._model),
+            "file": ("audio.wav", wav, "audio/wav"),
+            "language": (None, language or "en"),
+        }
+        if prompt:
+            fields["prompt"] = (None, prompt)
+        if word_timestamps:
+            fields["response_format"] = (None, "verbose_json")
+            fields["timestamp_granularities[]"] = (None, "word")
+        else:
+            fields["response_format"] = (None, "verbose_json")
+
+        resp = httpx.post(
+            self.ENDPOINT, headers={"Authorization": f"Bearer {self._key}"},
+            files=fields, timeout=30.0,
+        )
+        if resp.status_code != 200:
+            detail = resp.text[:300]
+            LOG.error("Groq transcription failed (%s): %s", resp.status_code, detail)
+            raise RuntimeError(f"Groq API error {resp.status_code}: {detail}")
+        data = resp.json()
+
+        text = data.get("text", "").strip()
+        duration = float(data.get("duration", len(audio) / 16000))
+        words = None
+        if word_timestamps and data.get("words"):
+            words = [{"word": w["word"].strip(), "start": round(w["start"], 3), "end": round(w["end"], 3)}
+                     for w in data["words"] if w.get("word", "").strip()]
+        segments = None
+        if data.get("segments"):
+            segments = [{"id": s.get("id", i), "start": round(s["start"], 3), "end": round(s["end"], 3),
+                         "text": s["text"].strip()} for i, s in enumerate(data["segments"]) if s.get("text", "").strip()]
+        return TranscriptionResult(text=text, language=data.get("language"), duration=duration,
+                                   confidence=0.95, segments=segments, words=words)
+
+    def loaded_model(self) -> str | None:
+        return self._model
+
+
 def timings(segments: Sequence[Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """faster-whisper segments decoded with word timestamps, in OpenAI's verbose_json shape.
 

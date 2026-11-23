@@ -1,18 +1,23 @@
 """OpenMeet Room server: host a 1:1 interview from this computer.
 
     python room_server.py                 # https://localhost:8443, reachable on the local network
+    python room_server.py --tunnel        # also a public Cloudflare address (opt-in, see below)
     python room_server.py --no-https      # http://localhost:8443 (this computer only: browsers
                                           # allow camera access on plain http only for localhost)
 
 Open https://localhost:8443 (accept the self-signed certificate once),
 create a room and send the invite link to the candidate. On a phone or a
 second laptop on the same Wi-Fi, the link uses this computer's network
-address; across networks, run a tunnel such as
-`cloudflared tunnel --url https://localhost:8443 --no-tls-verify` and
-share its address instead.
+address. Across networks, add --tunnel: the server then starts a Cloudflare
+quick tunnel (cloudflared, downloaded once and checked against a pinned
+SHA-256) that publishes this room's join page to the internet. It is off by
+default, because anyone with an invite link can then reach the join page.
 
-Transcription (faster-whisper) and the integrity signals run here; see
-room/__init__.py for what each side can reach.
+Transcription runs here (faster-whisper, the default) or, with
+`--transcription groq`, on Groq's cloud API, which then receives the candidate's
+audio (needs OPENMEET_GROQ_API_KEY). The integrity signals run here; see
+room/__init__.py for what each side can reach and what the join page tells
+the candidate.
 
 Follow-up questions (room/followups.py, a LangChain chain with guardrails)
 and the reference answers for the echo-similarity signal (room/similarity.py)
@@ -37,12 +42,13 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 
 import server
 from integrity import add_routes as add_integrity_routes
 from integrity.models import EchoModel, ReadingModel
-from room import add_room_routes, is_loopback, lan_addresses
+from room import add_room_routes, interviewer_names, interviewer_only, lan_addresses
+from room.tunnel import CloudflareTunnel
 
 CERT_DIR = server.MODEL_DIR / "room"
 
@@ -78,7 +84,8 @@ def self_signed_cert(folder: Path) -> tuple[Path, Path]:
 
 def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None,  # type: ignore[no-untyped-def]
                     followup_writer=None, followups: str | None = None, reference_writer=None, embedder=None,
-                    embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None) -> FastAPI:
+                    embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None,
+                    tunnel_url: str | None = None, cloud_transcription: bool = False) -> FastAPI:
     from room.followups import FollowupWriter
     from room.similarity import ReferenceWriter, SimilarityChecker
     from room.study import StudyRecorder
@@ -101,9 +108,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    def host_only_auth(request: Request) -> None:  # integrity API: this computer only
-        if not is_loopback(request.client.host if request.client else None):
-            raise HTTPException(status_code=403, detail="only the interviewer's computer can use this")
+    host_only_auth = interviewer_only(interviewer_names())  # integrity API: this computer only
 
     monitor = add_integrity_routes(app, host_only_auth, server.MODEL_DIR, tracker_factory=tracker_factory, clock=clock or time.time)
     app.state.rooms = add_room_routes(
@@ -118,6 +123,8 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
         followup_writer=writer,
         similarity=similarity,
         study=study,
+        tunnel_url=tunnel_url,
+        cloud_transcription=cloud_transcription,
     )
     return app
 
@@ -127,12 +134,20 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("OPENMEET_ROOM_PORT", "8443")))
     parser.add_argument("--no-https", action="store_true", help="plain http on localhost only")
     parser.add_argument("--host", default=None, help="override bind address (default: 127.0.0.1 for http, 0.0.0.0 for https)")
-    parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "base.en"))
+    parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "small.en"))
+    parser.add_argument("--transcription", choices=("local", "groq"), default=os.environ.get("OPENMEET_ROOM_TRANSCRIPTION", "local"),
+                        help="transcription backend: local (faster-whisper on this computer) or groq (Groq cloud API, needs OPENMEET_GROQ_API_KEY)")
     parser.add_argument("--followups", choices=("local", "online", "rules"), default=None,
                         help="where follow-up questions and reference answers come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
     parser.add_argument("--study", type=Path, default=None, metavar="DIR",
                         help="study mode: with the candidate's consent, save labelled answers under DIR (outside the repository)")
+    parser.add_argument("--tunnel", action="store_true",
+                        help="publish the join page through a Cloudflare quick tunnel (off by default)")
+    parser.add_argument("--no-tunnel", action="store_true",
+                        help="no-op: the tunnel is off unless --tunnel is given")
     args = parser.parse_args()
+    if args.tunnel and args.no_https:
+        parser.error("--tunnel needs https (drop --no-https)")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -140,8 +155,36 @@ def main() -> None:
     import uvicorn
 
     scheme = "http" if args.no_https else "https"
+
+    # Start the tunnel early so the URL is ready before the app serves requests.
+    tunnel = None
+    tunnel_url = None
+    if args.tunnel:
+        print("\nStarting Cloudflare tunnel (downloading cloudflared on first run)...")
+        tunnel = CloudflareTunnel(f"https://localhost:{args.port}", server.MODEL_DIR)
+        tunnel_url = tunnel.start(timeout=30)
+        if tunnel_url:
+            print(f"  Tunnel ready: {tunnel_url}")
+        else:
+            print(f"  Tunnel failed: {tunnel.error or 'unknown error'}. Falling back to LAN only.")
+
+    transcriber = None
+    if args.transcription == "groq":
+        from room.followups import _env_file_values, ENV_FILE
+        env = {**_env_file_values(ENV_FILE), **os.environ}
+        groq_key = env.get("OPENMEET_GROQ_API_KEY", "")
+        if not groq_key:
+            raise SystemExit("--transcription groq needs OPENMEET_GROQ_API_KEY (environment or ~/.openmeet/room.env)")
+        groq_model = env.get("OPENMEET_GROQ_WHISPER_MODEL", "whisper-large-v3")
+        transcriber = server.GroqTranscriber(groq_key, model=groq_model)
+        print(f"  transcription: {groq_model} (Groq cloud API)")
+    else:
+        print(f"  transcription: {args.whisper_model} (local, faster-whisper)")
+
     try:
-        app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups, study_dir=args.study)
+        app = create_room_app(args.port, scheme, args.whisper_model, transcriber=transcriber,
+                              followups=args.followups, study_dir=args.study, tunnel_url=tunnel_url,
+                              cloud_transcription=args.transcription == "groq")
     except ValueError as error:  # a study folder inside the repository
         parser.error(str(error))
     host = args.host or ("127.0.0.1" if args.no_https else "0.0.0.0")
@@ -159,12 +202,18 @@ def main() -> None:
              "rules": "simple rules"}[mode]
     print(f"\nOpenMeet Room: open {scheme}://localhost:{args.port} on this computer.")
     print(f"  follow-up questions and reference answers: {where}")
+    if tunnel_url:
+        print(f"  Anyone with the link can reach this room's join page: {tunnel_url}")
     if args.study:
         print(f"  STUDY MODE: answers of candidates who tick the study consent are saved under {args.study.resolve()}")
     if not args.no_https:
         for ip in lan_addresses():
             print(f"  candidates on this network join through {scheme}://{ip}:{args.port}/join/... (the invite link)")
-    uvicorn.run(app, host=host, port=args.port, log_level="warning", access_log=False, **ssl)
+    try:
+        uvicorn.run(app, host=host, port=args.port, log_level="warning", access_log=False, **ssl)
+    finally:
+        if tunnel:
+            tunnel.stop()
 
 
 if __name__ == "__main__":

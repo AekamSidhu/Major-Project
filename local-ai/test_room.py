@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import struct
+import wave
 import zlib
 from pathlib import Path
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -14,7 +18,7 @@ from starlette.websockets import WebSocketDisconnect
 import room_server
 import server
 from integrity import signals
-from room import is_phantom
+from room import is_interviewer, is_phantom
 from langchain_core.runnables import RunnableLambda
 
 from room import checks, guardrails
@@ -26,6 +30,8 @@ from test_integrity import AI_ANSWER, Clock, SawtoothTracker, feed
 from test_server import wav_bytes
 
 LOCAL = ("127.0.0.1", 50000)
+# This computer's Host header (TestClient would send "testserver", which is not this computer).
+LOCAL_HEADERS = {"host": "localhost:8443"}
 REMOTE = ("192.168.1.50", 50000)
 
 
@@ -90,12 +96,12 @@ def references(mode: str = "local", answer: str = REFERENCE, sent: list | None =
 
 
 def make(text: str = "I built the cache layer myself", confidence: float = 0.9, reading: bool = True, model=unreachable,  # type: ignore[no-untyped-def]
-         mode: str = "local", transcriber=None, refs: ReferenceWriter | None = None, study_dir=None):
+         mode: str = "local", transcriber=None, refs: ReferenceWriter | None = None, study_dir=None, cloud: bool = False):
     clock = Clock()
     app = room_server.create_room_app(8443, "https", "base.en", transcriber=transcriber or ScriptedTranscriber(text, confidence),
                                       tracker_factory=lambda: SawtoothTracker(clock, reading), clock=clock,
                                       followup_writer=writer(model, mode), reference_writer=refs or references(mode),
-                                      embedder=BagOfWords(), study_dir=study_dir)
+                                      embedder=BagOfWords(), study_dir=study_dir, cloud_transcription=cloud)
     return app, clock
 
 
@@ -106,7 +112,7 @@ def test_interviewer_endpoints_answer_only_this_computer():
     assert remote.post("/api/rooms").status_code == 403
     assert remote.post("/v1/integrity/echo", json={"text": AI_ANSWER}).status_code == 403
     assert remote.get("/").status_code == 404
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()
     assert room["invites"][-1].startswith("https://localhost:8443/join/" + room["room"])
     # The candidate's side is reachable from the network.
@@ -116,7 +122,7 @@ def test_interviewer_endpoints_answer_only_this_computer():
 
 def test_signaling_relays_between_host_and_guest():
     app, _ = make()
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     guest_key = room["invites"][0].split("k=")[1]
     with local.websocket_connect(f"/ws/{room['room']}?role=host&k={room['host_key']}") as host:
@@ -133,7 +139,7 @@ def test_signaling_relays_between_host_and_guest():
 
 def test_wrong_keys_and_remote_hosts_are_refused():
     app, _ = make()
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     for client, url in ((remote, f"/ws/{room['room']}?role=guest&k=wrong"),
                         (remote, f"/ws/{room['room']}?role=host&k={room['host_key']}"),  # right key, wrong computer
@@ -143,24 +149,108 @@ def test_wrong_keys_and_remote_hosts_are_refused():
                 ws.receive_json()
 
 
+def test_tunnelled_requests_are_not_the_interviewer():
+    """cloudflared forwards public traffic to localhost, so the tunnel's requests arrive from 127.0.0.1 too."""
+    app, _ = make()
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = local.post("/api/rooms").json()
+    rid = room["room"]
+    tunnel_headers = [
+        {"host": "abc-def.trycloudflare.com", "cf-connecting-ip": "203.0.113.7", "cf-ray": "8f00-LHR"},  # Cloudflare
+        {"host": "localhost:8443", "cf-connecting-ip": "203.0.113.7"},  # Host looks local, proxy header present
+        {"host": "abc-def.trycloudflare.com"},  # the tunnel's Host name alone
+        {"host": "localhost:8443", "x-forwarded-for": "203.0.113.7"},
+        {"host": "localhost:8443", "x-forwarded-host": "abc-def.trycloudflare.com"},
+        {"host": "localhost:8443", "forwarded": "for=203.0.113.7"},
+    ]
+    for headers in tunnel_headers:
+        tunnel = TestClient(app, client=LOCAL, headers=headers)
+        assert tunnel.get("/host").status_code == 403, headers
+        assert tunnel.post("/api/rooms").status_code == 403, headers
+        assert tunnel.get("/api/status").status_code == 403, headers
+        assert tunnel.get(f"/api/rooms/{rid}/report").status_code == 403, headers
+        assert tunnel.get(f"/api/rooms/{rid}/report.md").status_code == 403, headers
+        assert tunnel.post("/v1/integrity/echo", json={"text": AI_ANSWER}).status_code == 403, headers
+        assert tunnel.get("/").status_code == 404, headers  # no redirect to /host through the tunnel
+        with pytest.raises(WebSocketDisconnect):
+            with tunnel.websocket_connect(f"/ws/{rid}?role=host&k={room['host_key']}") as ws:
+                ws.receive_json()
+
+
+def test_guests_join_through_the_tunnel():
+    app, _ = make()
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = local.post("/api/rooms").json()
+    rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
+    tunnel = TestClient(app, client=LOCAL, headers={"host": "abc-def.trycloudflare.com",
+                                                     "cf-connecting-ip": "198.51.100.4", "cf-ray": "8f01-LHR"})
+    assert tunnel.get(f"/join/{rid}?k={guest_key}").status_code == 200
+    with local.websocket_connect(f"/ws/{rid}?role=host&k={room['host_key']}") as host:
+        assert host.receive_json()["peer_present"] is False
+        with tunnel.websocket_connect(f"/ws/{rid}?role=guest&k={guest_key}&name=Asha") as guest:
+            assert guest.receive_json()["peer_present"] is True
+            assert host.receive_json() == {"type": "peer-joined", "role": "guest", "name": "Asha"}
+
+
+def test_only_this_computers_names_count_as_the_interviewer():
+    names = frozenset({"localhost", "127.0.0.1", "::1", "192.168.1.20"})
+    assert is_interviewer("127.0.0.1", {"host": "localhost:8443"}, names)
+    assert is_interviewer("127.0.0.1", {"host": "[::1]:8443"}, names)
+    assert is_interviewer("127.0.0.1", {"host": "192.168.1.20:8443"}, names)
+    assert is_interviewer("127.0.0.1", {"host": "192.168.1.20"}, names)
+    assert not is_interviewer("127.0.0.1", {"host": "abc-def.trycloudflare.com"}, names)
+    assert not is_interviewer("127.0.0.1", {"host": "localhost:8443", "cf-ray": "1"}, names)
+    assert not is_interviewer("127.0.0.1", {}, names)  # no Host header
+    assert not is_interviewer("192.168.1.50", {"host": "localhost:8443"}, names)  # another computer
+
+
 def test_transcription_keeps_speech_and_drops_phantoms():
     app, _ = make("Tell me about a system you scaled.")
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     seg = local.post(f"/api/rooms/{room}/transcribe?speaker=interviewer&start=1&end=3", content=wav_bytes(1.0)).json()
     assert seg["text"] == "Tell me about a system you scaled."
     assert local.post(f"/api/rooms/{room}/transcribe?speaker=judge&start=1&end=3", content=wav_bytes(1.0)).status_code == 400
-    for text, conf in (("Thank you.", 0.9), ("We'll see you in the next one.", 0.9), ("real words here", 0.1)):
-        app2, _ = make(text, conf)
-        c = TestClient(app2, client=LOCAL)
-        r2 = c.post("/api/rooms").json()["room"]
-        assert c.post(f"/api/rooms/{r2}/transcribe?speaker=candidate&start=1&end=2", content=wav_bytes(0.5)).json()["text"] == ""
     assert is_phantom("Thanks for watching!") and not is_phantom("thanks for the question")
+
+
+def said(text: str, audio: bytes, confidence: float = 0.9) -> str:
+    """What the interviewer's segment transcribes to, through the real endpoint."""
+    app, _ = make(text, confidence)
+    c = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = c.post("/api/rooms").json()["room"]
+    return c.post(f"/api/rooms/{room}/transcribe?speaker=candidate&start=1&end=2", content=audio).json()["text"]
+
+
+def quiet_wav(seconds: float = 0.5) -> bytes:
+    """Near-silence (RMS about 0.0001), the kind Whisper answers with stock phrases."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"".join(struct.pack("<h", (i % 7) - 3) for i in range(int(seconds * 16000))))
+    return buf.getvalue()
+
+
+def test_stock_phrases_are_dropped_and_real_short_answers_kept():
+    # Stock phrases go whatever the loudness; the whole utterance must be the phrase.
+    for text in ("We'll see you in the next one.", "Hooray! Alright!", "Thanks for watching!", "For reference.", "I'm not clear."):
+        assert said(text, wav_bytes(1.0)) == "", text
+    # Short answers survive loud audio, and so does "Alright" inside a sentence.
+    for text in ("Yes.", "No.", "Why?", "How so?", "I did.", "Thank you.", "Oh.", "Alright, so we sharded it."):
+        assert said(text, wav_bytes(1.0)) == text, text
+    # Low-confidence results are dropped whatever the audio.
+    assert said("real words here", wav_bytes(1.0), confidence=0.1) == ""
+    # Filler words are dropped on quiet audio only.
+    for text in ("Thank you.", "Oh.", "Hello.", "Uh um.", "Okay."):
+        assert said(text, quiet_wav()) == "", text
+        assert said(text, wav_bytes(1.0)) == text, text
 
 
 def test_answer_check_and_report():
     app, clock = make()
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     start = clock.t
     feed(local, clock, 25)  # the candidate's eyes read for 25 s
@@ -208,7 +298,7 @@ def interview(local: TestClient, room: str, latencies: list[float]) -> list[dict
 def test_delivery_from_word_timings_against_the_candidates_baseline():
     n = 5
     app, _ = make(transcriber=ScriptedTranscriber("", texts=[QUESTION, WORDS23] * n))
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     answers = interview(local, room, [1.0, 1.2, 0.9, 5.0, 1.1])
     first = answers[0]["delivery"]
@@ -250,7 +340,7 @@ def test_question_end_and_utterances():
 def test_echo_similarity_from_the_rooms_model():
     sent: list = []
     app, _ = make(refs=references("local", answer=REFERENCE, sent=sent))
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     assert local.post(f"/api/rooms/{room}/references", json={"question": "How do you use caching?"}).json() == {"started": True}
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 30, "text": REFERENCE, "question": "How do you use caching?"})
@@ -270,7 +360,7 @@ def test_echo_similarity_from_the_rooms_model():
 def test_echo_similarity_unavailable(case):
     refs = references("rules") if case == "rules" else references("local", fail=case == "unreachable")
     app, _ = make(refs=refs, mode="rules" if case == "rules" else "local")
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 30, "text": REFERENCE,
                                                    "question": "" if case == "no_question" else "Why cache?"})
@@ -282,7 +372,7 @@ def test_echo_similarity_unavailable(case):
 def test_online_references_send_only_the_question_and_count_as_uncalibrated():
     sent: list = []
     app, _ = make(mode="online", refs=references("online", answer=REFERENCE, sent=sent))
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     guest_key = room["invites"][0].split("k=")[1]
     with remote.websocket_connect(f"/ws/{room['room']}?role=guest&k={guest_key}&name=Asha Rao") as guest:
@@ -301,7 +391,7 @@ def test_online_references_send_only_the_question_and_count_as_uncalibrated():
 
 def test_nothing_reaches_the_candidate():
     app, clock = make()
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
     with local.websocket_connect(f"/ws/{rid}?role=host&k={room['host_key']}") as host:
@@ -333,7 +423,7 @@ def test_study_folder_must_be_outside_the_repository(tmp_path):
 
 def test_study_mode_saves_labelled_answers_only_with_the_candidates_consent(tmp_path):
     app, clock = make(study_dir=tmp_path, transcriber=ScriptedTranscriber("", texts=[QUESTION, WORDS23] * 4))
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     rid, guest_key = room["room"], room["invites"][0].split("k=")[1]
     page = remote.get(f"/join/{rid}").text
@@ -409,7 +499,7 @@ def test_followups_come_from_the_model_through_the_guardrails():
         ])
 
     app, _ = make(model=model)
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()["room"]
     assert local.post(f"/api/rooms/{room}/followups", json={}).status_code == 409  # no answers yet
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 20, "text": ANSWER, "question": "Tell me about a project."})
@@ -431,7 +521,7 @@ def test_followups_come_from_the_model_through_the_guardrails():
 
 def test_followups_fall_back_to_rules_without_a_model():
     app, _ = make()
-    local = TestClient(app, client=LOCAL)
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
     room = local.post("/api/rooms").json()["room"]
     local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 20, "text": ANSWER})
     result = local.post(f"/api/rooms/{room}/followups", json={}).json()
@@ -450,7 +540,7 @@ def test_online_mode_redacts_and_tells_the_candidate():
         return '{"question": "How did Asha handle Redis failures during the sale?", "priority": "high"}'
 
     app, _ = make(model=model, mode="online")
-    local, remote = TestClient(app, client=LOCAL), TestClient(app, client=REMOTE)
+    local, remote = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS), TestClient(app, client=REMOTE)
     room = local.post("/api/rooms").json()
     guest_key = room["invites"][0].split("k=")[1]
     with remote.websocket_connect(f"/ws/{room['room']}?role=guest&k={guest_key}&name=Asha Rao") as guest:
@@ -494,6 +584,247 @@ def test_followup_parsing_and_rules_handle_odd_input():
     assert len(only) == 1 and "example" in only[0]["question"]
     asked = rule_followups("", ANSWER, ["Which part of this did you build or decide yourself?"])
     assert all("yourself" not in f["question"] for f in asked)
+
+
+# --- cloudflared download: pinned version, checksum before anything runs (no network) ---
+
+def _as_platform(monkeypatch, system: str, machine: str) -> None:  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    monkeypatch.setattr(tunnel.platform, "system", lambda: system)
+    monkeypatch.setattr(tunnel.platform, "machine", lambda: machine)
+
+
+def _fake_fetch(monkeypatch, payload: bytes, urls: list | None = None) -> None:  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    def fetch(url, filename):  # type: ignore[no-untyped-def]
+        if urls is not None:
+            urls.append(url)
+        Path(filename).write_bytes(payload)
+        return str(filename), None
+
+    monkeypatch.setattr(tunnel, "urlretrieve", fetch)
+
+
+def test_cloudflared_download_is_kept_only_when_its_checksum_matches(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    import hashlib
+
+    from room import tunnel
+
+    payload = b"pinned cloudflared"
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(payload).hexdigest(), hashlib.sha256(payload).hexdigest(), False))
+    urls: list = []
+    _fake_fetch(monkeypatch, payload, urls)
+    exe = tunnel.download_cloudflared(tmp_path)
+    assert exe.read_bytes() == payload
+    assert urls == [f"{tunnel._RELEASE_URL}/cloudflared-linux-amd64"]
+    assert tunnel.CLOUDFLARED_VERSION in str(exe)  # the cache is named for the pinned version
+    tunnel.download_cloudflared(tmp_path)  # verified copy already there: no second download
+    assert len(urls) == 1
+
+
+def test_a_cloudflared_download_that_fails_its_checksum_is_deleted_and_refused(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", "0" * 64, "0" * 64, False))
+    _fake_fetch(monkeypatch, b"tampered binary")
+    with pytest.raises(RuntimeError, match="checksum"):
+        tunnel.download_cloudflared(tmp_path)
+    bin_dir = tmp_path / "bin"
+    assert not any(bin_dir.iterdir())  # neither the download nor an executable copy is left behind
+
+
+def test_a_cached_cloudflared_that_fails_its_checksum_is_replaced(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    import hashlib
+
+    from room import tunnel
+
+    good = b"pinned cloudflared"
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setattr(tunnel.shutil, "which", lambda name: None)  # no cloudflared on PATH
+    monkeypatch.setitem(tunnel._ASSETS, ("Linux", "x86_64"), ("cloudflared-linux-amd64", hashlib.sha256(good).hexdigest(), hashlib.sha256(good).hexdigest(), False))
+    cached = tmp_path / "bin" / tunnel._exe_name()
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"something else entirely")
+    assert tunnel.find_cloudflared(tmp_path) is None  # refused and deleted, not run
+    assert not cached.exists()
+    _fake_fetch(monkeypatch, good)
+    assert tunnel.download_cloudflared(tmp_path).read_bytes() == good
+
+
+def test_darwin_archive_is_verified_before_it_is_extracted(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    import hashlib
+    import io
+    import tarfile
+
+    from room import tunnel
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = b"darwin cloudflared"
+        info = tarfile.TarInfo("cloudflared")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    archive = buf.getvalue()
+    _as_platform(monkeypatch, "Darwin", "arm64")
+    monkeypatch.setattr(tunnel.shutil, "which", lambda name: None)
+    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", hashlib.sha256(archive).hexdigest(), hashlib.sha256(b"darwin cloudflared").hexdigest(), True))
+    _fake_fetch(monkeypatch, archive)
+    assert tunnel.download_cloudflared(tmp_path).read_bytes() == b"darwin cloudflared"
+
+    monkeypatch.setitem(tunnel._ASSETS, ("Darwin", "arm64"), ("cloudflared-darwin-arm64.tgz", "0" * 64, "0" * 64, True))
+    other = tmp_path / "other"
+    _fake_fetch(monkeypatch, archive)
+    with pytest.raises(RuntimeError, match="checksum"):
+        tunnel.download_cloudflared(other)
+    assert not (other / "bin" / tunnel._exe_name()).exists()
+
+
+def test_a_cloudflared_on_the_path_is_preferred(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    from room import tunnel
+
+    _as_platform(monkeypatch, "Linux", "x86_64")
+    monkeypatch.setattr(tunnel.shutil, "which", lambda name: "/usr/local/bin/cloudflared")
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / tunnel._exe_name()).write_bytes(b"cached")
+    assert tunnel.find_cloudflared(tmp_path) == Path("/usr/local/bin/cloudflared")
+
+
+# --- the join page says what leaves the interviewer's computer ---
+
+GROQ_LINE = "Your speech (audio) is sent to Groq, an online service, to be transcribed."
+GEMINI_LINE = "the interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini"
+
+
+@pytest.mark.parametrize("cloud,mode,study", [
+    (False, "local", False), (True, "local", False), (False, "online", False), (True, "online", False),
+    (False, "local", True), (True, "local", True), (False, "online", True), (True, "online", True),
+])
+def test_join_notice_names_each_service_that_gets_the_candidates_data(cloud, mode, study, tmp_path):  # type: ignore[no-untyped-def]
+    app, _ = make(mode=mode, cloud=cloud, study_dir=tmp_path / "study" if study else None)
+    text = TestClient(app, client=REMOTE).get("/join/abc123").text
+    assert (GROQ_LINE in text) == cloud
+    assert (GEMINI_LINE in text) == (mode == "online")
+    assert ("Google Gemini" in text) == (mode == "online")
+    assert ("Groq" in text) == cloud
+    assert ("Nothing goes to an online service" in text) == (not cloud and mode == "local")
+    assert ("recorded unless you join the study below" in text.lower()) == study
+    assert ("<!--study-consent-->" in text) == (not study)  # the study consent is filled only in study mode
+    if cloud and not study:
+        assert GROQ_LINE + " Nothing is recorded" in text
+    if cloud and mode == "online" and not study:
+        assert GROQ_LINE + " Nothing is recorded. To suggest follow-up questions" in text
+    if cloud and mode == "local" and not study:
+        assert GROQ_LINE + " Nothing is recorded; the interviewer keeps" in text
+
+
+def test_consent_terms_wording_is_unchanged_without_cloud_transcription():
+    from room import OFFLINE_TERMS, STUDY_TERMS_OFFLINE, consent_terms
+
+    assert consent_terms(groq=False, online=False, study=False) == OFFLINE_TERMS
+    assert consent_terms(groq=False, online=False, study=True) == STUDY_TERMS_OFFLINE
+    assert consent_terms(groq=False, online=True, study=False) == (
+        "Nothing is recorded. To suggest follow-up questions and to write the comparison answers, the "
+        "interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini, "
+        "with emails, phone numbers and your name removed;")
+    assert consent_terms(groq=True, online=False, study=False) == GROQ_LINE + " Nothing is recorded;"
+    assert consent_terms(groq=True, online=False, study=True) == GROQ_LINE + " Nothing is recorded unless you join the study below;"
+
+
+# --- Groq transcription: the HTTP call is mocked, no network and no key ---
+
+class FakeResponse:
+    def __init__(self, status: int, body: dict | None = None, text: str = "") -> None:
+        self.status_code, self._body, self.text = status, body or {}, text
+
+    def json(self) -> dict:
+        return self._body
+
+
+def groq_body(words: bool = True) -> dict:  # type: ignore[type-arg]
+    body: dict = {"text": " Hello there ", "language": "en", "duration": 1.0}
+    if words:
+        body["words"] = [{"word": " Hello", "start": 0.1, "end": 0.4}, {"word": "there", "start": 0.5, "end": 0.9}]
+    return body
+
+
+def test_groq_request_carries_the_audio_the_key_and_the_word_request(monkeypatch):  # type: ignore[no-untyped-def]
+    import httpx
+
+    sent: dict = {}
+
+    def fake_post(url, headers=None, files=None, timeout=None):  # type: ignore[no-untyped-def]
+        sent.update(url=url, headers=headers, files=files)
+        return FakeResponse(200, groq_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    result = server.GroqTranscriber("gsk_test_key").transcribe(np.zeros(16000, dtype=np.float32), "small.en", "en", None,
+                                                              word_timestamps=True)
+    assert sent["url"] == server.GroqTranscriber.ENDPOINT
+    assert sent["headers"] == {"Authorization": "Bearer gsk_test_key"}
+    assert sent["files"]["model"] == (None, "whisper-large-v3")
+    assert sent["files"]["response_format"] == (None, "verbose_json")
+    assert sent["files"]["timestamp_granularities[]"] == (None, "word")
+    _, wav, content_type = sent["files"]["file"]
+    assert wav[:4] == b"RIFF" and content_type == "audio/wav"
+    assert result.text == "Hello there"
+    assert [w["word"] for w in result.words] == ["Hello", "there"]
+
+
+def test_groq_without_word_timestamps_asks_for_none(monkeypatch):  # type: ignore[no-untyped-def]
+    import httpx
+
+    sent: dict = {}
+
+    def fake_post(url, headers=None, files=None, timeout=None):  # type: ignore[no-untyped-def]
+        sent["files"] = files
+        return FakeResponse(200, groq_body(words=False))
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    result = server.GroqTranscriber("gsk_test_key").transcribe(np.zeros(16000, dtype=np.float32), "small.en", "en", None)
+    assert "timestamp_granularities[]" not in sent["files"]
+    assert result.words is None and result.text == "Hello there"
+
+
+def test_groq_errors_are_reported_without_the_key(monkeypatch):  # type: ignore[no-untyped-def]
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: FakeResponse(401, text="invalid api key"))
+    with pytest.raises(RuntimeError, match="Groq API error 401") as error:
+        server.GroqTranscriber("gsk_test_key").transcribe(np.zeros(16000, dtype=np.float32), "small.en", "en", None)
+    assert "gsk_test_key" not in str(error.value)
+
+
+def test_groq_needs_a_key():
+    with pytest.raises(RuntimeError, match="OPENMEET_GROQ_API_KEY"):
+        server.GroqTranscriber("")
+
+
+class NoWordsTranscriber:
+    """A transcriber whose answers carry no word timings (the room must still work)."""
+
+    def transcribe(self, audio, model, language, prompt):  # type: ignore[no-untyped-def]
+        return server.TranscriptionResult(text="I cached the results.", language="en", duration=len(audio) / 16000,
+                                          confidence=0.9)
+
+    def loaded_model(self) -> str | None:
+        return None
+
+
+def test_room_works_without_word_timestamps_and_delivery_uses_utterance_timing():
+    app, _ = make(transcriber=NoWordsTranscriber())
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = local.post("/api/rooms").json()["room"]
+    question = local.post(f"/api/rooms/{room}/transcribe?speaker=interviewer&start=0&end=2", content=wav_bytes(1.0)).json()
+    assert question["text"] == "I cached the results."
+    local.post(f"/api/rooms/{room}/transcribe?speaker=candidate&start=3&end=5", content=wav_bytes(1.0))
+    answer = local.post(f"/api/rooms/{room}/answers", json={"start": 3, "end": 5, "text": "I cached the results.",
+                                                            "question": "How did you speed it up?"})
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["delivery"]["features"]["granularity"] == "utterance"
 
 
 def test_early_reading_counts_at_most_possible_in_the_flag():

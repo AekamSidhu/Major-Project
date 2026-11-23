@@ -2,7 +2,8 @@
 
 The interviewer runs `room_server.py` on their own computer and opens
 https://localhost:8443. The candidate opens an invite link in any browser
-(laptop or phone, same Wi-Fi, or through a tunnel). Video and audio go
+(laptop or phone on the same Wi-Fi, or through a Cloudflare tunnel when the
+interviewer starts the room with --tunnel; the tunnel is off by default). Video and audio go
 directly between the two browsers (WebRTC); this server only introduces
 them (signaling) and serves the pages.
 
@@ -19,7 +20,8 @@ The interviewer's browser then sends, to this computer only:
 
 Who may call what:
 - interviewer endpoints (/host, /api/*, /v1/integrity/*) answer only to
-  this computer (loopback), so nobody on the network can use them;
+  this computer (loopback, Host naming this computer, no tunnel headers), so
+  nobody on the network or through the tunnel can use them;
 - the candidate gets the join page and the signaling socket, nothing else,
   and needs the room's guest key from the invite link. No score or flag
   ever reaches the candidate's side.
@@ -46,8 +48,9 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping
 
+import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
@@ -61,26 +64,96 @@ LOG = logging.getLogger("openmeet.room")
 HERE = Path(__file__).resolve().parent
 MAX_SEGMENT_BYTES = 8 * 1024 * 1024
 SPEAKERS = ("interviewer", "candidate")
-MIN_CONFIDENCE = 0.35
+MIN_CONFIDENCE = 0.45
 OFFLINE_TERMS = "Nothing goes to an online service and nothing is recorded;"
-ONLINE_TERMS = ("Nothing is recorded. To suggest follow-up questions and to write the comparison answers, the "
-                "interviewer's questions and the text of your answers (not audio or video) are sent to Google Gemini, "
-                "with emails, phone numbers and your name removed;")
 STUDY_TERMS_OFFLINE = "Nothing goes to an online service, and nothing is recorded unless you join the study below;"
-STUDY_TERMS_ONLINE = ONLINE_TERMS.replace("Nothing is recorded.", "Nothing is recorded unless you join the study below.")
+GROQ_TERMS = "Your speech (audio) is sent to Groq, an online service, to be transcribed."
+
+
+def consent_terms(*, groq: bool, online: bool, study: bool) -> str:
+    """The sentence on the join page that says what leaves the interviewer's computer.
+
+    `groq`: the candidate's audio goes to Groq for transcription; `online`: the text of the
+    questions and answers goes to Google Gemini for follow-ups. Without either, the offline
+    sentence; without groq, the sentences used before cloud transcription existed."""
+    if not groq and not online:
+        return STUDY_TERMS_OFFLINE if study else OFFLINE_TERMS
+    record = "Nothing is recorded unless you join the study below." if study else "Nothing is recorded."
+    sentences = [GROQ_TERMS] if groq else []
+    sentences.append(record)
+    if online:
+        sentences.append("To suggest follow-up questions and to write the comparison answers, the "
+                         "interviewer's questions and the text of your answers (not audio or video) are sent to "
+                         "Google Gemini, with emails, phone numbers and your name removed;")
+    else:
+        sentences[-1] = sentences[-1].rstrip(".") + ";"
+    return " ".join(sentences)
+
+
 STUDY_SLOT = "<!--study-consent-->"
-PHANTOMS = {"thank you", "thanks for watching", "thank you for watching", "well see you in the next one",
-            "see you in the next one", "bye", "you", "so", "okay", "subtitles by the amaraorg community"}
+# Whisper's stock lines for non-speech audio: dropped when the whole utterance is one of them.
+PHANTOMS = {"thanks for watching", "thank you for watching", "well see you in the next one",
+            "see you in the next one", "im not clear", "subtitles by the amaraorg community",
+            "for reference", "now cut to the rest", "hooray alright", "hooray", "alright"}
+# Short filler words Whisper invents on silence: dropped only when the audio is quiet.
+QUIET_PHRASES = {"thank you", "thanks", "you", "bye", "so", "okay", "oh", "hello", "uh", "um", "uh um"}
 
 
-def is_phantom(text: str) -> bool:
-    """Whisper's stock phrases for non-speech audio."""
-    words = "".join(c for c in text.lower() if c.isalnum() or c == " ").split()
-    return " ".join(words) in PHANTOMS
+def is_quiet(samples: Any) -> bool:
+    """Near-silent audio: RMS below 0.008, the same threshold as the desktop engine."""
+    audio = np.asarray(samples, dtype=np.float32)
+    return audio.size == 0 or float(np.sqrt(np.mean(np.square(audio)))) < 0.008
+
+
+def is_phantom(text: str, quiet: bool = False) -> bool:
+    """True for Whisper's stock phrases; short filler words only when `quiet`."""
+    joined = " ".join("".join(c for c in text.lower() if c.isalnum() or c == " ").split())
+    return joined in PHANTOMS or (quiet and joined in QUIET_PHRASES)
 
 
 def is_loopback(host: str | None) -> bool:
     return host in ("127.0.0.1", "::1", "localhost") or (host or "").startswith("127.")
+
+
+# Headers that a reverse proxy or tunnel adds. cloudflared runs on this computer and
+# forwards public traffic to localhost, so a tunnelled request arrives from 127.0.0.1
+# too; these headers (and the public Host name) are what tell it apart.
+PROXY_HEADERS = ("cf-connecting-ip", "cf-ray", "x-forwarded-for", "x-forwarded-host", "forwarded")
+
+
+def _host_name(value: str) -> str:
+    """The name part of a Host header: `localhost:8443` -> `localhost`, `[::1]:8443` -> `::1`."""
+    value = value.strip().lower()
+    if value.startswith("["):
+        end = value.find("]")
+        return value[1:end] if end > 0 else ""
+    if value.count(":") == 1:
+        return value.split(":", 1)[0]
+    return value
+
+
+def interviewer_names() -> frozenset[str]:
+    """Host names that mean this computer: localhost and this computer's network addresses."""
+    return frozenset({"localhost", "127.0.0.1", "::1", *lan_addresses()})
+
+
+def is_interviewer(client: str | None, headers: Mapping[str, str], names: frozenset[str]) -> bool:
+    """True only for a request made on this computer: loopback client, no proxy headers,
+    and a Host header naming this computer (never the tunnel's hostname)."""
+    if not is_loopback(client):
+        return False
+    if any(name in headers for name in PROXY_HEADERS):
+        return False
+    return _host_name(headers.get("host", "")) in names
+
+
+def interviewer_only(names: frozenset[str]) -> Callable[[Request], None]:
+    """A FastAPI dependency: refuse anything that is not the interviewer's own computer."""
+    def check(request: Request) -> None:
+        if not is_interviewer(request.client.host if request.client else None, request.headers, names):
+            raise HTTPException(status_code=403, detail="only the interviewer's computer can use this")
+
+    return check
 
 
 def lan_addresses() -> list[str]:
@@ -158,9 +231,11 @@ class LabelRequest(BaseModel):
 
 def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: Any, reading_factory: Any,
                     port: int, scheme: str, whisper_model: str, followup_writer: Any = None,
-                    similarity: Any = None, study: Any = None) -> dict[str, Room]:
+                    similarity: Any = None, study: Any = None,
+                    tunnel_url: str | None = None, cloud_transcription: bool = False) -> dict[str, Room]:
     """`similarity`: a room.similarity.SimilarityChecker (None: echo similarity unavailable);
-    `study`: a room.study.StudyRecorder in study mode."""
+    `study`: a room.study.StudyRecorder in study mode; `cloud_transcription`: the candidate's
+    audio goes to a cloud service (Groq), which the join page states."""
     from .followups import FollowupWriter
 
     rooms: dict[str, Room] = {}
@@ -173,9 +248,8 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     params = inspect.signature(transcriber.transcribe).parameters
     timed = "word_timestamps" in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
 
-    def host_only(request: Request) -> None:
-        if not is_loopback(request.client.host if request.client else None):
-            raise HTTPException(status_code=403, detail="only the interviewer's computer can use this")
+    names = interviewer_names()
+    host_only = interviewer_only(names)
 
     def model(name: str) -> Any:
         if name not in models:
@@ -196,7 +270,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
 
     @app.get("/", include_in_schema=False)
     def root(request: Request):  # type: ignore[no-untyped-def]
-        if is_loopback(request.client.host if request.client else None):
+        if is_interviewer(request.client.host if request.client else None, request.headers, names):
             return RedirectResponse("/host")
         return HTMLResponse("<p style='font-family:sans-serif'>Ask the interviewer for an invite link.</p>", status_code=404)
 
@@ -211,12 +285,11 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     def join_page(room_id: str) -> str:
         html = page("guest.html")
-        # The candidate agrees to what actually happens.
+        # The candidate agrees to what actually happens: audio to Groq, text to Gemini.
+        terms = consent_terms(groq=cloud_transcription, online=writer.online, study=study is not None)
+        html = html.replace(OFFLINE_TERMS, terms)
         if study is not None:
-            html = html.replace(OFFLINE_TERMS, STUDY_TERMS_ONLINE if writer.online else STUDY_TERMS_OFFLINE)
             html = html.replace(STUDY_SLOT, study.consent_html())
-        elif writer.online:
-            html = html.replace(OFFLINE_TERMS, ONLINE_TERMS)
         return html
 
     @app.post("/api/rooms", dependencies=[Depends(host_only)])
@@ -224,9 +297,12 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         room = Room(id=secrets.token_hex(3), host_key=secrets.token_urlsafe(16), guest_key=secrets.token_urlsafe(12))
         rooms[room.id] = room
         path = f"/join/{room.id}?k={room.guest_key}"
-        invites = [f"{scheme}://{ip}:{port}{path}" for ip in lan_addresses()] + [f"{scheme}://localhost:{port}{path}"]
+        lan_invites = [f"{scheme}://{ip}:{port}{path}" for ip in lan_addresses()] + [f"{scheme}://localhost:{port}{path}"]
+        tunnel_invite = f"{tunnel_url}{path}" if tunnel_url else None
+        invites = ([tunnel_invite] if tunnel_invite else []) + lan_invites
         monitor.reset()
-        return {"room": room.id, "host_key": room.host_key, "invites": invites}
+        return {"room": room.id, "host_key": room.host_key, "invites": invites,
+                "tunnel_url": tunnel_invite, "lan_invites": lan_invites}
 
     @app.get("/api/status", dependencies=[Depends(host_only)])
     def status() -> dict[str, Any]:
@@ -234,6 +310,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
                 "followup_model": writer.model_name, "followup_model_ok": writer.model_ok,
                 "followup_error": writer.last_error,
                 "reference_model": similarity.writer.model_name if similarity and similarity.writer.available else None,
+                "tunnel_url": tunnel_url,
                 "study": {"enabled": True, "conditions": list(study.conditions)} if study else {"enabled": False}}
 
     @app.post("/api/rooms/{room_id}/transcribe", dependencies=[Depends(host_only)])
@@ -260,7 +337,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
             text = " ".join(result.text.split())
             # The browser cuts speech by loudness, so noise and tones get through;
             # Whisper then invents stock phrases. Drop those and unsure results.
-            if (result.confidence is not None and result.confidence < MIN_CONFIDENCE) or is_phantom(text):
+            if (result.confidence is not None and result.confidence < MIN_CONFIDENCE) or is_phantom(text, is_quiet(audio)):
                 return "", []
             # Words on the meeting clock: the segment's audio starts at `start`.
             words = [{"word": w["word"], "start": round(start + w["start"], 3), "end": round(start + w["end"], 3)}
@@ -417,7 +494,8 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
         client = ws.client.host if ws.client else None
         LOG.info("ws connect: room=%s role=%s client=%s room_exists=%s", room_id, role, client, room is not None)
         allowed = room is not None and (
-            (role == "host" and secrets.compare_digest(k, room.host_key) and is_loopback(client))
+            (role == "host" and secrets.compare_digest(k, room.host_key)
+             and is_interviewer(client, ws.headers, names))
             or (role == "guest" and secrets.compare_digest(k, room.guest_key))
         )
         if not allowed:

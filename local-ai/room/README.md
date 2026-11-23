@@ -29,24 +29,52 @@ pip install -r requirements.txt -r requirements-integrity.txt
 For AI follow-up questions on this computer, install [Ollama](https://ollama.com)
 and download the model once: `ollama pull llama3.2`.
 
-For the online mode, put a Google Gemini key in `~/.openmeet/room.env`
-(outside the repository; never commit it):
+For the online options, put the keys in `~/.openmeet/room.env` (outside the
+repository; never commit it):
 
 ```
-OPENMEET_GEMINI_API_KEY=your-key
+OPENMEET_GEMINI_API_KEY=your-key       # --followups online (Google Gemini)
+OPENMEET_GROQ_API_KEY=your-key         # --transcription groq (Groq cloud Whisper)
 ```
 
 ## Run it
 
+Local is the default: transcription and follow-ups run on this computer, and the
+link works on this Wi-Fi only (add `--tunnel` for other networks).
+
 ```bash
-python room_server.py                      # follow-ups from Llama 3.2 on this computer
-python room_server.py --followups online   # follow-ups from Gemini; the candidate is told
-python room_server.py --followups rules    # no AI model, simple rules (no echo similarity)
+python room_server.py                      # local Whisper, follow-ups from Llama 3.2 (Ollama) on this computer
+python room_server.py --followups local    # follow-ups from Llama 3.2 on this computer (Ollama)
+python room_server.py --followups online   # follow-ups from Gemini: questions and answer text go to Google
+python room_server.py --transcription groq # the candidate's audio goes to Groq for transcription
+python room_server.py --tunnel             # also a public link: anyone with it can reach the join page
 python room_server.py --study D:/study     # study mode, see "Study mode" below
 ```
 
-The first start downloads the Whisper speech model (about 140 MB); the
-first answer downloads the embedding model (about 70 MB).
+`--transcription` is `local` (faster-whisper on this computer, `--whisper-model`,
+default `small.en`, about 480 MB on the first start) or `groq` (Groq's hosted
+`whisper-large-v3`, which needs `OPENMEET_GROQ_API_KEY`). `--followups` is
+`rules`, `local` or `online`. The room prints what goes online at startup.
+
+On Windows, `start-room.ps1` is local by default and takes the same choices as
+switches: `-Followups local|online|rules`, `-Transcription local|groq`,
+`-Tunnel`. `-Cloud` turns on the demo setup in one go: `-Tunnel -Transcription
+groq -Followups online`. Whatever goes online is printed before the room starts.
+`-NoTunnel` is accepted and does nothing (the tunnel is off unless asked for).
+
+The join page tells the candidate exactly what leaves this computer: with
+groq, "Your speech (audio) is sent to Groq, an online service, to be
+transcribed"; with online follow-ups, the questions and the text of the answers
+(not audio or video) go to Google Gemini. Without either, it says that nothing
+goes to an online service. The wording is built by `consent_terms()` in
+`room/__init__.py`, and a test checks each combination.
+
+The embedding model (about 70 MB) is downloaded on the first answer.
+
+If the transcriber returns no word timings (the Groq response without them, or
+a backend without timings), the room still works: delivery is measured from
+utterance timing instead of word timing, and the answer's delivery features
+say `granularity: utterance`.
 
 1. Open **https://localhost:8443** on the interviewer's computer and accept
    the certificate warning once (the server made the certificate itself).
@@ -63,11 +91,17 @@ example a normal and a private window), or use your phone on the same Wi-Fi.
 Add `?fake=1` to both URLs to send a moving test picture and a tone instead of
 a camera and microphone, so two windows don't fight over one camera.
 
-**Across networks** (candidate at home): run a tunnel such as
-`cloudflared tunnel --url https://localhost:8443 --no-tls-verify` and swap
-the invite link's address for the tunnel's. Video still goes browser to
-browser; a TURN server is only needed if both sides are behind strict
-corporate firewalls.
+**Across networks** (candidate at home): start the room with `--tunnel`
+(`start-room.ps1 -Tunnel` on Windows). The tunnel is off by default, because
+publishing the room puts its join page on the internet. The server downloads
+`cloudflared` once (a pinned release, checked against its SHA-256 before it
+runs; a `cloudflared` already on the PATH is used instead), starts a Cloudflare
+quick tunnel and lists its invite link first on the host page.
+**Anyone with the link can reach this room's join page.** The host page, the
+interviewer API and the report answer only to this computer, and requests that
+arrive through the tunnel are refused. Video still goes browser to browser; a
+TURN server is only needed if both sides are behind strict corporate firewalls.
+The tunnel needs https (do not combine `--tunnel` with `--no-https`).
 
 ### What to try
 
@@ -175,8 +209,9 @@ says that the questions go to Gemini too.
 The candidate sees a notice of what is analysed (transcription with word
 timings, reading gaze, AI-written text and comparison with an AI model's
 answers, pace and pauses against their first answers) and must agree before
-joining; in online mode it says that the questions and answer text go to
-Google Gemini. No score or flag ever reaches the candidate's page or
+joining. The notice also says which services get data: with `--transcription
+groq` the candidate's audio goes to Groq; in online mode the questions and
+answer text go to Google Gemini. No score or flag ever reaches the candidate's page or
 socket. Audio segments and frames are processed and dropped; transcripts
 and scores stay in memory until the server stops (study mode, with the
 candidate's separate consent, is the exception).
@@ -186,8 +221,8 @@ candidate's separate consent, is the exception).
 - One candidate per room, one room at a time for the gaze check.
 - Speech is cut by loudness in the browser; use headphones so the
   candidate's voice doesn't reach the interviewer's microphone.
-- Transcription runs on the CPU (`base.en`, a few seconds behind). A GPU or
-  a smaller model (`--whisper-model tiny.en`) keeps it closer to live.
+- Transcription runs on the CPU (`small.en`, a few seconds behind). A GPU or
+  a smaller model (`--whisper-model base.en` or `tiny.en`) keeps it closer to live.
 - Llama 3.2 on a laptop CPU takes several seconds to tens of seconds per set
   of follow-ups; the online mode takes about 5 seconds. Reference answers
   are written while the candidate talks (about 2 s each on an RTX 4060), so

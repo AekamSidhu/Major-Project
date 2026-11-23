@@ -13,6 +13,10 @@
   .preview { position: relative; aspect-ratio: 16/9; border-radius: 14px; overflow: hidden; background: var(--stage); }
   .preview video { width: 100%; height: 100%; object-fit: cover; }
   .preview .placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b9c2bf; font-size: 14px; }
+  .lighting-warn { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px 14px; background: rgb(180 60 30 / 0.88); color: #fff;
+    font-size: 13px; font-weight: 550; text-align: center; backdrop-filter: blur(6px); transition: opacity .3s; }
+  .lighting-ok { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px 14px; background: rgb(40 140 100 / 0.88); color: #fff;
+    font-size: 13px; font-weight: 550; text-align: center; backdrop-filter: blur(6px); transition: opacity .3s; }
   .panel h1 { font-size: 40px; line-height: 1.05; margin: 4px 0 10px; }
   .terms { margin: 18px 0; padding: 14px 16px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 13.5px; color: var(--fg-soft); line-height: 1.6; }
   .terms ul { margin: 8px 0 0; padding-left: 18px; } .terms li { margin: 3px 0; }
@@ -41,6 +45,8 @@
   <div class="preview enter">
     <video id="preview" autoplay playsinline muted></video>
     <div class="placeholder" id="previewNote">Your camera preview appears here</div>
+    <div class="lighting-warn" id="lightingWarn" hidden>Your face is not clearly visible. Move to a well-lit area so your eyes can be seen.</div>
+    <div class="lighting-ok" id="lightingOk" hidden>Face detected — you're good to go.</div>
   </div>
   <div class="panel enter-2">
     <h1>Ready to join?</h1>
@@ -92,8 +98,57 @@ const key = new URLSearchParams(location.search).get("k") || "";
 let local = null, pc = null, signal = null;
 
 // A preview before joining, so the candidate can check camera and framing.
-getMedia().then((s) => { local = s; showSelf($("preview"), s); $("previewNote").hidden = true; })
+getMedia().then((s) => { local = s; showSelf($("preview"), s); $("previewNote").hidden = true; startFaceCheck(); })
   .catch((e) => { $("previewNote").textContent = "Camera or microphone blocked: allow them in the browser, then reload."; });
+
+// Face and lighting check: warn the candidate if their face is not clearly visible.
+let faceCheckInterval = null;
+async function startFaceCheck() {
+  const video = $("preview");
+  const canvas = document.createElement("canvas");
+  const hasFaceDetector = typeof window.FaceDetector !== "undefined";
+  let detector = null;
+  if (hasFaceDetector) {
+    try { detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }); } catch (e) { detector = null; }
+  }
+
+  let consecutiveNoFace = 0, consecutiveFace = 0, shown = false;
+  faceCheckInterval = setInterval(async () => {
+    if (!video.videoWidth) return;
+    const w = Math.min(video.videoWidth, 320), h = Math.round(w * video.videoHeight / video.videoWidth);
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, w, h);
+
+    let faceFound = false;
+    if (detector) {
+      try {
+        const faces = await detector.detect(canvas);
+        faceFound = faces.length > 0 && faces[0].boundingBox.width >= w * 0.08;
+      } catch (e) { faceFound = true; }
+    } else {
+      // Fallback: check image brightness as a proxy for good lighting
+      const data = ctx.getImageData(0, 0, w, h).data;
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 16) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+      const brightness = sum / (data.length / 16);
+      faceFound = brightness > 50 && brightness < 230;
+    }
+
+    if (faceFound) {
+      consecutiveFace++; consecutiveNoFace = 0;
+      if (consecutiveFace >= 3) {
+        $("lightingWarn").hidden = true; $("lightingOk").hidden = false; shown = true;
+        setTimeout(() => { if ($("lightingOk")) $("lightingOk").hidden = true; }, 3000);
+      }
+    } else {
+      consecutiveNoFace++; consecutiveFace = 0;
+      if (consecutiveNoFace >= 5) {
+        $("lightingWarn").hidden = false; $("lightingOk").hidden = true; shown = true;
+      }
+    }
+  }, 500);
+}
 $("agree").onchange = () => ($("btnJoin").disabled = !$("agree").checked);
 $("btnJoin").onclick = async () => {
   $("btnJoin").disabled = true;
@@ -101,6 +156,7 @@ $("btnJoin").onclick = async () => {
     try { local = await getMedia(); }
     catch (e) { $("msg").textContent = "Camera or microphone blocked: " + e.message + ". Allow them and try again."; $("btnJoin").disabled = false; return; }
   }
+  if (faceCheckInterval) { clearInterval(faceCheckInterval); faceCheckInterval = null; }
   const enter = () => { showSelf($("self"), local); $("lobby").hidden = true; $("call").hidden = false; $("statusPill").textContent = "In the interview"; };
   if (document.startViewTransition) document.startViewTransition(enter); else enter();
   $("btnMic").innerHTML = ICON.mic; $("btnCam").innerHTML = ICON.cam; $("btnLeave").innerHTML = ICON.leave;

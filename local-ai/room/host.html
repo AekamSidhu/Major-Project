@@ -100,8 +100,7 @@
       <div class="waiting fade" id="waiting">
         <div class="card">
           <h2>Waiting for the candidate</h2>
-          <p class="note" style="font-size:13.5px">Send this link. A phone or laptop on the same Wi-Fi can open it; the browser warns about the certificate once
-            because this computer made it.</p>
+          <p class="note" style="font-size:13.5px" id="inviteNote">Send this link to the candidate. They can join from any device, any network.</p>
           <div id="invites"></div>
         </div>
       </div>
@@ -187,10 +186,19 @@ const serverStatus = await (await fetch("/api/status")).json();
 const study = serverStatus.study && serverStatus.study.enabled ? serverStatus.study : null;
 $("roomId").textContent = "Room " + room.room;
 const fake = new URLSearchParams(location.search).has("fake") ? "&fake=1" : "";
-const links = room.invites.map((u) => u + fake);
-$("invites").innerHTML = `<div class="invite"><code>${links[0]}</code><button class="btn primary sm" id="btnCopy">${ICON.copy}Copy link</button></div>` +
-  (links.length > 1 ? `<div class="others">Other addresses of this computer:${links.slice(1).map((l) => `<code>${l}</code>`).join("")}</div>` : "");
-$("btnCopy").onclick = async () => { await navigator.clipboard.writeText(links[0]); $("btnCopy").innerHTML = ICON.copy + "Copied"; };
+const tunnelLink = room.tunnel_url ? room.tunnel_url + fake : null;
+const lanLinks = (room.lan_invites || room.invites).map((u) => u + fake);
+const primaryLink = tunnelLink || lanLinks[0];
+if (tunnelLink) {
+  $("inviteNote").textContent = "Send this link to the candidate. They can join from any device, any network.";
+  $("invites").innerHTML = `<div class="invite"><code>${tunnelLink}</code><button class="btn primary sm" id="btnCopy">${ICON.copy}Copy invite link</button></div>` +
+    `<div class="others">Same Wi-Fi only:${lanLinks.map((l) => `<code>${l}</code>`).join("")}</div>`;
+} else {
+  $("inviteNote").textContent = "Send this link. A phone or laptop on the same Wi-Fi can open it; the browser warns about the certificate once because this computer made it.";
+  $("invites").innerHTML = `<div class="invite"><code>${lanLinks[0]}</code><button class="btn primary sm" id="btnCopy">${ICON.copy}Copy link</button></div>` +
+    (lanLinks.length > 1 ? `<div class="others">Other addresses of this computer:${lanLinks.slice(1).map((l) => `<code>${l}</code>`).join("")}</div>` : "");
+}
+$("btnCopy").onclick = async () => { await navigator.clipboard.writeText(primaryLink); $("btnCopy").innerHTML = ICON.copy + "Copied"; };
 let local;
 try { local = await getMedia(); }
 catch (e) {  // still useful receive-only: the candidate's video, gaze and transcript
@@ -235,17 +243,20 @@ setInterval(() => {
 }, 1000);
 
 // ---- candidate's video -> gaze, ~10 frames a second ----
-const grab = document.createElement("canvas"); let sending = false;
+const grab = document.createElement("canvas"); let gazeInFlight = 0;
 setInterval(async () => {
   const v = $("remote");
-  if (sending || !remoteStream || !v.videoWidth) return;
-  sending = true;
+  if (gazeInFlight >= 2 || !remoteStream || !v.videoWidth) return;
+  gazeInFlight++;
   const s = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
   grab.width = Math.round(v.videoWidth * s); grab.height = Math.round(v.videoHeight * s);
   grab.getContext("2d").drawImage(v, 0, 0, grab.width, grab.height);
   const blob = await new Promise((r) => grab.toBlob(r, "image/jpeg", 0.8));
-  try { await post("/v1/integrity/gaze/frame", null, blob); } catch (e) { setPill("pillGaze", "gaze unavailable", "bad"); }
-  sending = false;
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 2000);
+  try { await fetch("/v1/integrity/gaze/frame", { method: "POST", body: blob, signal: ctrl.signal }); }
+  catch (e) { if (e.name !== "AbortError") setPill("pillGaze", "gaze unavailable", "bad"); }
+  finally { clearTimeout(timeout); gazeInFlight--; }
 }, 100);
 setInterval(async () => {
   try {
