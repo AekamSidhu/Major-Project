@@ -414,7 +414,7 @@ flowchart LR
     M["Model output"]:::u
   end
   subgraph Renderer["Webviews (CSP: self only, no remote scripts)"]
-    O["Overlay: 33 commands"]
+    O["Overlay: its own capability file (src-tauri/capabilities/overlay.json)"]
     W["Main window: all app commands"]
   end
   subgraph Backend["Rust backend (privileged)"]
