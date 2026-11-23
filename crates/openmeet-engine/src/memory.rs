@@ -143,18 +143,19 @@ impl ContextMemory {
 
         // Semantic channel.
         let mut semantic = false;
-        if let Some((model, qv)) = q.vector {
-            if self.embedding_model.as_deref() == Some(model) && !self.vectors.is_empty() {
-                semantic = true;
-                let mut sims: Vec<(&str, f32)> = self
-                    .vectors
-                    .iter()
-                    .map(|(id, v)| (id.as_str(), cosine(qv, v).max(0.0)))
-                    .collect();
-                sims.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                for (id, s) in sims.into_iter().take(24) {
-                    scores.entry(id).or_default().1 = s;
-                }
+        if let Some((model, qv)) = q.vector
+            && self.embedding_model.as_deref() == Some(model)
+            && !self.vectors.is_empty()
+        {
+            semantic = true;
+            let mut sims: Vec<(&str, f32)> = self
+                .vectors
+                .iter()
+                .map(|(id, v)| (id.as_str(), cosine(qv, v).max(0.0)))
+                .collect();
+            sims.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            for (id, s) in sims.into_iter().take(24) {
+                scores.entry(id).or_default().1 = s;
             }
         }
 

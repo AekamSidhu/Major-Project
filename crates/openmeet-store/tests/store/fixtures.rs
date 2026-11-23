@@ -2,6 +2,9 @@
 
 use std::path::Path;
 
+use openmeet_core::integrity::{
+    DeliveryEvidence, IntegrityFlag, IntegrityLevel, IntegritySignal, IntegritySignalName,
+};
 use openmeet_core::store::{EmbeddingRecord, MeetingStore};
 use openmeet_core::types::*;
 use openmeet_store::Database;
@@ -246,6 +249,59 @@ pub fn privacy_rule(
     }
 }
 
+/// An answer-integrity flag with one scored and one not-scored signal.
+pub fn integrity_flag(
+    meeting_id: &str,
+    id: &str,
+    answer_start_ms: i64,
+    revision: u32,
+) -> IntegrityFlag {
+    IntegrityFlag {
+        id: id.to_string(),
+        meeting_id: meeting_id.to_string(),
+        question_id: Some(format!("{meeting_id}-q1")),
+        question_text: Some(secret("How would you design a rate limiter?")),
+        answer_start_ms,
+        answer_end_ms: answer_start_ms + 30_000,
+        answer_words: 64,
+        level: IntegrityLevel::Possible,
+        elevated: vec![IntegritySignalName::AiText],
+        headline: "Possible AI-assisted answer — worth a follow-up".to_string(),
+        signals: vec![
+            IntegritySignal {
+                name: IntegritySignalName::AiText,
+                level: IntegrityLevel::High,
+                calibrated: true,
+                score: Some(0.91),
+                evidence: vec!["AI-written text score 0.91 (high)".to_string()],
+                note: None,
+                delivery: None,
+            },
+            IntegritySignal {
+                name: IntegritySignalName::Delivery,
+                level: IntegrityLevel::Baseline,
+                calibrated: false,
+                score: None,
+                evidence: vec![
+                    "Learning this candidate's usual delivery (answer 1 of 3)".to_string(),
+                ],
+                note: Some("Learning this candidate's usual delivery (answer 1 of 3)".to_string()),
+                delivery: Some(DeliveryEvidence {
+                    granularity: "word".to_string(),
+                    word_count: 64,
+                    latency_s: Some(1.25),
+                    rate_wpm: Some(151.5),
+                    ..Default::default()
+                }),
+            },
+        ],
+        revision,
+        spec_version: 1,
+        created_at: NOW,
+        updated_at: NOW + i64::from(revision),
+    }
+}
+
 /// Saves one meeting with at least one row in every meeting-owned table and
 /// returns the record `load_meeting` must produce.
 pub fn populate(db: &Database, meeting_id: &str, started_at: i64) -> MeetingRecord {
@@ -302,6 +358,8 @@ pub fn populate(db: &Database, meeting_id: &str, started_at: i64) -> MeetingReco
         started_at + 2_000,
     ))
     .unwrap();
+    let integrity_flags = vec![integrity_flag(meeting_id, &p("f1"), 5_000, 1)];
+    db.save_integrity_flag(&integrity_flags[0]).unwrap();
 
     MeetingRecord {
         meeting: m,
@@ -314,12 +372,13 @@ pub fn populate(db: &Database, meeting_id: &str, started_at: i64) -> MeetingReco
         observations,
         action_items,
         summary: Some(summary),
+        integrity_flags,
     }
 }
 
 /// Rows per meeting-owned table for `meeting_id`, via a raw connection.
 pub fn child_row_counts(conn: &rusqlite::Connection, meeting_id: &str) -> Vec<(&'static str, i64)> {
-    const TABLES: [&str; 11] = [
+    const TABLES: [&str; 12] = [
         "participants",
         "transcript_segments",
         "questions",
@@ -331,6 +390,7 @@ pub fn child_row_counts(conn: &rusqlite::Connection, meeting_id: &str) -> Vec<(&
         "action_items",
         "meeting_summaries",
         "embeddings",
+        "integrity_flags",
     ];
     TABLES
         .iter()

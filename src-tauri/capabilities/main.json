@@ -27,6 +27,8 @@
     "allow-list-models",
     "allow-get-data-flow",
     "allow-get-local-ai-status",
+    "allow-get-integrity-status",
+    "allow-preview-integrity-region",
     "allow-start-local-ai",
     "allow-stop-local-ai",
     "allow-list-audio-devices",

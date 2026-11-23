@@ -14,6 +14,8 @@ const COMMANDS: &[&str] = &[
     "list_models",
     "get_data_flow",
     "get_local_ai_status",
+    "get_integrity_status",
+    "preview_integrity_region",
     "start_local_ai",
     "stop_local_ai",
     "list_audio_devices",

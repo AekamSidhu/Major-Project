@@ -4,6 +4,7 @@ import type { AnswerStyle } from "./AnswerStyle";
 import type { ComponentHealth } from "./ComponentHealth";
 import type { DetectedQuestion } from "./DetectedQuestion";
 import type { FollowUpQuestion } from "./FollowUpQuestion";
+import type { IntegrityFlag } from "./IntegrityFlag";
 import type { Meeting } from "./Meeting";
 import type { MeetingState } from "./MeetingState";
 import type { MeetingSummary } from "./MeetingSummary";
@@ -17,4 +18,8 @@ import type { TranscriptSegment } from "./TranscriptSegment";
 /**
  * Full engine state for windows that (re)load mid-meeting.
  */
-export type EngineSnapshot = { meeting: Meeting | null, state: MeetingState, pausedReason: PauseReason | null, mode: Mode, style: AnswerStyle, transcript: Array<TranscriptSegment>, questions: Array<DetectedQuestion>, active: ActiveRequestView | null, followups: Array<FollowUpQuestion>, followupsRequestId: string | null, pinned: Array<Suggestion>, topics: Array<Topic>, suggestedNextTopic: string | null, components: Array<ComponentHealth>, lastObservation: ScreenObservation | null, lastSummary: MeetingSummary | null, demoRunning: boolean, processingStopped: boolean, };
+export type EngineSnapshot = { meeting: Meeting | null, state: MeetingState, pausedReason: PauseReason | null, mode: Mode, style: AnswerStyle, transcript: Array<TranscriptSegment>, questions: Array<DetectedQuestion>, active: ActiveRequestView | null, followups: Array<FollowUpQuestion>, followupsRequestId: string | null, pinned: Array<Suggestion>, topics: Array<Topic>, suggestedNextTopic: string | null, components: Array<ComponentHealth>, lastObservation: ScreenObservation | null, lastSummary: MeetingSummary | null, demoRunning: boolean, processingStopped: boolean, 
+/**
+ * Answer-integrity flags of the current meeting (latest first).
+ */
+integrityFlags: Array<IntegrityFlag>, };

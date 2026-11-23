@@ -146,10 +146,10 @@ pub fn list_displays(app: &AppHandle) -> Vec<DisplayInfo> {
         .iter()
         .map(|m| display_info(m, primary_key.as_deref()))
         .collect();
-    if !out.iter().any(|d| d.is_primary) {
-        if let Some(first) = out.first_mut() {
-            first.is_primary = true;
-        }
+    if !out.iter().any(|d| d.is_primary)
+        && let Some(first) = out.first_mut()
+    {
+        first.is_primary = true;
     }
     out
 }
@@ -159,10 +159,10 @@ pub fn pick_display<'a>(
     displays: &'a [DisplayInfo],
     s: &OverlaySettings,
 ) -> Option<&'a DisplayInfo> {
-    if let Some(key) = &s.target_display {
-        if let Some(d) = displays.iter().find(|d| &d.key == key) {
-            return Some(d);
-        }
+    if let Some(key) = &s.target_display
+        && let Some(d) = displays.iter().find(|d| &d.key == key)
+    {
+        return Some(d);
     }
     let primary = displays
         .iter()

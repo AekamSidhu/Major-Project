@@ -113,10 +113,11 @@ impl OverlayController {
         let h = height.clamp(OVERLAY_MIN_HEIGHT, f64::from(settings.max_height));
         {
             let mut st = self.state.lock();
-            if let Some((pw, ph)) = st.content_size {
-                if (pw - w).abs() < 1.0 && (ph - h).abs() < 1.0 {
-                    return;
-                }
+            if let Some((pw, ph)) = st.content_size
+                && (pw - w).abs() < 1.0
+                && (ph - h).abs() < 1.0
+            {
+                return;
             }
             st.content_size = Some((w, h));
         }
@@ -207,10 +208,10 @@ impl OverlayController {
         if let Some(win) = self.window() {
             let _ = win.set_focusable(false);
         }
-        if let Some(prev) = previous {
-            if !openmeet_platform::focus::restore_foreground(&prev) {
-                tracing::debug!("could not restore the previous foreground window");
-            }
+        if let Some(prev) = previous
+            && !openmeet_platform::focus::restore_foreground(&prev)
+        {
+            tracing::debug!("could not restore the previous foreground window");
         }
     }
 

@@ -126,6 +126,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=int(os.environ.get("OPENMEET_ROOM_PORT", "8443")))
     parser.add_argument("--no-https", action="store_true", help="plain http on localhost only")
+    parser.add_argument("--host", default=None, help="override bind address (default: 127.0.0.1 for http, 0.0.0.0 for https)")
     parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "base.en"))
     parser.add_argument("--followups", choices=("local", "online", "rules"), default=None,
                         help="where follow-up questions and reference answers come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
@@ -143,7 +144,7 @@ def main() -> None:
         app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups, study_dir=args.study)
     except ValueError as error:  # a study folder inside the repository
         parser.error(str(error))
-    host = "127.0.0.1" if args.no_https else "0.0.0.0"
+    host = args.host or ("127.0.0.1" if args.no_https else "0.0.0.0")
     ssl = {}
     if not args.no_https:
         cert, key = self_signed_cert(CERT_DIR)
@@ -162,7 +163,7 @@ def main() -> None:
         print(f"  STUDY MODE: answers of candidates who tick the study consent are saved under {args.study.resolve()}")
     if not args.no_https:
         for ip in lan_addresses():
-            print(f"  candidates on this network join through https://{ip}:{args.port}/join/... (the invite link)")
+            print(f"  candidates on this network join through {scheme}://{ip}:{args.port}/join/... (the invite link)")
     uvicorn.run(app, host=host, port=args.port, log_level="warning", access_log=False, **ssl)
 
 

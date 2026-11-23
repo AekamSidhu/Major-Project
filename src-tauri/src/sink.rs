@@ -35,16 +35,17 @@ impl TauriSink {
 
 impl EventSink for TauriSink {
     fn emit(&self, event: MeetingEvent) {
-        if let MeetingEvent::SummaryReady { .. } = &event {
-            if self.notifications.load(Ordering::Relaxed) && !self.main_window_visible() {
-                let _ = self
-                    .app
-                    .notification()
-                    .builder()
-                    .title("OpenMeet")
-                    .body("Your meeting summary is ready.")
-                    .show();
-            }
+        if let MeetingEvent::SummaryReady { .. } = &event
+            && self.notifications.load(Ordering::Relaxed)
+            && !self.main_window_visible()
+        {
+            let _ = self
+                .app
+                .notification()
+                .builder()
+                .title("OpenMeet")
+                .body("Your meeting summary is ready.")
+                .show();
         }
         if let Err(e) = self.app.emit(MEETING_EVENT_CHANNEL, &event) {
             tracing::warn!(event = event.name(), error = %e, "failed to deliver event to windows");

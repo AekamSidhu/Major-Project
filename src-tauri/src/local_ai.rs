@@ -10,12 +10,12 @@ use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use openmeet_core::CoreError;
-use openmeet_core::ipc::LocalAiStatus;
+use openmeet_core::ipc::{LocalAiStatus, StartMeetingRequest};
 use openmeet_core::providers::location_for_url;
 use openmeet_core::settings::{
     DEFAULT_LOCAL_AI_URL, EmbeddingProviderKind, Settings, TranscriptionProviderKind,
 };
-use openmeet_core::types::ProviderLocation;
+use openmeet_core::types::{Mode, ProviderLocation};
 use openmeet_providers::local_ai::LocalAiClient;
 use parking_lot::Mutex;
 use tauri::{AppHandle, Manager};
@@ -50,23 +50,37 @@ fn setup_hint() -> String {
 /// Base URL used for the sidecar: the configured transcription / embedding
 /// URL when that provider is the local sidecar, else the default.
 pub fn sidecar_url(settings: &Settings) -> String {
-    if settings.transcription.provider == TranscriptionProviderKind::LocalAi {
-        if let Some(u) = &settings.transcription.base_url {
-            return u.clone();
-        }
+    if settings.transcription.provider == TranscriptionProviderKind::LocalAi
+        && let Some(u) = &settings.transcription.base_url
+    {
+        return u.clone();
     }
-    if settings.ai.embeddings.provider == EmbeddingProviderKind::LocalAi {
-        if let Some(u) = &settings.ai.embeddings.base_url {
-            return u.clone();
-        }
+    if settings.ai.embeddings.provider == EmbeddingProviderKind::LocalAi
+        && let Some(u) = &settings.ai.embeddings.base_url
+    {
+        return u.clone();
     }
     DEFAULT_LOCAL_AI_URL.to_string()
 }
 
-/// Whether the current settings use the sidecar at all.
+/// Whether the current settings use the sidecar at all (transcription,
+/// embeddings or the answer-integrity check).
 pub fn sidecar_in_use(settings: &Settings) -> bool {
+    speech_uses_sidecar(settings) || settings.integrity.enabled
+}
+
+/// Transcription or embeddings run on the sidecar.
+fn speech_uses_sidecar(settings: &Settings) -> bool {
     settings.transcription.provider == TranscriptionProviderKind::LocalAi
         || settings.ai.embeddings.provider == EmbeddingProviderKind::LocalAi
+}
+
+/// Whether a meeting started with `req` needs the sidecar running:
+/// captured audio transcribed or embedded locally, or an interviewer
+/// meeting with the answer-integrity check on.
+pub fn sidecar_needed(settings: &Settings, req: &StartMeetingRequest) -> bool {
+    ((req.microphone || req.system_audio) && speech_uses_sidecar(settings))
+        || (req.mode == Mode::Interviewer && settings.integrity.enabled)
 }
 
 fn port_of(url: &str) -> Option<u16> {
@@ -275,5 +289,19 @@ mod tests {
         assert!(sidecar_in_use(&s));
         s.transcription.provider = TranscriptionProviderKind::Openai;
         assert!(!sidecar_in_use(&s));
+        // The integrity check runs on the sidecar in interviewer meetings.
+        s.integrity.enabled = true;
+        assert!(sidecar_in_use(&s));
+        let mut req = StartMeetingRequest {
+            mode: Mode::Interviewer,
+            title: None,
+            microphone: true,
+            system_audio: true,
+            screen: None,
+            focus_app_id: None,
+        };
+        assert!(sidecar_needed(&s, &req));
+        req.mode = Mode::Candidate;
+        assert!(!sidecar_needed(&s, &req));
     }
 }

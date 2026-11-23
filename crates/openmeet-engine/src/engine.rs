@@ -103,6 +103,8 @@ pub(crate) struct Inner {
     pub deleted: Mutex<std::collections::VecDeque<Id>>,
     /// Cancels the background summary of a meeting (keyed by meeting id).
     pub summaries: Mutex<std::collections::HashMap<Id, CancellationToken>>,
+    /// Ordered gaze-capture commands for the integrity check.
+    pub gaze_tx: mpsc::UnboundedSender<crate::integrity::GazeCmd>,
     pub handle: Handle,
 }
 
@@ -122,6 +124,7 @@ impl Engine {
         let (audio_ctl, ctl_rx) = mpsc::unbounded_channel();
         let (screen_tx, screen_rx) = watch::channel(None);
         let (embed_tx, embed_rx) = mpsc::unbounded_channel();
+        let (gaze_tx, gaze_rx) = mpsc::unbounded_channel();
         let mode = deps.settings.mode;
         let style = deps.settings.assistant.answer_style;
         let inner = Arc::new(Inner {
@@ -151,11 +154,13 @@ impl Engine {
             sim: Mutex::new(SimState::default()),
             deleted: Mutex::new(std::collections::VecDeque::new()),
             summaries: Mutex::new(std::collections::HashMap::new()),
+            gaze_tx,
             handle: handle.clone(),
         });
         handle.spawn(audio_router(audio_rx, ctl_rx));
         crate::screen::spawn_screen_worker(Arc::downgrade(&inner), screen_rx, &handle);
         spawn_embedder(Arc::downgrade(&inner), embed_rx, &handle);
+        crate::integrity::spawn_gaze_worker(Arc::downgrade(&inner), gaze_rx, &handle);
         let engine = Engine { inner };
         engine.refresh_provider_health();
         engine
@@ -261,11 +266,11 @@ impl Engine {
     pub(crate) fn persist(&self, store: &Arc<dyn MeetingStore>, op: PersistOp) {
         // A write that arrives after the user deleted its meeting must not
         // bring the meeting back.
-        if let Some(id) = op.meeting_id() {
-            if self.is_deleted(id) {
-                tracing::debug!(op = op.name(), "dropped a write for a deleted meeting");
-                return;
-            }
+        if let Some(id) = op.meeting_id()
+            && self.is_deleted(id)
+        {
+            tracing::debug!(op = op.name(), "dropped a write for a deleted meeting");
+            return;
         }
         self.inner.persist.send(store, op);
     }
@@ -374,6 +379,9 @@ impl Engine {
         if let Some(mode) = mode_changed {
             self.emit(MeetingEvent::ModeChanged { mode });
         }
+        // The integrity check (or its reading signal / region) may have been
+        // turned on or off mid-meeting.
+        self.sync_integrity_gaze();
     }
 
     /// Hot-swaps providers. Running transcription sessions are restarted when
@@ -400,6 +408,7 @@ impl Engine {
             *self.inner.providers.write() = p;
         }
         self.refresh_provider_health();
+        self.sync_integrity_gaze();
         if transcription_changed {
             let restart = {
                 let st = self.inner.state.lock();
@@ -462,18 +471,18 @@ impl Engine {
         let settings = self.settings();
         {
             let st = self.inner.state.lock();
-            if let Some(rt) = &st.runtime {
-                if matches!(
+            if let Some(rt) = &st.runtime
+                && matches!(
                     rt.state(),
                     MeetingState::Starting
                         | MeetingState::Active
                         | MeetingState::Paused
                         | MeetingState::Stopping
-                ) {
-                    return Err(CoreError::InvalidState(
-                        "A meeting is already running. End it before starting another.".into(),
-                    ));
-                }
+                )
+            {
+                return Err(CoreError::InvalidState(
+                    "A meeting is already running. End it before starting another.".into(),
+                ));
             }
         }
         self.inner.requests.cancel_all(false);
@@ -563,6 +572,7 @@ impl Engine {
         self.inner
             .health
             .set(Component::QuestionDetector, ComponentStatus::Active, None);
+        self.integrity_meeting_started();
         tracing::info!(meeting = %meeting_id, mode = ?req.mode, demo, "meeting started");
         Ok(started)
     }
@@ -575,10 +585,22 @@ impl Engine {
         }
         let settings = self.settings();
         let provider = self.inner.providers.read().transcription.clone();
-        let trans_tx = {
+        // Word timestamps feed the integrity delivery signal (the candidate's
+        // utterances and the end of the interviewer's questions): requested
+        // only while it is on.
+        let (trans_tx, words_for) = {
             let st = self.inner.state.lock();
             match st.runtime.as_ref() {
-                Some(rt) => rt.trans_tx.clone(),
+                Some(rt) => {
+                    let delivery = rt.integrity.signal_on(
+                        &settings,
+                        rt.mode(),
+                        openmeet_core::integrity::IntegritySignalName::Delivery,
+                    );
+                    let words_for: Vec<AudioSourceKind> =
+                        sources.iter().copied().filter(|_| delivery).collect();
+                    (rt.trans_tx.clone(), words_for)
+                }
                 None => return,
             }
         };
@@ -610,6 +632,7 @@ impl Engine {
                 interim_results: settings.transcription.interim_results,
                 vad_sensitivity: settings.audio.vad_sensitivity,
                 silence_ms: settings.audio.silence_ms,
+                word_timestamps: words_for.contains(&source),
             };
             match provider.start_session(cfg, trans_tx.clone()) {
                 Ok(s) => sessions.push((source, s)),
@@ -676,6 +699,8 @@ impl Engine {
         self.inner
             .health
             .set(Component::Meeting, ComponentStatus::Paused, None);
+        // Paused means nothing is captured: gaze capture stops too.
+        self.sync_integrity_gaze();
         self.emit_state(&meeting_id);
         Ok(())
     }
@@ -705,6 +730,7 @@ impl Engine {
         self.inner
             .health
             .set(Component::Meeting, ComponentStatus::Active, None);
+        self.sync_integrity_gaze();
         self.emit_state(&meeting_id);
         Ok(())
     }
@@ -738,6 +764,7 @@ impl Engine {
                 }
             })
         };
+        self.sync_integrity_gaze();
         self.emit(MeetingEvent::ProcessingStopped {
             reason: "Emergency stop: audio, screen and AI processing halted.".into(),
         });
@@ -805,7 +832,8 @@ impl Engine {
         let _ = self.inner.audio_ctl.send(AudioControl::Stop);
         self.inner.requests.cancel_all(false);
 
-        let (store, meeting, answer, topics) = {
+        let settings = self.settings();
+        let (store, meeting, answer, topics, integrity_check) = {
             let mut st = self.inner.state.lock();
             let rt = st
                 .runtime
@@ -814,6 +842,8 @@ impl Engine {
                 .ok_or_else(|| CoreError::InvalidState("The meeting ended unexpectedly.".into()))?;
             rt.sessions_running = false;
             let answer = rt.close_answer();
+            // The candidate's last answer is final now.
+            let integrity_check = crate::integrity::finalize_answer(rt, &settings);
             rt.meeting.ended_at = Some(now_ms());
             rt.transition(MeetingState::Summarizing)
                 .map_err(CoreError::InvalidState)?;
@@ -822,11 +852,22 @@ impl Engine {
                 rt.meeting.clone(),
                 answer,
                 rt.topics.topics(),
+                integrity_check,
             )
         };
         if let Some(a) = answer {
             self.persist(&store, PersistOp::Answer(a));
         }
+        if let Some(job) = integrity_check {
+            self.run_integrity_actions(
+                &meeting_id,
+                vec![crate::integrity::IntegrityAction::Check(Box::new(job))],
+            );
+        }
+        // Gaze capture ends with the meeting; the samples are forgotten once
+        // the last check has read them.
+        self.sync_integrity_gaze();
+        self.reset_integrity_gaze_after_checks();
         self.persist(
             &store,
             PersistOp::Topics {
@@ -845,6 +886,11 @@ impl Engine {
         self.inner
             .health
             .set(Component::QuestionDetector, ComponentStatus::Inactive, None);
+        if self.inner.health.status(Component::Integrity) != Some(ComponentStatus::Disabled) {
+            self.inner
+                .health
+                .set(Component::Integrity, ComponentStatus::Inactive, None);
+        }
 
         // The summary task captures the LLM now, so demo providers can be
         // restored immediately afterwards.
@@ -992,6 +1038,8 @@ impl Engine {
         };
         self.inner.settings.write().mode = mode;
         self.emit(MeetingEvent::ModeChanged { mode });
+        // Gaze capture runs only in interviewer mode.
+        self.sync_integrity_gaze();
         if let Some(id) = meeting_id {
             self.emit_state(&id);
         }
@@ -1082,6 +1130,7 @@ impl Engine {
                     last_summary: rt.summary.clone(),
                     demo_running: rt.demo && rt.state().is_live(),
                     processing_stopped: st.processing_stopped,
+                    integrity_flags: rt.integrity.snapshot_flags(),
                 }
             }
             None => EngineSnapshot {
@@ -1103,6 +1152,7 @@ impl Engine {
                 last_summary: None,
                 demo_running: false,
                 processing_stopped: st.processing_stopped,
+                integrity_flags: Vec::new(),
             },
         }
     }

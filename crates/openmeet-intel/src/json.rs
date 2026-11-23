@@ -100,14 +100,13 @@ pub(crate) fn extract_json_values(text: &str) -> Vec<Value> {
     let mut i = 0;
     while i < bytes.len() {
         let b = bytes[i];
-        if b == b'{' || b == b'[' {
-            if let Some(end) = balanced_end(bytes, i) {
-                if let Some(v) = parse_lenient(&cleaned[i..end]) {
-                    out.push(v);
-                    i = end;
-                    continue;
-                }
-            }
+        if (b == b'{' || b == b'[')
+            && let Some(end) = balanced_end(bytes, i)
+            && let Some(v) = parse_lenient(&cleaned[i..end])
+        {
+            out.push(v);
+            i = end;
+            continue;
         }
         i += 1;
     }

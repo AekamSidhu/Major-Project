@@ -102,7 +102,7 @@ impl Engine {
         let n = (PIPELINE_SAMPLE_RATE * seconds) as usize;
         let audio: Vec<f32> = (0..n)
             .map(|i| {
-                let burst = (i / (PIPELINE_SAMPLE_RATE as usize * 2)) % 2 == 0;
+                let burst = (i / (PIPELINE_SAMPLE_RATE as usize * 2)).is_multiple_of(2);
                 if burst {
                     (i as f32 * 0.07).sin() * 0.3
                 } else {

@@ -12,6 +12,7 @@ coverage/
 # Local AI sidecar (Python virtual environment + downloaded models)
 local-ai/.venv/
 local-ai/.models/
+local-ai/.certs/
 __pycache__/
 *.pyc
 .pytest_cache/

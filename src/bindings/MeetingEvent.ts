@@ -8,6 +8,7 @@ import type { Component } from "./Component";
 import type { ComponentHealth } from "./ComponentHealth";
 import type { DetectedQuestion } from "./DetectedQuestion";
 import type { FollowUpQuestion } from "./FollowUpQuestion";
+import type { IntegrityFlag } from "./IntegrityFlag";
 import type { LatencySample } from "./LatencySample";
 import type { Meeting } from "./Meeting";
 import type { MeetingState } from "./MeetingState";
@@ -32,4 +33,4 @@ enabled: boolean, supported: boolean,
 /**
  * Exclusion currently applied.
  */
-active: boolean, } | { "type": "COMPONENT_STATUS_CHANGED", health: ComponentHealth, } | { "type": "PROCESSING_STOPPED", reason: string, } | { "type": "LATENCY_RECORDED", sample: LatencySample, } | { "type": "VOICE_COMMAND_RECOGNIZED", command: VoiceCommand, } | { "type": "MODE_CHANGED", mode: Mode, } | { "type": "STYLE_CHANGED", style: AnswerStyle, } | { "type": "AUDIO_LEVEL", source: AudioSourceKind, level: number, } | { "type": "NOTICE", level: NoticeLevel, message: string, component: Component | null, };
+active: boolean, } | { "type": "COMPONENT_STATUS_CHANGED", health: ComponentHealth, } | { "type": "PROCESSING_STOPPED", reason: string, } | { "type": "LATENCY_RECORDED", sample: LatencySample, } | { "type": "VOICE_COMMAND_RECOGNIZED", command: VoiceCommand, } | { "type": "MODE_CHANGED", mode: Mode, } | { "type": "STYLE_CHANGED", style: AnswerStyle, } | { "type": "AUDIO_LEVEL", source: AudioSourceKind, level: number, } | { "type": "INTEGRITY_CHECKED", flag: IntegrityFlag, } | { "type": "NOTICE", level: NoticeLevel, message: string, component: Component | null, };

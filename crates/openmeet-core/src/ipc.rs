@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ids::Id;
+use crate::integrity::IntegrityFlag;
 use crate::settings::ShortcutAction;
 use crate::types::*;
 
@@ -230,6 +231,8 @@ pub struct EngineSnapshot {
     pub last_summary: Option<MeetingSummary>,
     pub demo_running: bool,
     pub processing_stopped: bool,
+    /// Answer-integrity flags of the current meeting (latest first).
+    pub integrity_flags: Vec<IntegrityFlag>,
 }
 
 /// Developer tools: inject synthetic events without joining a meeting.
@@ -472,6 +475,13 @@ pub struct ExportParts {
     pub transcript: bool,
     pub questions: bool,
     pub followups: bool,
+    /// Answer-integrity flags (interviewer meetings with the check on).
+    #[serde(default = "default_true")]
+    pub integrity: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for ExportParts {
@@ -481,6 +491,7 @@ impl Default for ExportParts {
             transcript: true,
             questions: true,
             followups: true,
+            integrity: true,
         }
     }
 }

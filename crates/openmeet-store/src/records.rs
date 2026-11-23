@@ -7,6 +7,7 @@
 //! with `StoreError::NotFound(meeting_id)`, like `MemoryStore`.
 
 use openmeet_core::StoreError;
+use openmeet_core::integrity::IntegrityFlag;
 use openmeet_core::now_ms;
 use openmeet_core::store::{EmbeddingRecord, MeetingStore};
 use openmeet_core::types::{
@@ -207,6 +208,29 @@ const UPSERT_EMBEDDING: &str = "
         created_at = excluded.created_at,
         updated_at = excluded.updated_at";
 
+const UPSERT_INTEGRITY_FLAG: &str = "
+    INSERT INTO integrity_flags (id, meeting_id, question_id, question_text, answer_start_ms,
+                                 answer_end_ms, answer_words, level, elevated, headline,
+                                 signals, revision, spec_version, created_at, checked_at,
+                                 updated_at)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+    ON CONFLICT (id) DO UPDATE SET
+        meeting_id = excluded.meeting_id,
+        question_id = excluded.question_id,
+        question_text = excluded.question_text,
+        answer_start_ms = excluded.answer_start_ms,
+        answer_end_ms = excluded.answer_end_ms,
+        answer_words = excluded.answer_words,
+        level = excluded.level,
+        elevated = excluded.elevated,
+        headline = excluded.headline,
+        signals = excluded.signals,
+        revision = excluded.revision,
+        spec_version = excluded.spec_version,
+        checked_at = excluded.checked_at,
+        updated_at = excluded.updated_at
+    WHERE excluded.revision >= integrity_flags.revision";
+
 const SELECT_MEETING: &str = "
     SELECT id, title, mode, state, started_at, ended_at, persisted
     FROM meetings WHERE id = ?1";
@@ -260,6 +284,13 @@ const SELECT_ACTION_ITEMS: &str = "
     SELECT id, meeting_id, text, owner, source_segment_id, created_at
     FROM action_items WHERE meeting_id = ?1
     ORDER BY created_at, id";
+
+const SELECT_INTEGRITY_FLAGS: &str = "
+    SELECT id, meeting_id, question_id, question_text, answer_start_ms, answer_end_ms,
+           answer_words, level, elevated, headline, signals, revision, spec_version,
+           created_at, checked_at
+    FROM integrity_flags WHERE meeting_id = ?1
+    ORDER BY answer_start_ms, created_at, id";
 
 const SELECT_SUMMARY: &str = "
     SELECT meeting_id, overview, key_topics, questions_asked, answers, decisions, action_items,
@@ -615,6 +646,34 @@ impl MeetingStore for Database {
         Ok(())
     }
 
+    /// Upserts a flag by id. An older revision never overwrites a newer one
+    /// (re-checks of an answer can finish out of order).
+    fn save_integrity_flag(&self, flag: &IntegrityFlag) -> Result<(), StoreError> {
+        let conn = self.lock();
+        conn.prepare_cached(UPSERT_INTEGRITY_FLAG)
+            .db()?
+            .execute(params![
+                flag.id,
+                flag.meeting_id,
+                flag.question_id,
+                flag.question_text,
+                flag.answer_start_ms,
+                flag.answer_end_ms,
+                flag.answer_words,
+                SqlEnum(flag.level),
+                Json(&flag.elevated),
+                flag.headline,
+                Json(&flag.signals),
+                flag.revision,
+                flag.spec_version,
+                flag.created_at,
+                flag.updated_at,
+                now_ms(),
+            ])
+            .map_err(|e| meeting_write_error(e, &flag.meeting_id))?;
+        Ok(())
+    }
+
     /// Everything stored about a meeting, read from one consistent snapshot.
     /// Lists are chronological (segments by start time, questions by
     /// detection time, observations by capture time, the rest by creation
@@ -642,6 +701,12 @@ impl MeetingStore for Database {
             claims: query_list(&tx, SELECT_CLAIMS, meeting_id, claim_from_row)?,
             observations: query_list(&tx, SELECT_OBSERVATIONS, meeting_id, observation_from_row)?,
             action_items: query_list(&tx, SELECT_ACTION_ITEMS, meeting_id, action_item_from_row)?,
+            integrity_flags: query_list(
+                &tx,
+                SELECT_INTEGRITY_FLAGS,
+                meeting_id,
+                integrity_flag_from_row,
+            )?,
             summary: tx
                 .prepare_cached(SELECT_SUMMARY)
                 .db()?
@@ -683,6 +748,26 @@ fn meeting_from_row(row: &Row<'_>) -> rusqlite::Result<Meeting> {
         ended_at: row.get("ended_at")?,
         participants: Vec::new(),
         persisted: row.get("persisted")?,
+    })
+}
+
+fn integrity_flag_from_row(row: &Row<'_>) -> rusqlite::Result<IntegrityFlag> {
+    Ok(IntegrityFlag {
+        id: row.get("id")?,
+        meeting_id: row.get("meeting_id")?,
+        question_id: row.get("question_id")?,
+        question_text: row.get("question_text")?,
+        answer_start_ms: row.get("answer_start_ms")?,
+        answer_end_ms: row.get("answer_end_ms")?,
+        answer_words: row.get("answer_words")?,
+        level: row.get::<_, SqlEnum<_>>("level")?.0,
+        elevated: row.get::<_, Json<_>>("elevated")?.0,
+        headline: row.get("headline")?,
+        signals: row.get::<_, Json<_>>("signals")?.0,
+        revision: row.get("revision")?,
+        spec_version: row.get("spec_version")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("checked_at")?,
     })
 }
 

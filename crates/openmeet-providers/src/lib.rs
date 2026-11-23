@@ -6,7 +6,8 @@
 //! * Anthropic ([`anthropic`]);
 //! * Ollama ([`ollama`]);
 //!
-//! plus the sidecar status client ([`local_ai`]), the settings-driven
+//! plus the sidecar status client ([`local_ai`]), the sidecar's
+//! answer-integrity endpoints ([`integrity`]), the settings-driven
 //! [`factory`], an incremental Server-Sent Events parser ([`sse`]) and shared
 //! HTTP plumbing ([`http`]).
 //!
@@ -19,6 +20,7 @@
 pub mod anthropic;
 pub mod factory;
 pub mod http;
+pub mod integrity;
 pub mod local_ai;
 pub mod ollama;
 pub mod openai;
@@ -29,8 +31,9 @@ mod stream;
 mod think;
 
 pub use factory::{
-    BuildContext, build_embeddings, build_fast_llm, build_llm, build_transcriber, build_vision_llm,
-    resolved_base_url,
+    BuildContext, build_embeddings, build_fast_llm, build_integrity, build_llm, build_transcriber,
+    build_vision_llm, resolved_base_url,
 };
+pub use integrity::LocalAiIntegrity;
 pub use local_ai::{LocalAiClient, LocalAiHealth};
 pub use sse::{SseEvent, SseParser};

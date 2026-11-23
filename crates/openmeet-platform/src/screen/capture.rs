@@ -204,11 +204,11 @@ pub(crate) fn evaluate_area_privacy(
     if !has_window_rules(rules) {
         return result;
     }
-    if let Some(f) = front {
-        if let Some(reason) = windows[f].excluded(rules) {
-            result.skip_reason = Some(reason);
-            return result;
-        }
+    if let Some(f) = front
+        && let Some(reason) = windows[f].excluded(rules)
+    {
+        result.skip_reason = Some(reason);
+        return result;
     }
     for (pos, &i) in candidates.iter().enumerate() {
         let w = &windows[i];
@@ -600,10 +600,10 @@ pub(crate) fn find_monitor(id: &str) -> Result<xcap::Monitor, PlatformError> {
             .nth(pos)
             .ok_or_else(|| PlatformError::DeviceNotFound("No display is available".into()));
     }
-    if let Ok(num) = wanted.parse::<u32>() {
-        if let Some(m) = monitors.iter().find(|m| m.id().ok() == Some(num)) {
-            return Ok(m.clone());
-        }
+    if let Ok(num) = wanted.parse::<u32>()
+        && let Some(m) = monitors.iter().find(|m| m.id().ok() == Some(num))
+    {
+        return Ok(m.clone());
     }
     monitors
         .into_iter()

@@ -77,6 +77,7 @@ impl VisionProvider for LlmVisionProvider {
             temperature: Some(0.1),
             json_output: true,
             latency_sensitive: false,
+            seed: None,
         };
         let text = complete_text(self.llm.as_ref(), llm_request, cancel).await?;
         let mut result = screen_analysis::parse(&text);

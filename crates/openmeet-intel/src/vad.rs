@@ -576,17 +576,18 @@ impl Segmenter {
 
         // Stationarity guard: a constant, moderately loud sound that has been
         // "speech" for several seconds is a new noise source.
-        if !utt.noise_suspect && utt.voiced_ms() >= STATIONARY_MIN_SPEECH_MS {
-            if let Some((mean, std)) = utt.recent_stats() {
-                if std < STATIONARY_MAX_STD_DB && mean < STATIONARY_MAX_LEVEL_DB {
-                    utt.noise_suspect = true;
-                    self.noise_floor = Some((mean + 1.0).clamp(FLOOR_MIN_DB, FLOOR_MAX_DB));
-                    tracing::debug!(
-                        level_db = mean,
-                        "stationary noise detected; noise floor raised"
-                    );
-                }
-            }
+        if !utt.noise_suspect
+            && utt.voiced_ms() >= STATIONARY_MIN_SPEECH_MS
+            && let Some((mean, std)) = utt.recent_stats()
+            && std < STATIONARY_MAX_STD_DB
+            && mean < STATIONARY_MAX_LEVEL_DB
+        {
+            utt.noise_suspect = true;
+            self.noise_floor = Some((mean + 1.0).clamp(FLOOR_MIN_DB, FLOOR_MAX_DB));
+            tracing::debug!(
+                level_db = mean,
+                "stationary noise detected; noise floor raised"
+            );
         }
 
         if utt.silence_run_ms + 1e-6 >= silence_ms {
