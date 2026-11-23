@@ -460,7 +460,7 @@ mod tests {
                     assert!((1_000..=10_000).contains(delay_ms));
                     let candidate_speaks = match s.mode {
                         Mode::Interviewer => *speaker == SpeakerRole::Remote,
-                        Mode::Candidate => *speaker == SpeakerRole::User,
+                        Mode::Candidate | Mode::Workplace => *speaker == SpeakerRole::User,
                     };
                     if candidate_speaks && s.mode == Mode::Interviewer {
                         assert!(

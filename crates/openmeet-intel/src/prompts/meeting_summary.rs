@@ -64,7 +64,7 @@ how good the answer was), \"claimsToVerify\" (specific, checkable statements suc
 ownership or production experience, quoted or closely paraphrased) and \"unexploredTopics\" (planned \
 or relevant topics that were not discussed)."
         }
-        Mode::Candidate => "",
+        Mode::Candidate | Mode::Workplace => "",
     };
     format!(
         "Task: write the post-meeting summary for the user as one JSON object with these keys \
@@ -251,10 +251,12 @@ pub fn build(input: &SummaryInput, budget_tokens: usize) -> PromptParts {
     let questions_header = match mode {
         Mode::Candidate => "Questions detected (asked by the interviewer / other participants):",
         Mode::Interviewer => "Questions detected (asked by the user and by the candidate):",
+        Mode::Workplace => "Questions detected (asked by you and by others):",
     };
     let answers_header = match mode {
         Mode::Candidate => "Answers the user gave:",
         Mode::Interviewer => "Answers the candidate gave:",
+        Mode::Workplace => "Answers given in the meeting:",
     };
     let parts_before_transcript = vec![
         meeting,
@@ -377,7 +379,7 @@ pub fn parse(
         _ => String::new(),
     };
     let interviewer = match mode {
-        Mode::Candidate => None,
+        Mode::Candidate | Mode::Workplace => None,
         Mode::Interviewer => {
             let source = match get(&obj, &["interviewer", "interviewer_notes"]) {
                 Some(Value::Object(m)) => m.clone(),
@@ -414,6 +416,7 @@ pub fn parse(
             ],
         ),
         interviewer,
+        workplace: None,
         markdown: String::new(),
         generated_at: now_ms(),
         generated_by: generated_by.to_string(),
@@ -481,6 +484,7 @@ pub fn render_markdown(summary: &MeetingSummary, title: &str, mode: Mode) -> Str
         &mut out,
         match mode {
             Mode::Candidate => "Suggested follow-ups",
+            Mode::Workplace => "Suggested follow-ups",
             Mode::Interviewer => "Areas to explore next",
         },
         &summary.follow_up_suggestions,

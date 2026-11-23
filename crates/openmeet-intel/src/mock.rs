@@ -782,12 +782,22 @@ pub(crate) fn default_response(request: &LlmRequest) -> String {
         RequestKind::QuestionClassification => classification_text(&user),
         RequestKind::Compression => compression_text(&user),
         RequestKind::ScreenAnalysis => screen_text(&user),
+        RequestKind::CatchUp => catch_up_text(&user),
         RequestKind::TopicAnalysis => topic_analysis_text(&user),
         // The reference recipe sends the bare question as the user message.
         RequestKind::IntegrityReference => reference_answer_text(user.trim()),
         // Integrity checks never call an LLM themselves.
         RequestKind::IntegrityCheck => String::new(),
     }
+}
+
+/// Deterministic "catch me up" answer in the sectioned format the overlay
+/// renders.
+fn catch_up_text(_user: &str) -> String {
+    "[[ANSWER]]
+The team went through the current agenda item and recorded the points on the board.
+[[KEY_POINTS]]
+- Discussion continued on the current agenda item.".to_string()
 }
 
 /// A plausible spoken reference answer (echo-similarity signal).

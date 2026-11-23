@@ -987,7 +987,7 @@ pub fn render_minutes_markdown(summary: &MeetingSummary, title: &str) -> String 
 }
 
 /// Board lines for prompts: "[mm:ss] text" for decisions.
-pub(crate) fn decision_lines(decisions: &[Claim], since_unix_ms: Option<i64>) -> Vec<String> {
+pub fn decision_lines(decisions: &[Claim], since_unix_ms: Option<i64>) -> Vec<String> {
     decisions
         .iter()
         .filter(|d| since_unix_ms.is_none_or(|s| d.created_at >= s))

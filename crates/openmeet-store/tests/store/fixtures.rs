@@ -188,6 +188,7 @@ pub fn action_item(meeting_id: &str, id: &str, created_at: i64) -> ActionItem {
         meeting_id: meeting_id.to_string(),
         text: secret("Send the take-home assignment"),
         owner: Some("You".into()),
+        due: None,
         source_segment_id: Some("s4".into()),
         created_at,
     }
@@ -211,6 +212,7 @@ pub fn summary(meeting_id: &str, generated_at: i64) -> MeetingSummary {
             claims_to_verify: vec![secret("Scaled to 10k QPS")],
             unexplored_topics: vec!["Observability".into()],
         }),
+        workplace: None,
         markdown: secret("# Summary"),
         generated_at,
         generated_by: "anthropic/claude-opus-5-5".into(),

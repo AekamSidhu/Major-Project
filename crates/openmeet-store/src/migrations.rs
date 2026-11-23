@@ -23,7 +23,7 @@ use crate::error::SqlResultExt;
 
 /// Latest schema version understood by this build of the store. Databases
 /// with a higher `user_version` are refused by [`crate::Database::open`].
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// One schema migration: `sql` upgrades a database from `version - 1` to
 /// `version`.
@@ -44,6 +44,11 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
         version: 2,
         name: "answer-integrity flags",
         sql: include_str!("../migrations/0002_integrity_flags.sql"),
+    },
+    Migration {
+        version: 3,
+        name: "workplace mode",
+        sql: include_str!("../migrations/0003_workplace.sql"),
     },
 ];
 
