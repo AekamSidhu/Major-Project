@@ -488,18 +488,32 @@ pub fn is_probable_hallucination(text: &str, clip: &AudioClip) -> bool {
     if norm.is_empty() {
         return true;
     }
-    const ALWAYS: [&str; 6] = [
+    const ALWAYS: [&str; 14] = [
         "subtitles by the amaraorg community",
         "thanks for watching",
         "thank you for watching",
         "please subscribe",
         "like and subscribe",
         "transcribed by",
+        "well see you in the next one",
+        "see you in the next one",
+        "now cut to the rest",
+        "hooray alright",
+        "for reference",
+        "im not clear",
+        "hooray",
+        "alright",
     ];
     if ALWAYS.iter().any(|p| norm.starts_with(p)) && clip.duration_ms() < 4000 {
         return true;
     }
-    const QUIET_ONLY: [&str; 8] = [
+    // Short utterances where every word is ≤4 chars are almost always
+    // hallucinated filler (e.g. "oh", "so", "uh um").
+    let words: Vec<&str> = norm.split_whitespace().collect();
+    if words.len() <= 2 && words.iter().all(|w| w.len() <= 4) {
+        return true;
+    }
+    const QUIET_ONLY: [&str; 10] = [
         "thank you",
         "thanks",
         "you",
@@ -508,6 +522,8 @@ pub fn is_probable_hallucination(text: &str, clip: &AudioClip) -> bool {
         "okay",
         "uh",
         "um",
+        "hello",
+        "oh",
     ];
     let quiet = rms(&clip.samples) < 0.008;
     quiet && QUIET_ONLY.contains(&norm.as_str())
@@ -775,5 +791,17 @@ mod tests {
         assert!(!is_probable_hallucination("Thank you.", &loud));
         assert!(is_probable_hallucination("Thanks for watching!", &loud));
         assert!(!is_probable_hallucination("How did you scale it?", &quiet));
+        // New phrases from the Room's expanded phantom list.
+        assert!(is_probable_hallucination("For reference.", &loud));
+        assert!(is_probable_hallucination("I'm not clear.", &loud));
+        assert!(is_probable_hallucination("Hooray! Alright!", &loud));
+        assert!(is_probable_hallucination("Now cut to the rest.", &loud));
+        // Short-word filter: ≤2 words, all ≤4 chars.
+        assert!(is_probable_hallucination("Oh.", &loud));
+        assert!(is_probable_hallucination("Uh um.", &loud));
+        assert!(!is_probable_hallucination("Great answer.", &loud));
+        // "hello" and "oh" are quiet-only.
+        assert!(is_probable_hallucination("Hello.", &quiet));
+        assert!(!is_probable_hallucination("Hello.", &loud));
     }
 }
