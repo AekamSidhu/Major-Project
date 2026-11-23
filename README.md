@@ -304,12 +304,12 @@ logs, dependency auditing in CI. Report vulnerabilities privately — see
   retrieval, with cloud providers as opt-in options.
 * The answer-integrity check in the desktop app and in the interview room
   (`docs/INTEGRITY.md`, `spec/integrity/`).
-* The OpenMeet Room, with its optional tunnel and opt-in Groq and Gemini.
-* Benchmarks (`docs/BENCHMARKS.md`) and diagrams (`diagrams/`).
-
-**Open pull requests, not in `main` yet**
-* #16: the room keeps the interviewer's question while its transcript is slow.
-* #17: diagrams for workplace mode.
+* The OpenMeet Room, with its optional tunnel and opt-in Groq and Gemini; it
+  keeps the interviewer's question even when its transcript is slow.
+* Benchmarks (`docs/BENCHMARKS.md`) and diagrams of the whole system,
+  workplace mode included (`diagrams/`).
+* A Windows build, a one-command start script and a run guide
+  (`docs/RUNNING.md`).
 
 **Next**
 * Calibrate the integrity thresholds on our own labelled interviews; the
