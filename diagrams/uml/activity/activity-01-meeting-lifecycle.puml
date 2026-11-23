@@ -4,13 +4,14 @@
 ' src-tauri/src/commands/meeting.rs, src-tauri/src/state.rs (start_meeting, start_capture,
 ' pause/resume, stop_meeting), crates/openmeet-engine/src/engine.rs (start_meeting_inner,
 ' start_sessions, pause, resume, stop_meeting), crates/openmeet-engine/src/assist.rs
-' (spawn_meeting_summary), crates/openmeet-core/src/types.rs (MeetingState).
+' (spawn_meeting_summary, summarize_with, summarize_minutes), crates/openmeet-core/src/types.rs (MeetingState),
+' crates/openmeet-intel/src/workplace.rs (extractive_minutes).
 title Meeting lifecycle: setup -> activate -> live -> stop -> summary -> stored
 
 |User / main window|
 start
 :Fill the "Start a meeting" form
-(Mode: Candidate or Interviewer, title,
+(Mode: Candidate, Interviewer or Workplace, title,
 microphone / system audio, screen context,
 meeting app);
 if (validateStartForm() returns a problem?) then (yes)
@@ -109,8 +110,22 @@ transition -> **Summarizing**;
 :spawn_meeting_summary(meeting_id);
 
 |Background summary task|
-:summarize_with(): LLM summary
-or extractive fallback;
+:spawn task: summarize_with(record)
+(the meeting's mode decides which path);
+if (mode == Workplace?) then (yes)
+  :summarize_minutes(): minutes prompt
+  (JSON, Background slot, 180 s timeout)
+  or extractive_minutes when no LLM;
+  if (output usable?) then (no)
+    :notice "created basic minutes instead";
+    :extractive_minutes(record);
+  else (yes)
+    :keep the parsed minutes;
+  endif
+else (no)
+  :interview / candidate summary prompt,
+  or fallback_summary (extractive) without LLM;
+endif
 if (meeting deleted meanwhile?) then (yes)
   :transition -> **Completed**
   (nothing saved or shown);

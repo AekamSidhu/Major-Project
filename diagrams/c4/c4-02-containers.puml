@@ -23,7 +23,7 @@ rectangle "Interview room server\n[container: Python process, optional]\nlocal-a
 
 rectangle "Browser pages\n[container: web]\nhost.html (interviewer)\nguest.html (candidate)" as Pages #E6E9FB
 
-database "SQLite store\n[container: file]\nmeetings, transcript, suggestions,\nintegrity_flags (schema v2), settings" as DB #EEF7F1
+database "SQLite store\n[container: file]\nmeetings, transcript, suggestions,\nintegrity_flags, action_items.due,\nworkplace minutes (schema v3), settings" as DB #EEF7F1
 database "OS keyring\n[container: OS service]\nAPI keys only (service\ndev.openmeet.desktop)" as KR #EEF7F1
 folder "Model files\n[container: disk]\nlocal-ai/.models (Whisper, embedder,\nECHO and reading models, face model)" as MOD #EEF7F1
 

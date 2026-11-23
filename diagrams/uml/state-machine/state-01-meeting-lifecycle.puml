@@ -3,7 +3,7 @@
 ' Derived from: crates/openmeet-core/src/types.rs (MeetingState, can_transition_to, is_live, PauseReason),
 ' crates/openmeet-engine/src/state.rs (MeetingStateMachine), crates/openmeet-engine/src/runtime.rs (MeetingRuntime::transition),
 ' crates/openmeet-engine/src/engine.rs (start_meeting_inner, pause, resume, emergency_stop, stop_meeting, forget_meeting, meeting_state),
-' crates/openmeet-engine/src/assist.rs (spawn_meeting_summary), src-tauri/src/state.rs, src-tauri/src/commands/meeting.rs,
+' crates/openmeet-engine/src/assist.rs (spawn_meeting_summary, summarize_minutes), src-tauri/src/state.rs, src-tauri/src/commands/meeting.rs,
 ' src-tauri/src/tray.rs, src-tauri/src/shortcuts.rs, src-tauri/src/commands/history.rs (delete_meeting, delete_all_data),
 ' crates/openmeet-store/src/history.rs (recover_interrupted_meetings)
 title Meeting lifecycle - MeetingState with PauseReason (Engine, one MeetingRuntime per meeting)
@@ -33,7 +33,7 @@ state "Live (MeetingState::is_live)" as Live {
 state Stopping : entry / accepting_audio = false\nentry / AudioControl::Flush(ack), wait for\npending_utterances (STOP_DRAIN_TIMEOUT)\nexit / AudioControl::Stop,\nrequests.cancel_all(false)
 
 state "Ended" as Ended {
-  state Summarizing : entry / close_answer(), ended_at = now\nentry / emit MeetingStopped\nentry / spawn_meeting_summary\n(summarize_with: LLM or fallback_summary)
+  state Summarizing : entry / close_answer(), ended_at = now\nentry / emit MeetingStopped\nentry / spawn_meeting_summary\n(summarize_with: workplace minutes\nin Workplace mode, else the interview summary,\nLLM or extractive fallback)
   state Completed : entry / summary stored on runtime\nentry / emit SummaryReady, notice
   Summarizing --> Completed : summary ready, or summary\ncancelled (meeting deleted)
 }

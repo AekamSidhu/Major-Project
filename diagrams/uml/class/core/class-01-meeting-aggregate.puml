@@ -1,7 +1,8 @@
 @startuml
 !include ../../../_style.iuml
 ' Derived from crates/openmeet-core/src/types.rs (Meeting, Participant, MeetingState,
-' PauseReason, Mode, MeetingRecord, MeetingListItem, MeetingSummary, InterviewerSummary)
+' PauseReason, Mode, MeetingRecord, MeetingListItem, MeetingSummary, InterviewerSummary,
+' WorkplaceMinutes)
 ' and crates/openmeet-core/src/ids.rs (Id, new_id, now_ms).
 title openmeet-core: meeting aggregate (types.rs)
 
@@ -29,8 +30,10 @@ class Participant <<struct>> {
 enum Mode {
   Candidate  <<default>>
   Interviewer
+  Workplace
   --
-  +toggled(): Mode
+  +next(): Mode
+  +label(): &str
 }
 
 enum MeetingState {
@@ -88,9 +91,21 @@ class MeetingSummary <<struct>> {
   +technical_topics: Vec<String>
   +follow_up_suggestions: Vec<String>
   +interviewer: Option<InterviewerSummary>
+  +workplace: Option<WorkplaceMinutes>
   +markdown: String
   +generated_at: i64
   +generated_by: String
+}
+
+class WorkplaceMinutes <<struct>> {
+  +action_items: Vec<MinutesActionItem>
+  +follow_up_message: String
+}
+
+class MinutesActionItem <<struct>> {
+  +task: String
+  +owner: Option<String>
+  +due: Option<String>
 }
 
 class InterviewerSummary <<struct>> {
@@ -131,12 +146,18 @@ Participant --> "1" SpeakerRole : role
 MeetingListItem ..> Mode
 MeetingListItem ..> MeetingState
 MeetingSummary *-- "0..1" InterviewerSummary : interviewer
+MeetingSummary *-- "0..1" WorkplaceMinutes : workplace
+WorkplaceMinutes *-- "0..*" MinutesActionItem : action_items
 MeetingSummary ..> Meeting : meeting_id
 
 note bottom of MeetingSummary
   Post-meeting summary. The code comment states it
   never contains hiring recommendations or scores.
   generated_by = "provider/model" or "extractive".
+  Workplace meetings: overview, decisions and open
+  questions hold the rest of the minutes; workplace
+  holds the action items and the follow-up message.
+  Stored in meeting_summaries.workplace (JSON).
 end note
 
 note right of Meeting

@@ -61,6 +61,7 @@ class ActionItem <<struct>> {
   +meeting_id: Id
   +text: String
   +owner: Option<String>
+  +due: Option<String>
   +source_segment_id: Option<Id>
   +created_at: i64
 }
@@ -110,6 +111,13 @@ Claim --> "1" ExtractionSource : source
 Claim --> "1" SpeakerRole : speaker_role
 Claim --> "0..1" TranscriptSegment : segment_id
 ActionItem --> "0..1" TranscriptSegment : source_segment_id
+
+note bottom of ActionItem
+  owner and due are filled from the meeting: due is
+  kept as said ("by Friday"), never a calendar date.
+  Workplace mode can fill a missing owner or due later.
+  Column action_items.due (schema v3).
+end note
 Topic --> "1" TopicStatus : status
 UserProfile ..> Topic : planned_topic_list()\nfeeds planned topics
 ScreenFrame ..> ScreenObservation : analysed into\n(OCR / vision)

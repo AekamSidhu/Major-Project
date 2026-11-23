@@ -1,13 +1,14 @@
 // Derived from: crates/openmeet-engine/src/transcription.rs (VadSession::transcribe_final, Shared::complete),
 // crates/openmeet-engine/src/conversation.rs (spawn_conversation, on_transcription_event, handle_final, run_actions),
 // crates/openmeet-engine/src/metrics.rs (record_latency), crates/openmeet-engine/src/engine.rs (Engine::persist, Engine::emit),
-// crates/openmeet-engine/src/embedder.rs (EmbedJob, spawn_embedder).
+// crates/openmeet-engine/src/embedder.rs (EmbedJob, spawn_embedder),
+// crates/openmeet-intel/src/workplace.rs (WorkplaceTracker::observe) for the Workplace branch (3.17-3.19).
 // UML communication diagram drawn with Graphviz (PlantUML has no native notation):
 // objects are boxes with an underlined "name : Type", each link carries its numbered
 // messages, and the open arrowhead on the link shows the direction of those messages.
 digraph communication01 {
   graph [fontname="Segoe UI", fontsize=16, labelloc=t, nodesep=0.5, ranksep=0.6, pad=0.3, bgcolor="#FFFFFF",
-         label=<<B>Communication 01: final transcript segment -&gt; question detected (Candidate mode)</B>>];
+         label=<<B>Communication 01: final transcript segment -&gt; question detected (Candidate mode; Workplace branch 3.17-3.19)</B>>];
   node  [fontname="Segoe UI", fontsize=11, shape=box, style="rounded,filled", fillcolor="#F6F7FD", color="#4F5BD5", margin="0.15,0.08"];
   edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756", arrowhead=vee, arrowsize=0.7];
 
@@ -21,20 +22,22 @@ digraph communication01 {
   per    [label=<<U>persist : Persister</U>>, fillcolor="#EEF7F1"];
   emb    [label=<<U>embedder task</U><BR/><FONT POINT-SIZE="9">spawn_embedder</FONT>>];
   sink   [label=<<U>sink : TauriSink</U>>];
+  wp     [label=<<U>rt.workplace : WorkplaceTracker</U>>, fillcolor="#FFF8E1"];
   assist [label=<<U>assist module</U><BR/><FONT POINT-SIZE="9">see communication 02</FONT>>];
 
   vad -> tr     [label="1: transcribe(request, cancel)"];
   vad -> loop   [label="2: events.send(TranscriptionEvent::Draft(d))\l    (Shared::complete, in utterance order)\l"];
   loop -> engine [label="3: on_transcription_event(meeting_id, Draft(d))\l    -> handle_final(meeting_id, d, true)\l"];
   engine -> rt  [label="3.1: add_final(segment)\l3.2: memory.add(MemoryItem Segment)\l3.5: topics.observe(&segment)\l3.7: questions.push(q)\l3.8: memory.add(MemoryItem Question)\l"];
-  engine -> intel [label="3.3: extract_claims(&segment)\l3.4: extract_action_items(&segment)\l3.6: detect(&DetectionInput)\l"];
+  engine -> intel [label="3.3: extract_claims(&segment)\l3.4: extract_action_items(&segment, mode)\l3.6: detect(&DetectionInput)\l"];
   engine -> lat [label="3.9: record_latency(AudioToTranscript)\l3.10: record_latency(TranscriptToDetection)\l"];
   engine -> per [label="3.11: persist(store, PersistOp::Segment)\l3.12: persist(store, PersistOp::Question)\l"];
   engine -> sink [label="3.13: emit(TranscriptFinal)\l3.14: emit(QuestionDetected)\l"];
   engine -> emb [label="3.15: embed_tx.send(EmbedJob)"];
   engine -> assist [label="3.16: run_actions([Action::Answer(q)])\l    -> answer_question(q, style)\l"];
+  engine -> wp [style=dashed, label="3.17 [Workplace only]: observe(segment, board_claims,\l    board_items, accepted question)\l3.18 [Workplace, items]: persist(store, PersistOp::ActionItems)\l3.19 [Workplace, changed]: rt.action_items = board items;\l    emit(ActionItemsUpdated), emit(WorkplaceUpdated)\l"];
 
   note [shape=note, style=filled, fillcolor="#FFF8E1", color="#C9A227", fontsize=10,
-        label="The question is accepted when confidence >= assistant.detection_threshold.\lAction::Answer is queued only when the meeting is Active, mode == Candidate,\lq.requires_response and settings.assistant.auto_answer are true.\lPersists / events for claims, action items and topics are omitted here.\l"];
+        label="The question is accepted when confidence >= assistant.detection_threshold.\lAction::Answer is queued only when the meeting is Active, mode == Candidate,\lq.requires_response and settings.assistant.auto_answer are true.\lWorkplace (3.4, 3.17-3.19): action items and decisions go to the board, not to\lrt.action_items (3.4 extends rt.action_items only in Candidate and Interviewer mode).\lIn Workplace mode Action::Answer(q) is queued only for a question from someone else\lthat is addressed to the user (addressed_to_listener), not for every question.\lPersists / events for claims, action items and topics are otherwise omitted here.\l"];
   assist -> note [style=dashed, arrowhead=none, color="#C9A227"];
 }

@@ -14,9 +14,10 @@ own rules (local-ai/room/host.html), on a real-time timeline:
   the host page's segmenter (split_speech: 0.256 s blocks, a piece ends after
   more than 0.8 s of silence or at 20 s) and each piece goes to
   /api/rooms/<id>/transcribe when the segmenter would send it;
-- when the candidate starts, the question is the interviewer's transcripts
-  that have come back by then (as `answer.question` in the host page), and
-  /references starts the echo reference answers if there is one;
+- the question is the interviewer's transcripts that began before the
+  candidate did: read when the answer closes (`--question-at close`, the host
+  page after the fix), or only the ones back when the candidate starts
+  (`--question-at start`, the host page before the fix);
 - the answer closes when the interviewer starts the next question (or "End
   answer now" after the last): the host waits for the candidate pieces sent
   so far, posts /answers (the card: AI text, delivery, reading and the fused
@@ -113,8 +114,8 @@ def timeline(turns: list[tuple[str, str, float, float]], questions: dict[str, np
 
 
 class Session:
-    def __init__(self, base: str, room: str, t0: float) -> None:
-        self.base, self.room, self.t0 = base, room, t0
+    def __init__(self, base: str, room: str, t0: float, question_at: str = "close") -> None:
+        self.base, self.room, self.t0, self.question_at = base, room, t0, question_at
         self.pool = ThreadPoolExecutor(max_workers=8)
         self.rows: list[dict[str, Any]] = []
         self.segment_ms: list[float] = []
@@ -136,10 +137,14 @@ class Session:
         """The host page's closeAnswer, then (renderAnswer) similarity and follow-ups together."""
         t_close = time.perf_counter()
         texts = [f.result(timeout=600)["text"] for f in answer["pieces"]]
+        if self.question_at == "close":  # the host page: the question is read now, after its transcripts settle
+            question = " ".join(t for t in (f.result(timeout=600)["text"] for f in answer["question_jobs"]) if t)
+        else:  # the host page before the fix: only the transcripts back when the candidate started
+            question = answer["question"]
         t_post = time.perf_counter()
         end = max([answer["start"]] + answer["ends"])
         row = {"turn": answer["turn"], "id": answer["id"], "kind": answer["kind"], "answer_delay_s": answer["answer_delay"],
-               "close_delay_s": answer["close_delay"], "question_transcribed": bool(answer["question"]),
+               "close_delay_s": answer["close_delay"], "question_transcribed": bool(question),
                "question_ready_after_s": answer["question_ready_after_s"], "pieces_in_answer": len(answer["pieces"]),
                "pieces_sent_after_close": answer["late"], "wait_for_transcripts_ms": (t_post - t_close) * 1000.0}
         self.rows.append(row)
@@ -147,7 +152,7 @@ class Session:
             row["dropped_by_host"] = True  # the host page's "a cough or noise" rule
             return
         body = {"start": answer["start"], "end": max(end, answer["start"] + 1), "text": " ".join(t for t in texts if t),
-                "question": answer["question"]}
+                "question": question}
         card = benchlib.post_json(f"{self.base}/api/rooms/{self.room}/answers", body)
         t_card = time.perf_counter()
         row.update({"answers_request_ms": (t_card - t_post) * 1000.0, "close_to_card_ms": (t_card - t_close) * 1000.0,
@@ -186,8 +191,9 @@ class Session:
                 arrived = [f.result()["text"] for f in questions.get(turn, []) if f.done()]
                 question = " ".join(t for t in arrived if t)
                 answers[turn] = {**ev, "start": self.t0 + ev["start"], "question": question, "pieces": [], "ends": [], "late": 0,
-                                 "question_ready_after_s": None, "_ready_jobs": questions.get(turn, [])}
-                if question:
+                                 "question_ready_after_s": None, "_ready_jobs": questions.get(turn, []),
+                                 "question_jobs": questions.get(turn, [])}
+                if question and self.question_at == "start":
                     self.pool.submit(benchlib.post_json, f"{self.base}/api/rooms/{self.room}/references", {"question": question})
             elif kind == "close":
                 answer = answers[turn]
@@ -232,6 +238,9 @@ def main() -> None:
     ap.add_argument("--model-dir", type=Path, default=None)
     ap.add_argument("--port", type=int, default=benchlib.ROOM_PORT)
     ap.add_argument("--out", type=Path, default=benchlib.RESULTS / "room_e2e.json")
+    ap.add_argument("--question-at", choices=("start", "close"), default="close",
+                    help="close: the question is the interviewer's transcripts read at close (the host page after the fix); "
+                         "start: the transcripts back when the candidate starts (the committed run before the fix)")
     a = ap.parse_args()
 
     samples_of_wav = benchlib.wav_samples
@@ -254,7 +263,7 @@ def main() -> None:
         warm_ms = (time.perf_counter() - t) * 1000.0
         room = benchlib.post_json(f"{base}/api/rooms", {})["room"]  # a fresh room (resets the gaze)
         events = timeline(TURNS, questions, replies)
-        session = Session(base, room, time.time())
+        session = Session(base, room, time.time(), a.question_at)
         with benchlib.FrameFeed(f"{base}/v1/integrity/gaze/frame", frame) as feed:
             session.run(events)
         report = benchlib.get_json(f"{base}/api/rooms/{room}/report")
@@ -270,7 +279,8 @@ def main() -> None:
                                                 "langchain-ollama", "fastapi", "uvicorn"]), "ollama": benchlib.ollama_version()},
         "config": {"whisper_model": a.whisper_model, "device": a.device, "followups": "local (llama3.2)",
                    "turns": [{"id": q, "answer": k, "answer_delay_s": d, "close_delay_s": c} for q, k, d, c in TURNS],
-                   "frames_fps": 10, "session_s": round(events[-1][0], 1)},
+                   "frames_fps": 10, "session_s": round(events[-1][0], 1),
+                   "question_at": a.question_at},
         "warm_up_ms": round(warm_ms, 1),
         "gaze_feed": {"frames": len(feed.latencies_ms), "face_found": feed.face_found, "errors": feed.errors,
                       "latency_ms": benchlib.summary(feed.latencies_ms)},

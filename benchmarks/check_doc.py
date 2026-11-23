@@ -104,10 +104,8 @@ CLAIMS = [
           lambda v: f"{v / 1000:.1f} s on the GPU"),
     claim("all 12 questions were detected", R / "engine_live_cpu.json", ["candidate_mode", "detected"],
           lambda v: "all 12 questions were detected" if v == 12 else f"{v} questions detected"),
-    claim("transcribed back in 3 of its 8 turns", R / "room_e2e.json", ["answers"],
-          lambda rows: f"transcribed back in {sum(not r['question_transcribed'] for r in rows)} of its {len(rows)} turns"),
-    claim("transcribed back in 3 of the 8 turns", R / "room_e2e.json", ["answers"],
-          lambda rows: f"transcribed back in {sum(not r['question_transcribed'] for r in rows)} of the {len(rows)} turns"),
+        claim("transcribed back in 8 of its 8 turns", R / "room_e2e.json", ["answers"],
+          lambda rows: f"transcribed back in {sum(bool(r['question_transcribed']) for r in rows)} of its {len(rows)} turns"),
     # 6. Reproducibility of the committed v2 model (section 3)
     claim("0.4900 / 0.2476 for HC3", R / "retrain_v2_rerun.json", ["thresholds", "balanced"],
           lambda v: f"{v:.4f} / 0.2476 for HC3"),
