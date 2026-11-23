@@ -97,6 +97,17 @@ CLAIMS = [
     claim("about 28% of non-reading windows", REPO / "training" / "gaze-detection" / "results" / "reading_detector_results.json",
           ["test", "network", "gazebase_small_hard", "window_fpr_at_low_fpr"],
           lambda v: f"about {100 * v:.0f}% of non-reading windows"),
+    # 5b. Desktop engine and room (summary, section 2)
+    claim("a median 1.8 s after the speaker", R / "engine_live_cpu.json", ["candidate_mode", "speech_end_to_first_token_ms", "median"],
+          lambda v: f"a median {v / 1000:.1f} s after the speaker"),
+    claim("0.7 s on the GPU", R / "engine_live_cuda.json", ["candidate_mode", "speech_end_to_first_token_ms", "median"],
+          lambda v: f"{v / 1000:.1f} s on the GPU"),
+    claim("all 12 questions were detected", R / "engine_live_cpu.json", ["candidate_mode", "detected"],
+          lambda v: "all 12 questions were detected" if v == 12 else f"{v} questions detected"),
+    claim("transcribed back in 3 of its 8 turns", R / "room_e2e.json", ["answers"],
+          lambda rows: f"transcribed back in {sum(not r['question_transcribed'] for r in rows)} of its {len(rows)} turns"),
+    claim("transcribed back in 3 of the 8 turns", R / "room_e2e.json", ["answers"],
+          lambda rows: f"transcribed back in {sum(not r['question_transcribed'] for r in rows)} of the {len(rows)} turns"),
     # 6. Reproducibility of the committed v2 model (section 3)
     claim("0.4900 / 0.2476 for HC3", R / "retrain_v2_rerun.json", ["thresholds", "balanced"],
           lambda v: f"{v:.4f} / 0.2476 for HC3"),

@@ -20,9 +20,11 @@ their inputs and how to run them are in [Reproduce](#reproduce). Read
   sidecar's default) makes 3.9% word errors on test-clean and 10.7% on
   test-other. Its median request takes about 0.41 s on the CPU and 0.09 s on the
   GPU for a clip of about 7 s on average (section 1).
-- **Live pipeline.** In the desktop engine, real-time spoken questions are
-  detected and the answer starts streaming well under a few seconds after the
-  speaker stops (section 2; the tables give the medians and percentiles).
+- **Live pipeline.** In the desktop engine's live run (12 spoken questions in
+  real time), the first answer token appears a median 1.8 s after the speaker
+  stops on the CPU and 0.7 s on the GPU; all 12 questions were detected
+  (section 2, with percentiles). In the room run, the question was not
+  transcribed back in 3 of its 8 turns, which is reported as a problem.
 - **AI-written text.** The shipped model (v2) and the first model (v1) each
   catch 97.8% of ChatGPT answers at their `high` level on the HC3 test
   questions, and flag 1.8% (v2) and 2.0% (v1) of human answers (section 3).
@@ -67,6 +69,32 @@ cuDNN 9 from NVIDIA's pip wheels on its `PATH` (the sidecar needs them for
 `benchmarks/results/asr_cpu.json`, `asr_cuda.json`, `asr_cpu_words.json`.
 
 <!-- tables:asr -->
+### Transcription: WER and speed
+
+WER with a 95% bootstrap interval over utterances in brackets. First request: a fresh sidecar's first transcription, which loads the model (models already on disk).
+
+| Model | Device | WER test-clean | WER test-other | Latency per utterance, ms (median / p90 / p95) | Real-time factor (median) | Aggregate RTF | First request, s |
+|---|---|---|---|---|---|---|---|
+| tiny.en | cpu | 5.37% (4.5–6.2) | 14.58% (12.7–16.6) | 217 / 260 / 273 | 0.041 | 0.0319 | 1.2 |
+| base.en | cpu | 3.89% (3.2–4.6) | 10.70% (9.3–12.3) | 409 / 494 / 523 | 0.078 | 0.0607 | 11.2 |
+| small.en | cpu | 3.27% (2.6–4.1) | 7.00% (5.9–8.2) | 1,232 / 1,497 / 1,648 | 0.234 | 0.1859 | 26.2 |
+| tiny.en | cuda | 5.34% (4.5–6.1) | 14.16% (12.4–16.0) | 62 / 116 / 136 | 0.011 | 0.0101 | 1.6 |
+| base.en | cuda | 4.01% (3.3–4.7) | 10.72% (9.3–12.3) | 88 / 157 / 190 | 0.016 | 0.0142 | 1.3 |
+| small.en | cuda | 3.40% (2.7–4.3) | 7.18% (6.0–8.4) | 156 / 284 / 338 | 0.029 | 0.0254 | 1.9 |
+
+300 + 300 utterances (40 + 32 speakers, 69.6 min of audio), seed 2026.
+
+*Run 2026-11-19 17:47, commit 79dbf40; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastapi 0.165.0, uvicorn 0.54.0, whisper_normalizer 1.0.1, jiwer 4.0.0.*
+
+*Run 2026-11-19 18:09, commit 1e093c0; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastapi 0.165.0, uvicorn 0.54.0, whisper_normalizer 1.0.1, jiwer 4.0.0.*
+
+Word timestamps (verbose_json, as the room asks), CPU:
+
+| Model | Word timings | WER test-clean | WER test-other | Latency, ms (median / p90 / p95) | Aggregate RTF |
+|---|---|---|---|---|---|
+| base.en | yes | 4.66% (3.4–6.1) | 10.77% (8.3–13.8) | 992 / 1,518 / 1,623 | 0.1621 |
+
+(100 utterances per split, the first of the same seeded order.) *Run 2026-11-19 18:13, commit 1e093c0; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastapi 0.165.0, uvicorn 0.54.0, whisper_normalizer 1.0.1, jiwer 4.0.0.*
 <!-- /tables -->
 
 ![Word error rate against latency for each Whisper model on CPU and GPU](../benchmarks/results/asr_wer_latency.png)
@@ -106,15 +134,121 @@ Three views of the same pipeline:
   from llama3.2.
 
 <!-- tables:engine -->
+### Desktop engine: built-in benchmark (synthetic input, mock LLM)
+
+| Item | Median | p90 | p95 | Unit |
+|---|---|---|---|---|
+| Question detection | 0.101 | 0.1144 | 0.1309 | ms |
+| Voice activity detection | 4.542e+04 | 4.807e+04 | 4.908e+04 | x realtime |
+| Local embedding | 0.007 | 0.007 | 0.0071 | ms |
+| Context retrieval (1,500 items) | 0.507 | 0.5579 | 0.5846 | ms |
+| Prompt assembly | 0.2045 | 0.236 | 0.2467 | ms |
+| Pipeline: transcript → question detected | 0.2645 | 0.3279 | 0.3481 | ms |
+| Pipeline: question → first token (mock LLM) | 0.0855 | 0.3773 | 0.4059 | ms |
+| Pipeline: first token → complete (mock LLM) | 0.0405 | 0.0506 | 0.0665 | ms |
+
+20 runs. *Run 2026-11-23 18:56, commit f10ae37; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; rustc 1.99.0 (b940084d7 2026-09-28).*
+
+### Desktop engine: live pipeline, Whisper base.en on CPU
+
+| Stage (from the end of the speech) | ms (median / p90 / p95) | n |
+|---|---|---|
+| transcript final (VAD hangover + Whisper) | 1,386 / 2,092 / 2,104 | 12 |
+| question detected | 1,386 / 2,092 / 2,104 | 12 |
+| question detected -> first answer token | 389 / 496 / 601 | 12 |
+| first answer token | 1,840 / 2,531 / 2,647 | 12 |
+| first token -> answer complete | 3,807 / 6,413 / 8,230 | 12 |
+| answer complete | 6,015 / 7,606 / 9,231 | 12 |
+| interviewer mode: first follow-up | 7,394 / 16,091 / 23,697 | 11 |
+| interviewer mode: follow-ups done | 18,148 / 31,691 / 34,444 | 11 |
+
+Questions detected: 12 of 12; one transcript per question: 12; answers with follow-ups: 10 of 12; summary after stop: 33.3 s (ok).
+
+Engine's own latency tracker: AudioToTranscript p50 1,389 ms, p95 5,111 ms (n 49); TranscriptToDetection p50 1 ms, p95 11 ms (n 49); DetectionToFirstToken p50 726 ms, p95 1,486 ms (n 24); FirstTokenToComplete p50 7,617 ms, p95 22,030 ms (n 23)
+
+*Run 2026-11-23 21:27, commit 72f9343; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0; Ollama 0.34.0; rustc 1.99.0 (b940084d7 2026-09-28).*
+
+### Desktop engine: live pipeline, Whisper base.en on CUDA
+
+| Stage (from the end of the speech) | ms (median / p90 / p95) | n |
+|---|---|---|
+| transcript final (VAD hangover + Whisper) | 354 / 465 / 493 | 12 |
+| question detected | 354 / 465 / 493 | 12 |
+| question detected -> first answer token | 337 / 508 / 2,100 | 12 |
+| first answer token | 701 / 876 / 2,436 | 12 |
+| first token -> answer complete | 3,802 / 8,875 / 10,010 | 12 |
+| answer complete | 4,503 / 11,256 / 12,616 | 12 |
+| interviewer mode: first follow-up | 3,595 / 4,548 / 5,316 | 11 |
+| interviewer mode: follow-ups done | 6,764 / 10,834 / 15,289 | 11 |
+
+Questions detected: 12 of 12; one transcript per question: 12; answers with follow-ups: 11 of 12; summary after stop: 17.2 s (ok).
+
+Engine's own latency tracker: AudioToTranscript p50 868 ms, p95 1,075 ms (n 49); TranscriptToDetection p50 1 ms, p95 3 ms (n 49); DetectionToFirstToken p50 513 ms, p95 1,329 ms (n 23); FirstTokenToComplete p50 3,951 ms, p95 10,945 ms (n 23)
+
+*Run 2026-11-23 21:45, commit 04a488c; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0; Ollama 0.34.0; rustc 1.99.0 (b940084d7 2026-09-28).*
 <!-- /tables -->
 
 <!-- tables:sidecar -->
+### Sidecar endpoints
+
+| Endpoint | What is sent | Latency, ms (median / p90 / p95) | First request, ms | n |
+|---|---|---|---|---|
+| `POST /v1/embeddings` | one answer | 24.4 / 62.6 / 81.7 | 1,206 | 50 |
+| `POST /v1/embeddings` | answer + 2 reference answers | 168.8 / 269.9 / 335.0 | – | 50 |
+| `POST /v1/integrity/echo` | one answer (AI-text model) | 4.30 / 23.40 / 25.82 | 92 | 50 |
+| `POST /v1/integrity/gaze/frame` | one JPEG frame, 10 a second | 25.6 / 32.8 / 35.0 | 2,456 | 636 |
+| `POST /v1/integrity/reading` | last 10 s of gaze | 14.48 / 26.07 / 26.86 | – | 50 |
+| `POST /v1/integrity/reading` | last 60 s of gaze | 27.92 / 33.68 / 34.98 | – | 50 |
+
+Gaze feed: 636 frames in public-domain NASA portrait (scikit-image astronaut.png), JPEG q80; face found in 636; 9.09 frames a second achieved; 0 errors.
+
+*Run 2026-11-23 18:42, commit 8f7828a; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; fastapi 0.163.1, uvicorn 0.54.0, fastembed 0.9.1, onnxruntime 1.32.0, mediapipe 1.2.3, opencv-contrib-python 5.0.0.93, numpy 2.4.6.*
 <!-- /tables -->
 
 <!-- tables:followups -->
+### Follow-up questions: local LLM vs rules
+
+| Mode | Latency per answer, ms (median / p90 / p95) | Suggestions before guardrails | Kept (shown) | Answers with at least one kept | Fell back to rules |
+|---|---|---|---|---|---|
+| local (llama3.2, structured output) | 2,614 / 3,236 / 7,279 | 95 | 95 (2.64 per answer) | 35 / 36 | 1 |
+| rules | 0.243 / 0.345 / 0.379 | 72 | 72 (2.0 per answer) | 36 / 36 | – |
+
+Streamed (same prompt and model, plain text): first token 29 / 33 / 35 ms, whole answer 1,253 / 1,603 / 1,699 ms (median / p90 / p95). First local call after loading: 7,985 ms.
+
+Echo reference answers (2 per question, llama3.2): 3,992 / 4,409 / 4,555 ms; 152 words each (median).
+
+Dropped by the guardrails (local): none; rules output under the same guardrails: none dropped. Kept with a trigger the candidate actually said: local 89 of 95, rules 72 of 72.
+
+*Run 2026-11-23 18:44, commit ef94b29; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; langchain-core 1.8.1, langchain-ollama 1.1.0, ollama 0.6.3; Ollama 0.34.0.*
 <!-- /tables -->
 
 <!-- tables:room -->
+### Interview room, end to end
+
+| Step (turns 1-7) | ms (median / p90 / p95) | n |
+|---|---|---|
+| answer closed -> its last transcripts back | 530 / 1,138 / 1,405 | 7 |
+| POST /answers (AI text, delivery, reading, flag) | 12 / 150 / 249 | 7 |
+| answer closed -> card shown | 542 / 1,284 / 1,652 | 7 |
+| card -> echo similarity filled in | 117 / 469 / 625 | 7 |
+| card -> follow-ups shown | 3,259 / 3,871 / 3,909 | 7 |
+| every transcription request (both speakers, all turns) | 1,808 / 2,669 / 2,896 | 25 |
+| every gaze frame | 22 / 32 / 34 | 2937 |
+
+The question's text was back 1.90 s (median; max 2.87 s) after the interviewer stopped.
+
+| Turn | Answer | Candidate starts after | Question known | Pieces (late) | Flag | AI text | Echo similarity | Delivery | Reading | Follow-ups |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | q02 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.609) | baseline | possible | 3 (ai) |
+| 2 | q03 (written) | 2.5 s | **no** | 2 (0) | possible | low (2%) | unavailable | baseline | possible | 1 (ai) |
+| 3 | q04 (written) | 2.5 s | yes | 1 (0) | possible | low (5%) | low (0.685) | baseline | possible | 3 (ai) |
+| 4 | q05 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.616) | low | possible | 3 (rules) |
+| 5 | q01 (llama3.2, read out) | 2.5 s | **no** | 3 (0) | high | high (96%) | unavailable | low | possible | 3 (ai) |
+| 6 | q07 (written) | 2.5 s | yes | 1 (0) | possible | low (12%) | low (0.733) | low | possible | 1 (ai) |
+| 7 | q06 (llama3.2, read out) | 2.5 s | yes | 4 (0) | high | high (82%) | high (0.958) | low | low | 1 (rules) |
+| 8 | q08 (written) | 0.8 s | **no** | 2 (0) | possible | low (15%) | unavailable | low | possible | 3 (ai) |
+
+*Run 2026-11-23 18:53, commit 0a177e7; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastembed 0.9.1, onnxruntime 1.32.0, mediapipe 1.2.3, langchain-ollama 1.1.0, fastapi 0.163.1, uvicorn 0.54.0; Ollama 0.34.0.*
 <!-- /tables -->
 
 ![Median and 90th percentile of each live stage](../benchmarks/results/pipeline_latency.png)
@@ -123,6 +257,13 @@ The live engine numbers are the desktop app's own pipeline on this machine;
 the room numbers come from the room's HTTP API and include its browser-side
 requests through the sidecar and Ollama. The latency to the first answer token
 is what the candidate sees first; the complete answer follows after it.
+
+In the room run, the question's text was not transcribed back in 3 of the 8
+turns (turns 2, 5 and 8 in the table: "Question known" is **no**). Those turns
+still produced answers, flags and follow-ups from the candidate's own speech
+and the video, but the room had no question text for them. The cause was not
+investigated. The room run is 8 answers, so this is a finding about this run,
+not a rate.
 
 ## 3. Detection rate and false flags
 
@@ -134,6 +275,18 @@ threshold below was chosen on development data before these test sets were
 scored.
 
 <!-- tables:held_out -->
+### Detection rate and false flags: held-out results already measured
+
+| Signal | Test data (held out) | ROC-AUC | Detection rate | False-flag rate | Source |
+|---|---|---|---|---|---|
+| Reading (shipped network) | GazeBase, 64 unseen people, 10 s windows, webcam-quality noise | 0.999 | 99.7% at `possible` | 4.9% at `possible` (balanced accuracy 98.8% at `high`) | `training/gaze-detection/results/reading_detector_results.json` |
+| Reading, hardest condition | same people, small face + heavy noise | 0.949 | 97.6% at `possible` | 28.5% at `possible` | same file |
+| Reading, real life (a model trained on RitW, **not** the shipped one) | Reading in the Wild, 17 unseen people | 0.908 | 78.7% | 12.8% | `training/gaze-detection/results/ritw_10s.json` |
+| AI-written text (v2, shipped) | HC3, all test questions (5,244 ChatGPT + 9,959 human answers) | 0.998 | 99.2% / 97.8% | 5.0% / 1.8% | `benchmarks/results/ai_text_v1_vs_v2.json` |
+| Echo similarity | HC3, 500 test questions (100 per source) | 0.876 | 81.1% / 46.7% | 18.6% / 6.6% | `training/echo-detection/results/echo_similarity.json` |
+| Delivery (uncalibrated) | SpiCE, 34 speakers: read vs spontaneous 30-word stretches | 0.547 | 23.2% / 8.8% of read | 27.6% / 12.2% of spontaneous | `training/echo-detection/results/delivery_spice.json` |
+
+A / B = at `possible` / at `high`.
 <!-- /tables -->
 
 These were measured when each model was built; the table only gathers them
@@ -185,6 +338,40 @@ cause of the difference was not found. v1's stored test metrics are reproduced
 with the same split code, to two decimals.
 
 <!-- tables:ai_text -->
+### AI-written text model: v1 against v2 (HC3 test questions, the same split)
+
+| Model | ROC-AUC | Balanced accuracy at `high` | Detected at `possible` | False flags at `possible` | Detected at `high` | False flags at `high` |
+|---|---|---|---|---|---|---|
+| v1 (commit 0836f1e, HC3 only) | 0.9980 | 97.9% | 99.1% | 4.9% | 97.8% | 2.0% |
+| v2 (shipped; HC3 + interview Q&A) | 0.9980 | 98.0% | 99.2% | 5.0% | 97.8% | 1.8% |
+
+Thresholds (the sidecar's: `possible` is the lower of the two stored thresholds, `high` the higher): v1 0.2494 / 0.4444; v2 0.2466 / 0.4624. 15,203 answers (5,244 ChatGPT, 9,959 human) to 4,761 test questions.
+
+By HC3 source (ROC-AUC within the source; detection and false flags at `high`):
+
+| Source | ChatGPT / human | v1 AUC | v2 AUC | v1 detected / false flags | v2 detected / false flags |
+|---|---|---|---|---|---|
+| finance | 904 / 781 | 0.999 | 0.999 | 98.9% / 1.3% | 99.1% / 1.3% |
+| medicine | 270 / 258 | 1.000 | 1.000 | 100.0% / 0.8% | 100.0% / 0.4% |
+| open_qa | 688 / 206 | 0.968 | 0.970 | 94.2% / 13.6% | 94.6% / 14.1% |
+| reddit_eli5 | 3,214 / 8,554 | 0.999 | 0.999 | 98.0% / 1.4% | 97.8% / 1.1% |
+| wiki_csai | 168 / 160 | 0.986 | 0.983 | 99.4% / 24.4% | 98.8% / 26.2% |
+
+In the fused flag (HC3 sample of 1,411 answers, two references; see section 3):
+
+| Configuration | v1 detected / false flags at `possible` | v2 detected / false flags at `possible` | v1 detected / false flags at `high` | v2 detected / false flags at `high` |
+|---|---|---|---|---|
+| ai_text alone | 98.5% / 13.0% | 98.8% / 13.2% | 97.4% / 6.4% | 97.8% / 6.8% |
+| fused (ai_text + echo) | 99.6% / 25.0% | 99.6% / 25.0% | 79.8% / 4.4% | 80.0% / 4.7% |
+
+Stored test metrics in each model file (`balanced` level, written by its training script), against the recomputed ones:
+
+| File | Stored balanced accuracy | Recomputed | Stored recall | Recomputed | Stored false-positive rate | Recomputed |
+|---|---|---|---|---|---|---|
+| v1 | 97.90% | 97.90% | 97.79% | 97.79% | 1.98% | 1.98% |
+| v2 | 97.99% | 97.99% | 97.77% | 97.77% | 1.79% | 1.79% |
+
+*Run 2026-11-23 18:34, commit f312f96; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; scikit-learn 1.9.1, numpy 2.4.6.*
 <!-- /tables -->
 
 ![Detection and false flags of each signal and the fused flag on HC3 test questions](../benchmarks/results/fusion_hc3.png)
@@ -232,6 +419,42 @@ run through the same benchmark (`--ai-model`, `fusion_hc3_v1.json`).
   fewer detections (72.5%).
 
 <!-- tables:fusion -->
+### The combined flag on HC3 test questions (new)
+
+| Configuration | ROC-AUC | Detected at `possible` | False flags at `possible` | Detected at `high` | False flags at `high` |
+|---|---|---|---|---|---|
+| ai_text alone | 0.993 | 98.8% | 13.2% (10.9–16.0) | 97.8% | 6.8% (5.2–9.0) |
+| echo similarity alone | 0.876 | 81.1% | 18.6% (15.9–21.7) | 46.7% | 6.6% (4.9–8.6) |
+| fused (ai_text + echo) | – | 99.6% | 25.0% (21.9–28.4) | 80.0% | 4.7% (3.3–6.5) |
+| fused, ai_text only available | – | 98.8% | 13.2% (10.9–16.0) | 0.0% | 0.0% (0.0–0.6) |
+| fused, echo only available | – | 81.1% | 18.6% (15.9–21.7) | 0.0% | 0.0% (0.0–0.6) |
+| echo similarity alone, 1 reference | 0.859 | 73.6% | 15.9% (13.3–18.8) | 37.7% | 5.5% (4.1–7.5) |
+| fused (ai_text + echo, 1 reference) | – | 99.6% | 23.4% (20.4–26.8) | 72.5% | 3.8% (2.6–5.5) |
+
+1411 answers (724 ChatGPT, 687 human) to 500 test questions; 95% Wilson intervals in brackets.
+
+By source (fused flag, 2 references; detected / false flags):
+
+| Source | ChatGPT / human answers | At `possible` | At `high` | AI text alone at `high` | Echo alone at `high` |
+|---|---|---|---|---|---|
+| finance | 123 / 100 | 100% / 11% | 84% / 0% | 100% / 1% | 43% / 0% |
+| medicine | 104 / 100 | 100% / 13% | 83% / 0% | 100% / 1% | 38% / 2% |
+| open_qa | 297 / 100 | 100% / 54% | 83% / 7% | 96% / 16% | 51% / 7% |
+| reddit_eli5 | 100 / 287 | 98% / 5% | 51% / 0% | 96% / 0% | 15% / 0% |
+| wiki_csai | 100 / 100 | 100% / 80% | 92% / 25% | 100% / 28% | 78% / 36% |
+
+Human answers flagged by the fused rule, by cause:
+
+- possible: ai_text low, echo possible: 59
+- possible: ai_text possible, echo low: 23
+- possible: ai_text low, echo high: 22
+- possible: ai_text high, echo low: 21
+- high: ai_text high, echo high: 17
+- possible: ai_text possible, echo possible: 15
+- high: ai_text high, echo possible: 9
+- high: ai_text possible, echo high: 6
+
+*Run 2026-11-23 18:38, commit f312f96; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; fastembed 0.9.1, onnxruntime 1.32.0, numpy 2.4.6, pandas 3.1.1, scikit-learn 1.9.1.*
 <!-- /tables -->
 
 ## 4. Ablations
@@ -251,6 +474,8 @@ the rules engine; see section 2.
   reproduces the numbers committed with 79dbf40 exactly.
 - **The committed v2 model is not reproducible from the repository's script on
   this machine** (section 3).
+- **The room did not transcribe the question back in 3 of 8 turns** (section
+  2). The cause was not investigated.
 - **Ollama stopped responding during the live engine run** (the first attempt
   failed with connection refused). The Ollama server was restarted and the run
   repeated from the beginning; the reported numbers come from that complete
