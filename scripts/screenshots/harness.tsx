@@ -3,7 +3,7 @@
 // capture.mjs to produce docs/screenshots/*.png.
 //
 //   ?scene=overlay-candidate | overlay-interviewer | overlay-integrity | main-live
-//          | main-privacy | main-integrity
+//          | overlay-workplace | main-minutes | main-privacy | main-integrity
 //          | main-home | main-history | main-ai | main-appearance (previews only)
 
 import { StrictMode } from "react";
@@ -24,7 +24,9 @@ import {
   candidateSnapshot,
   integritySnapshot,
   interviewerSnapshot,
+  minutesSnapshot,
   settings,
+  workplaceSnapshot,
 } from "./fixtures";
 
 const scene = new URLSearchParams(location.search).get("scene") ?? "overlay-candidate";
@@ -44,12 +46,18 @@ const SECTION_SCENES: Record<
   "main-ai": "settings/ai",
   "main-appearance": "settings/appearance",
 };
+const workplace = scene === "overlay-workplace";
+const minutes = scene === "main-minutes";
 const idle = scene in SECTION_SCENES && scene !== "main-privacy";
 const liveSnapshot: EngineSnapshot = integrity
   ? integritySnapshot()
-  : interviewer
-    ? interviewerSnapshot()
-    : candidateSnapshot();
+  : workplace
+    ? workplaceSnapshot()
+    : minutes
+      ? minutesSnapshot()
+      : interviewer
+        ? interviewerSnapshot()
+        : candidateSnapshot();
 const snapshot: EngineSnapshot = idle
   ? {
       ...liveSnapshot,
@@ -63,7 +71,7 @@ const snapshot: EngineSnapshot = idle
   : liveSnapshot;
 // Tall enough that the candidate answer's controls are in the picture.
 const appSettings = settings(
-  interviewer || integrity ? "interviewer" : "candidate",
+  workplace || minutes ? "workplace" : interviewer || integrity ? "interviewer" : "candidate",
   scene === "overlay-candidate" || scene === "overlay-integrity" ? 760 : 560,
 );
 if (integrity) {

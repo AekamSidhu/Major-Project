@@ -8,13 +8,15 @@ use std::time::Duration;
 
 use openmeet_core::events::{EventSink, MeetingEvent};
 use openmeet_core::ipc::{ExportFormat, ExportParts, SimulationAction, StartMeetingRequest};
+use openmeet_core::integrity::{IntegrityLevel, IntegrityService};
 use openmeet_core::providers::ProviderSet;
 use openmeet_core::settings::{RetentionPolicy, Settings};
 use openmeet_core::store::{MeetingStore, MemoryStore};
 use openmeet_core::types::*;
 use openmeet_engine::{Engine, EngineDeps};
 use openmeet_intel::export::render;
-use openmeet_intel::mock::MockLlmProvider;
+use openmeet_intel::integrity::spec_thresholds;
+use openmeet_intel::mock::{MockIntegrityService, MockLlmProvider};
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
@@ -74,12 +76,25 @@ fn harness() -> Harness {
     settings.assistant.semantic_detection = false;
     settings.assistant.turn_end_silence_ms = 400;
     settings.privacy.retention = RetentionPolicy::SevenDays;
+    // Integrity is ON with every signal, and a mock service is wired in, so
+    // the check would run if workplace mode were not gated out of it.
+    settings.integrity.enabled = true;
+    settings.integrity.ai_text = true;
+    settings.integrity.echo_similarity = true;
+    settings.integrity.delivery = true;
+    settings.integrity.reading = true;
+    let integrity = MockIntegrityService::new()
+        .with_embedding_model(spec_thresholds().echo_similarity.embedding_model.clone());
+    for p in [0.1, 0.2, 0.15, 0.9] {
+        integrity.push_reading(Some(p), IntegrityLevel::Low);
+    }
     let engine = Engine::new(
         EngineDeps {
             sink: sink.clone(),
             store: store.clone(),
             providers: ProviderSet {
                 llm: Some(Arc::new(llm.clone())),
+                integrity: Some(Arc::new(integrity) as Arc<dyn IntegrityService>),
                 ..Default::default()
             },
             settings,

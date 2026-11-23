@@ -3,6 +3,7 @@
 // show what demo mode produces.
 
 import type {
+  Claim,
   DataFlowNode,
   DataFlowReport,
   DisplayInfo,
@@ -12,9 +13,11 @@ import type {
   FollowUpQuestion,
   Meeting,
   MeetingListItem,
+  MeetingSummary,
   Settings,
   Topic,
   TranscriptSegment,
+  WorkplaceBoard,
 } from "@/bindings";
 import defaults from "./default-settings.json";
 import { quietFlag, raisedFlag } from "@/lib/integrity.fixtures";
@@ -22,7 +25,10 @@ import { quietFlag, raisedFlag } from "@/lib/integrity.fixtures";
 /** The demo meeting started a few minutes before the screenshot. */
 const T0 = Date.now() - 6 * 60_000 - 42_000;
 
-export function settings(mode: "candidate" | "interviewer", overlayMaxHeight = 560): Settings {
+export function settings(
+  mode: "candidate" | "interviewer" | "workplace",
+  overlayMaxHeight = 560,
+): Settings {
   const s = structuredClone(defaults) as unknown as Settings;
   s.mode = mode;
   s.general.onboardingComplete = true;
@@ -35,7 +41,7 @@ export function settings(mode: "candidate" | "interviewer", overlayMaxHeight = 5
   return s;
 }
 
-function meeting(mode: "candidate" | "interviewer", title: string): Meeting {
+function meeting(mode: "candidate" | "interviewer" | "workplace", title: string): Meeting {
   return {
     id: "demo-meeting",
     title,
@@ -405,3 +411,155 @@ export const DATA_FLOW_INTEGRITY: DataFlowReport = {
   ...DATA_FLOW_LOCAL,
   nodes: [...DATA_FLOW_LOCAL.nodes, ...INTEGRITY_NODES],
 };
+
+// --- Workplace: sprint planning ------------------------------------------------
+
+function boardClaim(id: string, text: string): Claim {
+  return {
+    id,
+    meetingId: "demo-meeting",
+    text,
+    kind: "decision",
+    segmentId: null,
+    speakerRole: "remote",
+    source: "heuristic",
+    createdAt: T0,
+  } as Claim;
+}
+
+/** The live board of the sprint planning demo, as the engine would send it. */
+export const WORKPLACE_BOARD: WorkplaceBoard = {
+  decisions: [boardClaim("d1", "We decided to move the export job to Kafka for this sprint.")],
+  actionItems: [
+    {
+      id: "a1",
+      meetingId: "demo-meeting",
+      text: "Priya will update the runbook.",
+      owner: "Priya",
+      due: "by Friday",
+      sourceSegmentId: null,
+      createdAt: T0,
+    },
+    {
+      id: "a2",
+      meetingId: "demo-meeting",
+      text: "Someone should look into the alerting thresholds.",
+      owner: null,
+      due: null,
+      sourceSegmentId: null,
+      createdAt: T0,
+    },
+  ],
+  openQuestions: [
+    {
+      id: "q1",
+      question: "Can you share the rollout plan by Monday?",
+      speakerRole: "remote",
+      addressedToYou: true,
+      askedAtMs: 60_000,
+      answered: false,
+      answer: null,
+      deferred: false,
+    },
+    {
+      id: "q2",
+      question: "Do we know if the staging data is ready?",
+      speakerRole: "remote",
+      addressedToYou: false,
+      askedAtMs: 95_000,
+      answered: false,
+      answer: null,
+      deferred: true,
+    },
+  ],
+  clarifications: [
+    {
+      id: "c1",
+      targetId: "a2",
+      targetKind: "action_item",
+      targetText: "Someone should look into the alerting thresholds.",
+      issues: ["no_owner", "no_due_date", "unclear_scope"],
+      question: "Who will take “look into the alerting thresholds”, and by when?",
+      createdAt: T0,
+    },
+  ],
+};
+
+export function workplaceSnapshot(): EngineSnapshot {
+  return {
+    ...BASE_SNAPSHOT,
+    meeting: meeting("workplace", "Demo: Sprint planning"),
+    mode: "workplace",
+    transcript: [
+      seg(
+        "user",
+        "Morning, everyone. Let's run sprint planning, starting with the billing export.",
+        2,
+      ),
+      seg("remote", "We decided to move the export job to Kafka for this sprint.", 14),
+      seg("remote", "Priya will update the runbook by Friday.", 26),
+      seg("remote", "Can you share the rollout plan by Monday?", 60),
+      seg("user", "Yes, I'll share the rollout plan on Monday.", 74),
+    ],
+    workplace: WORKPLACE_BOARD,
+    active: {
+      requestId: "req-catch-up",
+      kind: "catch_up",
+      slot: "primary",
+      state: "complete",
+      questionText: null,
+      category: null,
+      style: "concise",
+      text: "[[ANSWER]]\nThe team agreed to move the export job to Kafka this sprint, and Priya will update the runbook by Friday.\n[[KEY_POINTS]]\n- Decided: move the export job to Kafka\n- Action: Priya updates the runbook by Friday",
+      error: null,
+    },
+  };
+}
+
+/** A finished sprint planning meeting with its minutes. */
+export function minutesSnapshot(): EngineSnapshot {
+  const summary: MeetingSummary = {
+    meetingId: "demo-meeting",
+    overview:
+      "The team moved the billing export to Kafka for this sprint, agreed on the schema freeze, and left the alerting thresholds to be tuned.",
+    keyTopics: ["Billing export", "Kafka", "Alerting"],
+    questionsAsked: ["Can you share the rollout plan by Monday?"],
+    answers: ["Yes, I’ll share the rollout plan on Monday."],
+    decisions: [
+      "Move the export job to Kafka for this sprint.",
+      "Freeze the schema for this sprint.",
+    ],
+    actionItems: [
+      "Update the runbook — Priya, by Friday",
+      "Tune the alert thresholds — owner to be confirmed",
+    ],
+    openQuestions: ["Is the staging data ready? (deferred)"],
+    technicalTopics: [],
+    followUpSuggestions: [],
+    interviewer: null,
+    workplace: {
+      actionItems: [
+        { task: "Update the runbook", owner: "Priya", due: "by Friday" },
+        { task: "Tune the alerting thresholds", owner: null, due: null },
+      ],
+      followUpMessage:
+        "Hi all,\n\nThanks for the sprint planning. Here is what we agreed:\n- Move the export job to Kafka this sprint.\n- Freeze the schema this sprint.\n\nAction items:\n- Update the runbook: Priya, by Friday\n- Tune the alerting thresholds: owner to be confirmed\n\nLet me know if I missed anything.",
+    },
+    markdown: "",
+    generatedAt: T0,
+    generatedBy: "extractive",
+  };
+  return {
+    ...BASE_SNAPSHOT,
+    meeting: {
+      ...meeting("workplace", "Demo: Sprint planning"),
+      state: "completed",
+      endedAt: T0 + 1_800_000,
+    },
+    state: "completed",
+    mode: "workplace",
+    transcript: workplaceSnapshot().transcript,
+    workplace: WORKPLACE_BOARD,
+    lastSummary: summary,
+  };
+}

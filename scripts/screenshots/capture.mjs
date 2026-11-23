@@ -29,7 +29,17 @@ const SCENES = [
   { name: "main-live", width: 1200, height: 800 },
   { name: "main-privacy", width: 1200, height: 800 },
   { name: "main-integrity", width: 1200, height: 1000 },
+  { name: "overlay-workplace", width: 1100, height: 760 },
+  { name: "main-minutes", width: 1200, height: 900 },
 ];
+
+// OPENMEET_SCENES=name,name captures only those scenes (the others keep their
+// existing PNGs untouched).
+const only = process.env.OPENMEET_SCENES?.split(",").map((s) => s.trim()).filter(Boolean);
+const SCENES_TO_CAPTURE = only ? SCENES.filter((s) => only.includes(s.name)) : SCENES;
+if (only && SCENES_TO_CAPTURE.length !== only.length) {
+  throw new Error(`Unknown scene in OPENMEET_SCENES: ${only.join(", ")}`);
+}
 
 function findBrowser() {
   const candidates = [
@@ -127,7 +137,7 @@ let cdp;
 try {
   cdp = await connect(await pageTarget());
   await cdp.send("Page.enable");
-  for (const s of SCENES) {
+  for (const s of SCENES_TO_CAPTURE) {
     await cdp.send("Emulation.setDeviceMetricsOverride", {
       width: s.width,
       height: s.height,
