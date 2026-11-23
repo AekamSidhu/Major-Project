@@ -507,7 +507,7 @@ export function workplaceSnapshot(): EngineSnapshot {
       kind: "catch_up",
       slot: "primary",
       state: "complete",
-      questionText: null,
+      questionText: "Last 5 minutes",
       category: null,
       style: "concise",
       text: "[[ANSWER]]\nThe team agreed to move the export job to Kafka this sprint, and Priya will update the runbook by Friday.\n[[KEY_POINTS]]\n- Decided: move the export job to Kafka\n- Action: Priya updates the runbook by Friday",

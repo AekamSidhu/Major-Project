@@ -838,7 +838,14 @@ export type RetryPlan =
   | { kind: "refine"; requestId: string; refinement: Refinement }
   | { kind: "answer"; question: string | null }
   | { kind: "ask"; prompt: string }
-  | { kind: "clarify" };
+  | { kind: "clarify" }
+  | { kind: "catch_up"; minutes: number };
+
+/** The window of a catch-up, from its heading ("Last 5 minutes"); 5 if unknown. */
+export function catchUpMinutes(text: string | null): number {
+  const n = Number(/^Last (\d+) minutes$/.exec(text ?? "")?.[1]);
+  return Number.isInteger(n) && n >= 1 && n <= 60 ? n : 5;
+}
 
 /** What "Retry" re-runs for a failed / cancelled primary request. */
 export function retryPlan(p: PrimaryRequest): RetryPlan {
@@ -849,6 +856,8 @@ export function retryPlan(p: PrimaryRequest): RetryPlan {
         : { kind: "refine", requestId: p.requestId, refinement: "regenerate" };
     case "clarification":
       return { kind: "clarify" };
+    case "catch_up":
+      return { kind: "catch_up", minutes: catchUpMinutes(p.questionText) };
     case "refinement":
       return p.parentId
         ? { kind: "refine", requestId: p.parentId, refinement: p.refinement ?? "regenerate" }

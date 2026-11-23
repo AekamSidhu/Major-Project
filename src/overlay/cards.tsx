@@ -88,7 +88,8 @@ function useCopied(): [boolean, (text: string) => void] {
 function headerFor(p: PrimaryRequest): { label: string; text: string | null } {
   switch (p.kind) {
     case "catch_up":
-      return { label: "Catch-up", text: null };
+      // The heading is the window: "Last 5 minutes".
+      return { label: p.questionText ?? "Catch-up", text: null };
     case "ask_ai":
       return { label: "Ask OpenMeet", text: p.questionText };
     case "clarification":
@@ -115,7 +116,16 @@ function Thinking({ label }: { label: string }) {
   );
 }
 
-function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
+function Sections({
+  a,
+  streaming,
+  recap = false,
+}: {
+  a: ParsedAnswer;
+  streaming: boolean;
+  /** A catch-up: the answer section is a recap, not something to say aloud. */
+  recap?: boolean;
+}) {
   const [showExample, setShowExample] = useState(true);
   const caretOn = (key: ParsedAnswer["current"]) => streaming && a.current === key;
   return (
@@ -137,7 +147,7 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
       )}
       {(a.answer || (streaming && a.current === "answer")) && (
         <div>
-          <SectionLabel>Suggested answer</SectionLabel>
+          <SectionLabel>{recap ? "Recap" : "Suggested answer"}</SectionLabel>
           <p
             className={cx(
               "mt-1 text-[0.92rem] leading-relaxed whitespace-pre-wrap text-fg",
@@ -264,7 +274,9 @@ export function PrimaryCard({
       </div>
 
       {thinking && <Thinking label="Thinking…" />}
-      {!thinking && p.text.trim() && <Sections a={parsed} streaming={p.state === "streaming"} />}
+      {!thinking && p.text.trim() && (
+        <Sections a={parsed} streaming={p.state === "streaming"} recap={p.kind === "catch_up"} />
+      )}
 
       {p.state === "failed" && (
         <div
@@ -291,29 +303,32 @@ export function PrimaryCard({
 
       {!thinking && (p.text.trim() || p.state === "complete") && (
         <div className="space-y-1.5">
-          <div
-            className="flex flex-wrap items-center gap-1"
-            role="group"
-            aria-label="Answer controls"
-          >
-            <ChipButton
-              disabled={running}
-              title={withHotkey("Regenerate", regenerateKey)}
-              onClick={() => void refine(p.requestId, "regenerate")}
+          {/* A catch-up is a recap: no answer refinements (Retry re-runs it). */}
+          {p.kind !== "catch_up" && (
+            <div
+              className="flex flex-wrap items-center gap-1"
+              role="group"
+              aria-label="Answer controls"
             >
-              <RefreshIcon /> Regenerate
-            </ChipButton>
-            {REFINEMENTS.map((r) => (
               <ChipButton
-                key={r.value}
-                disabled={!canRefine}
-                title={r.title}
-                onClick={() => void refine(p.requestId, r.value)}
+                disabled={running}
+                title={withHotkey("Regenerate", regenerateKey)}
+                onClick={() => void refine(p.requestId, "regenerate")}
               >
-                {r.label}
+                <RefreshIcon /> Regenerate
               </ChipButton>
-            ))}
-          </div>
+              {REFINEMENTS.map((r) => (
+                <ChipButton
+                  key={r.value}
+                  disabled={!canRefine}
+                  title={r.title}
+                  onClick={() => void refine(p.requestId, r.value)}
+                >
+                  {r.label}
+                </ChipButton>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             {mode === "candidate" && (p.kind === "candidate_answer" || p.kind === "refinement") ? (
               <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Answer style">

@@ -51,6 +51,8 @@ export function retry(p: PrimaryRequest) {
       return attempt("Couldn't ask OpenMeet", () => api.askOpenMeet(plan.prompt));
     case "clarify":
       return attempt("Couldn't clarify the question", () => api.clarifyQuestion());
+    case "catch_up":
+      return catchUp(plan.minutes);
   }
 }
 

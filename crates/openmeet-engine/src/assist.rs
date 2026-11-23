@@ -462,7 +462,8 @@ pub(crate) fn catch_up(engine: &Engine, minutes: u32) -> Result<Id, CoreError> {
             kind: RequestKind::CatchUp,
             suggestion_kind: SuggestionKind::CatchUp,
             question_id: None,
-            question_text: None,
+            // The overlay heading shows the window ("Last 5 minutes").
+            question_text: Some(format!("Last {minutes} minutes")),
             category: None,
             style: Some(style),
             parent_id: None,
