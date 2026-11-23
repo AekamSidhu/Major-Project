@@ -207,6 +207,10 @@ pub fn parse_reading(value: &Value) -> Result<ReadingResult, ProviderError> {
             .and_then(Value::as_array)
             .map_or(0, |w| w.len() as u32),
         seconds: number(value, "seconds").unwrap_or(0.0),
+        calibrated: value
+            .get("calibrated")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
     })
 }
 
