@@ -1,0 +1,116 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from: crates/openmeet-engine/src/conversation.rs (handle_final, Action::Answer, the workplace board branch),
+' crates/openmeet-engine/src/assist.rs (catch_up, start_primary, answer_question, spawn_meeting_summary,
+' summarize_with, summarize_minutes), crates/openmeet-engine/src/engine.rs (stop_meeting, generate_answer, catch_up),
+' crates/openmeet-intel/src/workplace.rs (WorkplaceTracker::observe, extractive_minutes),
+' crates/openmeet-intel/src/detect/mod.rs (requires_response, addressed_to_listener),
+' crates/openmeet-intel/src/prompts/workplace_catchup.rs, workplace_minutes.rs, candidate_answer.rs (WORKPLACE_ANSWER_RULE),
+' crates/openmeet-intel/src/export.rs (extractive_summary, markdown export),
+' src-tauri/src/commands/assistant.rs (catch_up, generate_answer), src/main/sections/home/LiveMeeting.tsx,
+' src/main/sections/home/WorkplaceBoard.tsx, src/main/sections/home/CompletedMeeting.tsx, src/overlay/actions.ts.
+title Workplace meeting: transcript to board, question to suggestion, catch me up, minutes
+
+skinparam maxMessageSize 260
+
+participant "Audio + transcription\n(segments)" as Tr
+participant "conversation loop\nEngine::handle_final" as Conv
+participant "MeetingRuntime\n(under state lock)" as RT
+participant "WorkplaceTracker\nrt.workplace" as WP
+participant "Event sink\n(main window, overlay)" as Sink
+actor "User" as U
+participant "Primary slot\nrequest (LLM stream)" as Pri
+participant "Stop / summary task\nspawn_meeting_summary" as Sum
+participant "LLM provider\n(optional)" as LLM
+participant "Persister" as Per
+participant "History / export\n(store, Markdown)" as Hist
+
+== 1. Transcript to the board (every FINAL segment, in workplace mode) ==
+
+Tr -> Conv : final segment (utterance)
+activate Conv
+Conv -> RT : lock; add_final(segment)\nmemory.add(Segment)
+Conv -> Conv : extract_claims(segment) -> board_claims\n(kept when mode == Workplace)
+Conv -> Conv : extract_action_items(segment, mode) -> board_items\n(kept as the board's items when mode == Workplace)
+note right of Conv
+  Interview-only steps are skipped here: no integrity
+  hooks, no turn timer, no follow-up generation.
+end note
+Conv -> Conv : detect(DetectionInput { mode: Workplace })\nquestion accepted at confidence >= threshold
+Conv -> WP : observe(segment, board_claims, board_items, accepted question)
+activate WP
+WP --> Conv : WorkplaceUpdate { changed, items, answered }
+deactivate WP
+alt update.items not empty
+  Conv -> Per : PersistOp::ActionItems(items) (upsert by id)
+end
+alt update.changed
+  Conv -> Sink : ActionItemsUpdated(items)
+  Conv -> Sink : WorkplaceUpdated(board)
+  note right of Sink : the board is replaced as a whole;\nthe overlay ignores it (board is in the main window)
+end
+deactivate Conv
+
+== 2. Question to the user: suggested answer (only when addressed to you) ==
+
+Tr -> Conv : final segment with a question\nfrom a colleague ("Can you share the plan?")
+activate Conv
+Conv -> Conv : requires_response: Remote/Unknown speakers only\nand addressed_to_listener(question)\n(questions to the room or to a named colleague get no suggestion)
+Conv -> Conv : settings.assistant.auto_answer && active
+Conv -> Pri : answer_question(q, style)\nRequestKind::CandidateAnswer, Primary slot
+note right of Pri
+  Prompt: candidate_answer.rs with WORKPLACE_ANSWER_RULE
+  (a colleague answering a colleague, not an interview answer).
+end note
+Pri -> LLM : stream request
+LLM --> Pri : tokens
+Pri --> Sink : answer streams into the overlay
+deactivate Conv
+
+U -> Sink : "Suggest answer in overlay" on a board question\n(main window)
+Sink -> Pri : generate_answer { question, style: null }\n(engine.generate_answer -> assist::generate_answer)
+note right of Pri : any question on the board can be asked this way,\nincluding ones not addressed to the user
+
+== 3. Catch me up (on demand, live workplace meeting only) ==
+
+U -> Sink : "Catch me up" (main window: 5 minutes;\noverlay: "Summarize the last five minutes")
+Sink -> Pri : catch_up(minutes)\n(Tauri catch_up -> Engine::catch_up -> assist::catch_up)
+activate Pri
+Pri -> RT : check: mode == Workplace && state is live\n(else InvalidState)
+Pri -> RT : minutes clamped to 1..60;\nlines since (now - window)\ndecisions and action items created in the window,\nopen questions (asked in window or still unanswered)
+Pri -> Pri : start_primary(RequestKind::CatchUp, Primary slot,\nheading "Last N minutes")
+Pri -> LLM : workplace_catchup prompt (stream)
+LLM --> Sink : recap streams into the overlay (no refinements offered)
+deactivate Pri
+
+== 4. Meeting end: minutes, then store and export ==
+
+U -> Sum : stop meeting
+activate Sum
+Sum -> Sum : state Stopping -> Summarizing\ndrain pending transcripts (bounded wait)\nclose the open answer; meeting.ended_at = now
+Sum -> Per : PersistOp::Topics, PersistOp::Meeting
+Sum -> Sum : spawn_meeting_summary(meeting_id)\nsnapshot: record, long-term summary, gaps
+Sum -> Sum : summarize_with: mode == Workplace -> summarize_minutes
+alt LLM configured
+  Sum -> LLM : workplace_minutes prompt (JSON output, Background slot,\nRequestKind::Summary, 180 s timeout)
+  LLM --> Sum : minutes JSON
+  alt parse ok
+    Sum -> Sum : MeetingSummary { overview, decisions, open_questions,\nworkplace: { action_items, follow_up_message } }\nmarkdown rendered
+  else parse failed
+    Sum -> Sink : notice: "created basic minutes instead"
+    Sum -> Sum : extractive_minutes(record)
+  end
+else no LLM
+  Sum -> Sum : extractive_minutes(record) (no model)
+end
+Sum -> Sum : state Summarizing -> Completed\nrt.summary = summary
+Sum -> Per : PersistOp::Summary (meeting_summaries.workplace JSON)
+Sum -> Sink : SummaryReady(summary), MeetingStateChanged(Completed)
+deactivate Sum
+
+U -> Hist : open the meeting in History (Summary tab)
+Hist --> U : minutes, action items with owner and due,\nfollow-up message draft (text to copy)
+U -> Hist : export Markdown
+Hist -> Hist : export::render_markdown: Summary section\n= the stored minutes (or extractive_minutes when none)
+
+@enduml
