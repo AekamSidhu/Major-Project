@@ -80,7 +80,17 @@ flowchart TB
 | `openmeet-store` | SQLite persistence (rusqlite), migrations, retention, deletion, settings, privacy rules | core |
 | `src-tauri` | The desktop app: windows, overlay behaviour, tray, hotkeys, keychain, sidecar management, commands, wiring | all |
 | `src/` | React UI: overlay and main window | generated bindings |
-| `local-ai/` | Optional Python sidecar in a virtual environment: local Whisper transcription and local embeddings | — |
+| `local-ai/` | Optional Python sidecar in a virtual environment: local Whisper transcription (with word timestamps), local embeddings, the answer-integrity endpoints (AI-text and reading models, gaze capture) and `/integrity`; also the browser interview room (`local-ai/room`, `room_server.py`) | — |
+| `spec/integrity/` | Shared definitions of the answer-integrity signals: thresholds (read by Rust and Python), fixtures, reference implementation | — |
+| `benchmarks/` | Scripts that measure latency, transcription accuracy and detection rates; results in `benchmarks/results/` ([BENCHMARKS.md](BENCHMARKS.md)) | — |
+| `diagrams/` | Diagram sources (PlantUML, Mermaid, C4) and rendered views ([diagrams/README.md](../diagrams/README.md)) | — |
+
+The answer-integrity analyzer lives in `openmeet-engine` (`integrity.rs`), its
+pure signal and fusion code in `openmeet-intel` (`integrity/`), and its client
+for the sidecar endpoints in `openmeet-providers` (`integrity.rs`). Workplace
+mode is `openmeet-intel` (`workplace.rs`) with its engine wiring in
+`openmeet-engine` (`assist.rs`, `conversation.rs`, `engine.rs`) and its UI in
+`src/main/sections/home/` and `src/overlay/`.
 
 ## 2. Key architectural decisions
 
@@ -250,6 +260,46 @@ models are never mixed.
   short reason; semantic duplicate filtering against asked questions and
   earlier suggestions (lexical paraphrase similarity + embedding cosine);
   claims, gaps and topics captured along the way. Never evaluative.
+* **Workplace** (`Mode::Workplace`): no integrity check and no interviewer
+  follow-ups. Decisions, action items, open
+  questions and clarifying questions for vague items are kept on a live board
+  by rules (`intel::workplace::WorkplaceTracker`), and each change is sent to the
+  UI as one `WORKPLACE_UPDATED` event with the whole board. A question addressed
+  to the user ("Can you share the plan?") gets a suggested answer in the overlay.
+  "Catch me up" (the `catch_up` command, 1 to 60 minutes) is a streamed summary
+  of the recent window. Follow-up question generation refuses in this mode.
+  When the meeting ends, minutes are written: from the model when it answers in
+  a usable form, otherwise built without a model by `intel::workplace`.
+
+### Answer-integrity check (interviewer mode)
+
+Opt-in and off by default (`settings.integrity.enabled`); it runs only in
+interviewer meetings. The analyzer is `openmeet-engine/src/integrity.rs`.
+
+* An **answer** is the candidate's speech from one interviewer question until the
+  next question (or the end of the meeting). Each time the candidate pauses, the
+  answer so far is checked in the background. If the candidate goes on, the same
+  answer is checked again with a higher `revision`, and an older revision never
+  replaces a newer one.
+* **Four signals** (`IntegritySignalName`): `ai_text` (the sidecar's
+  `POST /v1/integrity/echo`), `echo_similarity` (the configured LLM writes
+  `references` answers when the question is detected; answer and references are
+  embedded with the configured embedder; the highest cosine counts),
+  `delivery` (computed in Rust from transcript timings, using word timestamps
+  when the recognizer gives them, against the candidate's first three finished
+  answers), and `reading` (the sidecar's `POST /v1/integrity/reading` for the
+  answer's time window, while the sidecar captures the candidate's video
+  region).
+* `openmeet-intel::integrity` does the arithmetic and the wording: delivery
+  features and baseline, echo similarity, the fused flag and the evidence lines.
+  Thresholds and calibration flags come from `spec/integrity/thresholds.json`,
+  embedded at compile time.
+* Each result is an `INTEGRITY_CHECKED` event with an `IntegrityFlag`. The
+  latest revision of each answer is stored in `integrity_flags`, is removed with
+  its meeting, and is shown in the overlay card, the live view, History and
+  exports.
+* Checks use background request slots, never the UI slots. An emergency stop
+  cancels them.
 
 ### Screen pipeline (spec §13, §26–§30)
 
@@ -290,7 +340,16 @@ enables screenshot retention.
 
 SQLite (WAL, foreign keys, `secure_delete`), migrations via `PRAGMA
 user_version`. All meeting-owned rows reference `meetings(id) ON DELETE
-CASCADE`.
+CASCADE`. The schema has three versions (`SCHEMA_VERSION = 3`):
+
+1. initial schema (the tables in the diagram below, except `integrity_flags`);
+2. answer-integrity flags: the new `integrity_flags` table;
+3. workplace mode: adds two columns and no table, `action_items.due` (the due
+   date as said in the meeting) and `meeting_summaries.workplace` (the
+   workplace minutes as JSON).
+
+A database from a newer version is refused, and a failed migration leaves the
+database at its previous version.
 
 ```mermaid
 erDiagram
@@ -303,6 +362,7 @@ erDiagram
   meetings ||--o{ claims : has
   meetings ||--o{ screen_observations : has
   meetings ||--o{ action_items : has
+  meetings ||--o{ integrity_flags : has
   meetings ||--o| meeting_summaries : has
   meetings ||--o{ embeddings : has
   privacy_rules
@@ -388,6 +448,8 @@ flowchart LR
   remote providers; the data-flow report and its "No meeting data leaves this
   device." statement are derived from the live provider set.
 * Raw audio never touches disk; screenshots only with explicit opt-in.
+* The integrity check's video-region capture runs only in interviewer meetings
+  with its Reading signal on; the interview room's tunnel is off unless started.
 * Logs carry ids/counts/sizes/durations only.
 
 See [PRIVACY.md](../PRIVACY.md).
@@ -436,4 +498,13 @@ export providers). Details: [PROVIDERS.md](PROVIDERS.md).
 * Hardware tests (`#[ignore]`) for real devices, screens, OCR and capture
   exclusion.
 * Frontend: reducer and helper unit tests, render tests with mocked IPC.
-* Sidecar: pytest with injected fake backends + CUDA-fallback test.
+* Sidecar: pytest with injected fake backends + CUDA-fallback test
+  (`local-ai/`, including `test_integrity.py` and `test_room.py`).
+* Integrity: `crates/openmeet-intel/tests/integrity_spec.rs` reproduces the
+  spec fixtures in `spec/integrity/` to 1e-6; `crates/openmeet-engine/tests/integrity.rs`
+  runs a question and answer through VAD, all four signals and the fused flag.
+  Workplace mode: `crates/openmeet-engine/tests/workplace.rs` and
+  `crates/openmeet-intel/src/workplace/tests.rs`.
+* Benchmarks: `benchmarks/tests` (pytest) checks the benchmark code, and
+  `benchmarks/check_doc.py` checks the numbers in `docs/BENCHMARKS.md` against
+  the result files.

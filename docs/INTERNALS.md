@@ -16,10 +16,11 @@ openmeet-core        domain types, events, settings, provider traits, IPC DTOs, 
    │                                   OpenAI-compatible, local AI sidecar
    └────────────── openmeet-intel      pure algorithms: VAD, question detection, text
                                        similarity, topics, claims, prompts, export,
-                                       vision adapters, mocks, demo scripts
+                                       vision adapters, mocks, demo scripts,
+                                       answer-integrity signals, workplace board
 openmeet-engine      real-time orchestration (tokio): transcription sessions, context
                      engine, retrieval, request manager (cancellation / versioning),
-                     candidate + interviewer flows, summaries, diagnostics
+                     candidate + interviewer flows, answer-integrity analyzer, workplace flows, summaries, diagnostics
                      depends on core + intel
 src-tauri            the desktop app: windows, overlay, tray, hotkeys, commands,
                      secrets (keychain), wiring of all crates
@@ -512,6 +513,56 @@ pub struct MockEmbeddingProvider;   // impl EmbeddingProvider via HashingEmbedde
 pub struct MockOcr { pub text: String }   // impl OcrEngine
 ```
 
+### `intel::integrity` (answer-integrity arithmetic, per `spec/integrity`)
+
+Pure functions; thresholds come from `spec/integrity/thresholds.json` (embedded
+with `include_str!`), and the parity tests in `tests/integrity_spec.rs` must
+reproduce the spec fixtures to 1e-6.
+```rust
+pub const SPEC_VERSION: u32 = 1;
+pub fn spec_thresholds() -> &'static IntegrityThresholds;
+pub fn delivery_features(question_end: Option<f64>, utterances: &[SpeechUnit]) -> Option<DeliveryFeatures>;
+pub fn delivery_baseline(features: &[DeliveryFeatures]) -> DeliveryBaseline;   // median / MAD per feature
+pub fn delivery_score(features: Option<&DeliveryFeatures>, baseline: Option<&DeliveryBaseline>,
+                      thresholds: &DeliveryThresholds) -> DeliveryScore;
+pub struct DeliveryTracker { .. }   // baseline = the first 3 finished answers with at least 10 words
+pub fn echo_similarity(answer: &[f64], references: &[Vec<f64>], thresholds: &EchoThresholds) -> EchoResult;
+pub fn cosine64(a: &[f64], b: &[f64]) -> f64;        // 0 when either vector is all zeros
+pub fn to_transcript(text: &str) -> String;          // the spec's text normalisation before embedding
+pub fn fuse(signals: &[FusionInput]) -> FusedFlag;   // the combined flag
+pub fn headline(level: IntegrityLevel) -> &'static str;   // evidence wording: "Possible AI-assisted answer ..."
+```
+Rules: an uncalibrated signal counts at most as `possible`; `high` needs a
+calibrated `high` signal and at least one other raised signal; `unavailable`
+when nothing was scored. Logs carry no transcript text.
+
+### `intel::workplace` (team meetings)
+
+```rust
+pub struct WorkplaceTracker { .. }                // live board: decisions, action items, open questions
+impl WorkplaceTracker {
+    pub fn new() -> Self;
+    pub fn observe(&mut self, segment: &TranscriptSegment, claims: &[Claim],
+                   items: Vec<ActionItem>, question: Option<&DetectedQuestion>) -> WorkplaceUpdate;
+    pub fn board(&self) -> WorkplaceBoard;
+    pub fn action_items(&self) -> Vec<ActionItem>;
+}
+pub fn action_item_issues(item: &ActionItem) -> Vec<VagueIssue>;   // no owner, no due date, unclear scope, tentative
+pub fn decision_issues(decision: &Claim) -> Vec<VagueIssue>;
+pub fn clarifying_question(kind: WorkItemKind, text: &str, owner: Option<&str>,
+                           issues: &[VagueIssue]) -> Option<String>;   // None when nothing is vague
+pub fn extractive_catch_up(lines: &[TranscriptLine], board: &WorkplaceBoard, minutes: u32,
+                           since_ms: i64, since_unix_ms: i64) -> String;   // catch-up without a model
+pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary;   // minutes without a model
+pub fn follow_up_message(title: &str, summary: &MeetingSummary,
+                         items: &[MinutesActionItem]) -> String;
+pub fn render_minutes_markdown(summary: &MeetingSummary, title: &str) -> String;
+```
+`observe` reports whether the board changed and which action items were new or
+gained an owner or a due date (persisted as upserts). Decisions are claims of
+kind `decision`; action items come from `intel::claims`; due dates are kept as
+said ("by Friday"), never resolved to a calendar date.
+
 ### `intel::demo`
 ```rust
 pub fn scenarios() -> Vec<DemoScenario>;
@@ -654,6 +705,36 @@ Requirements:
   cancel must end the stream < 500 ms), multipart transcription, base URL
   normalization, local-only blocking, model-rule helpers (temperature/effort
   /fallback selection).
+
+---
+
+### Local AI integrity endpoints (`integrity.rs`)
+
+`LocalAiIntegrity` implements `IntegrityService` against the sidecar
+(`local-ai/integrity`):
+
+| Method | Endpoint |
+|---|---|
+| `status` | `GET /v1/integrity/status` (and `GET /health` for the embedding model) |
+| `ai_text` | `POST /v1/integrity/echo` `{"text"}` |
+| `start_gaze` / `stop_gaze` / `reset_gaze` | `POST /v1/integrity/gaze/screen` `{"left","top","width","height"}` / `.../gaze/stop` / `.../gaze/reset` |
+| `reading` | `POST /v1/integrity/reading` `{"start","end"}` (epoch seconds) |
+
+Limits: `MAX_AI_TEXT_CHARS` 20 000, `MAX_READING_SPAN_S` 600 (the sidecar scores
+at most the last 600 s of an answer), `SCORING_TIMEOUT` 30 s. The sidecar's
+`not_enough_gaze` maps to the spec's `no_gaze`. Logs and errors carry the
+endpoint name, sizes and error kinds only. The `parse_*` functions turn the
+JSON into the core types and are unit-tested against the sidecar's shapes.
+
+### Word timestamps in transcription (`openai.rs`)
+
+When `TranscriptionSessionConfig.word_timestamps` is set, the OpenAI-compatible
+transcriber sends `response_format=verbose_json` and
+`timestamp_granularities[]=word`, and reads `words[]` into `WordTiming`s. The
+engine adds each utterance's start time to them, so they sit on the meeting
+clock. The engine sets the flag only while the delivery signal is on. Official OpenAI accepts it for
+`whisper-1` only; other servers are asked, and a 400 or 422 response switches
+the option off for that adapter from then on (`words_supported`).
 
 ---
 
@@ -826,10 +907,15 @@ impl Database {
 impl core::store::MeetingStore for Database { .. }
 ```
 Schema (versioned migrations via `PRAGMA user_version`, each migration in a
-transaction, embedded SQL): `meetings`, `participants`, `transcript_segments`,
-`questions`, `answers`, `topics`, `claims`, `screen_observations`,
-`ai_suggestions`, `action_items`, `meeting_summaries`, `embeddings`,
-`privacy_rules`, `settings`. Every meeting-owned row has `id`, `meeting_id`
+transaction, embedded SQL; `SCHEMA_VERSION` = 3): `meetings`, `participants`,
+`transcript_segments`, `questions`, `answers`, `topics`, `claims`,
+`screen_observations`, `ai_suggestions`, `action_items`, `meeting_summaries`,
+`embeddings`, `privacy_rules`, `settings`, and `integrity_flags` (migration 2).
+Migration 3 (workplace mode) adds no table: it adds `action_items.due` (the due
+date as said, TEXT, NULL outside workplace meetings) and
+`meeting_summaries.workplace` (the minutes as JSON, NULL otherwise). Each
+`integrity_flags` row is one checked answer, replaced on re-check; its
+`elevated` and `signals` columns are JSON lists. Every meeting-owned row has `id`, `meeting_id`
 (FK `ON DELETE CASCADE`), `created_at`/timestamps; indexes on
 `(meeting_id, start_time)` etc. Lists (`segment_ids`, `entities`, `parts`,
 `followups`) are JSON text columns. Embeddings are little-endian f32 BLOBs.
