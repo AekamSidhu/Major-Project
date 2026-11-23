@@ -1244,6 +1244,7 @@ impl IntegrityService for MockIntegrityService {
                 0
             },
             seconds,
+            calibrated: true,
         })
     }
 }

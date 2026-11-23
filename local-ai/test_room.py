@@ -825,3 +825,20 @@ def test_room_works_without_word_timestamps_and_delivery_uses_utterance_timing()
                                                             "question": "How did you speed it up?"})
     assert answer.status_code == 200, answer.text
     assert answer.json()["delivery"]["features"]["granularity"] == "utterance"
+
+
+def test_early_reading_counts_at_most_possible_in_the_flag():
+    # Same reading level, twice: an early (3-10 s) reading is uncalibrated and cannot make the flag "high".
+    def answer(reading: dict) -> dict:
+        return {"echo": {"level": "possible", "ai_probability": 0.6, "words": 40}, "reading": reading}
+
+    early = {"reading_probability": 0.8, "level": "high", "window_probabilities": [0.8], "valid_fraction": 1.0,
+             "seconds": 5.0, "early": True, "calibrated": False}
+    full = {**early, "early": False, "calibrated": True, "seconds": 12.0}
+    early_items = {s["name"]: s for s in checks.signal_list(answer(early))}
+    assert early_items["reading"]["calibrated"] is False and early_items["reading"]["level"] == "high"
+    assert "early detector" in early_items["reading"]["evidence"]
+    assert checks.flag(answer(early))["level"] == "possible"
+    full_items = {s["name"]: s for s in checks.signal_list(answer(full))}
+    assert full_items["reading"]["calibrated"] is True
+    assert checks.flag(answer(full))["level"] == "high"

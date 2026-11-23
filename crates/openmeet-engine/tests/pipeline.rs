@@ -129,31 +129,14 @@ fn is_complete(e: &MeetingEvent) -> bool {
     matches!(e, MeetingEvent::AnswerComplete { .. })
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn audio_to_overlay_pipeline_with_mock_providers() {
-    // audio -> VAD -> mock transcription -> question detection -> context ->
-    // mock LLM -> overlay events.
-    let h = harness_with(settings(), |llm| {
-        let transcriber = Arc::new(MockTranscriber::new(vec![
-            "How would you design a rate limiter for our public API?".into(),
-        ]));
-        ProviderSet {
-            llm: Some(Arc::new(llm.clone())),
-            transcription: Some(Arc::new(VadTranscriptionProvider::new(transcriber))),
-            ..Default::default()
-        }
-    });
-    h.engine
-        .start_meeting(start_request(Mode::Candidate))
-        .await
-        .unwrap();
-
-    // 0.4 s silence, 1.5 s "speech", 1.2 s silence, as 20 ms system-audio frames
-    // timestamped in the recent past (as if captured in real time).
+/// A remote question as system audio: 0.4 s silence, 1.5 s "speech", 1.2 s
+/// silence, as 20 ms frames timestamped in the recent past (as if captured in
+/// real time).
+fn push_question_audio(engine: &Engine) {
     let mut t = now_ms() - 3_200;
     let mut push = |samples: Vec<f32>| {
         for chunk in samples.chunks(320) {
-            h.engine.push_audio(AudioFrame {
+            engine.push_audio(AudioFrame {
                 source: AudioSourceKind::System,
                 samples: chunk.to_vec(),
                 captured_at_ms: t,
@@ -177,6 +160,30 @@ async fn audio_to_overlay_pipeline_with_mock_providers() {
             .map(|i| if i % 2 == 0 { 0.0004 } else { -0.0004 })
             .collect(),
     );
+}
+
+fn rate_limiter_transcriber_providers(llm: &MockLlmProvider) -> ProviderSet {
+    let transcriber = Arc::new(MockTranscriber::new(vec![
+        "How would you design a rate limiter for our public API?".into(),
+    ]));
+    ProviderSet {
+        llm: Some(Arc::new(llm.clone())),
+        transcription: Some(Arc::new(VadTranscriptionProvider::new(transcriber))),
+        ..Default::default()
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn audio_to_overlay_pipeline_with_mock_providers() {
+    // audio -> VAD -> mock transcription -> question detection -> context ->
+    // mock LLM -> overlay events.
+    let h = harness_with(settings(), rate_limiter_transcriber_providers);
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
+
+    push_question_audio(&h.engine);
 
     let q = h
         .sink
@@ -221,6 +228,28 @@ async fn audio_to_overlay_pipeline_with_mock_providers() {
     assert!(stages.contains(&LatencyStage::AudioToTranscript));
     assert!(stages.contains(&LatencyStage::TranscriptToDetection));
     assert!(stages.contains(&LatencyStage::DetectionToFirstToken));
+}
+
+/// Audio pushed in the same task turn as `start_meeting` (before the audio
+/// router has run) must reach the sessions. On a single-threaded runtime the
+/// router only runs at the first await after the push.
+#[tokio::test]
+async fn audio_pushed_right_after_start_is_not_dropped() {
+    let h = harness_with(settings(), rate_limiter_transcriber_providers);
+    h.engine
+        .start_meeting(start_request(Mode::Candidate))
+        .await
+        .unwrap();
+    push_question_audio(&h.engine);
+    let q = h
+        .sink
+        .wait_for(WAIT, |e| matches!(e, MeetingEvent::QuestionDetected { .. }))
+        .await
+        .expect("question detected from audio pushed right after start");
+    let MeetingEvent::QuestionDetected { question } = q else {
+        unreachable!()
+    };
+    assert!(question.question.to_lowercase().contains("rate limiter"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

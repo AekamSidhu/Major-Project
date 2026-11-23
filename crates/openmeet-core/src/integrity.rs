@@ -300,6 +300,10 @@ pub struct ReadingResult {
     /// Number of 10-second windows scored.
     pub windows: u32,
     pub seconds: f64,
+    /// False when the sidecar scored a short answer (3-10 s) with its early
+    /// detector, whose score is not on the calibrated scale. Defaults to true
+    /// for sidecars that do not send the field.
+    pub calibrated: bool,
 }
 
 /// The local AI sidecar's integrity endpoints (`/v1/integrity/*`).
