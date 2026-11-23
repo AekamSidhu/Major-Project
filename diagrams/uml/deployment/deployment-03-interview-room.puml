@@ -1,0 +1,64 @@
+@startuml
+!include ../../_style.iuml
+' Derived from local-ai/room_server.py (create_room_app, main: port 8443, --no-https binds 127.0.0.1,
+' https binds 0.0.0.0, self_signed_cert under MODEL_DIR/room, --followups local|online|rules),
+' local-ai/room/__init__.py (add_room_routes, transcribe, check_answer, signaling /ws/{room_id}),
+' local-ai/room/room.js (ICE stun.l.google.com:19302, WebSocket /ws/{room}, RTCPeerConnection),
+' local-ai/room/host.html and guest.html (getUserMedia, gaze frames every ~100 ms to /v1/integrity/gaze/frame),
+' local-ai/room/followups.py (Settings: ollama_url 127.0.0.1:11434, llama3.2; gemini-3.5-flash online),
+' local-ai/integrity/models.py (echo_tfidf.json, reading network), integrity/gaze.py (MediaPipe face_landmarker.task,
+' downloaded once), local-ai/server.py (WhisperTranscriber base.en, FastEmbedder BAAI/bge-small-en-v1.5).
+title OpenMeet Room: interview in the browser, interviewer computer and candidate device
+
+skinparam nodesep 25
+skinparam ranksep 60
+
+node "Candidate's device\n(laptop or phone, any browser)" <<device>> as CAND {
+  artifact "guest.html + room.js\n(join page /join/{room}?k=...)" <<browser>> as GUEST
+  artifact "Camera and microphone\n(sent to the interviewer's\nbrowser over WebRTC)" <<hardware>> as CAM
+  GUEST -- CAM
+}
+
+node "Interviewer's computer\n(this computer, runs room_server.py)" <<device>> as HOST {
+  artifact "host.html + room.js\nhttps://localhost:8443/host\n(loopback only)" <<browser>> as HOSTPAGE
+
+  node "Python process: room_server.py\nFastAPI + uvicorn, default port 8443\nHTTPS with a self-signed certificate\n(--no-https: 127.0.0.1 http)" <<executionEnvironment>> as ROOM {
+    artifact "room routes\nroom/__init__.py\n/api/rooms, /api/*, /ws/{room}" <<module>> as RROUTES
+    artifact "integrity routes\nintegrity/__init__.py\n/v1/integrity/*\n(gaze frames, status, reading)" <<module>> as IROUTES
+    artifact "Whisper transcriber\nserver.py (faster-whisper base.en)\nword timestamps" <<module>> as ASR
+    artifact "Echo model: ai_text\nintegrity/models.py\n(echo_tfidf.json)" <<module>> as ECHO
+    artifact "Reading model + gaze\nintegrity/models.py, gaze.py\n(ONNX CNN, MediaPipe face)" <<module>> as READ
+    artifact "Similarity + follow-ups\nroom/similarity.py, room/followups.py\n(LangChain, guardrails)" <<module>> as SIM
+    artifact "Embedder\nserver.py FastEmbedder\n(BAAI/bge-small-en-v1.5)" <<module>> as EMB
+    artifact "checks.py: fusion of the four signals\n(integrity/signals.py fuse)" <<module>> as CHK
+    RROUTES --> ASR : transcribe
+    RROUTES --> CHK : answers
+    CHK --> ECHO
+    CHK --> READ
+    SIM --> EMB
+  }
+
+  database "Room state (memory only)\nrooms, transcript, answers, flags\n(study mode: DIR outside the repo)" <<memory>> as MEM
+  ROOM ..> MEM : lost when the server stops\n(report download first)
+}
+
+node "Ollama on this computer\n127.0.0.1:11434\n(llama3.2, follow-ups and\nreference answers; default)" <<executionEnvironment>> as OLLAMA
+cloud "Google Gemini API\n(only --followups online)" <<external>> as GEMINI
+cloud "Google STUN\nstun.l.google.com:19302\n(finds a route; no media)" <<external>> as STUN
+node "Model files\nMODEL_DIR (local-ai/.models)\nface_landmarker.task fetched once" <<artifact-store>> as MODELS
+
+HOSTPAGE -down-> RROUTES : HTTPS, WSS /ws/{room}\nhost key, loopback only
+HOSTPAGE -down-> IROUTES : HTTPS /v1/integrity/*\n(gaze frame ~10 per s, status 1 per s)
+GUEST -up-> RROUTES : HTTPS /join/{room}\nWSS /ws/{room}?role=guest&k=guest key\n(signaling only; no flags sent)
+CAND -[#4F5BD5,dashed]-> HOST : WebRTC media (peer to peer, DTLS-SRTP)\nvideo and audio never reach the server
+GUEST -- STUN : ICE
+HOSTPAGE -- STUN : ICE
+RROUTES ..> OLLAMA : follow-up questions,\nreference answers (HTTP)
+RROUTES ..> GEMINI : online mode only (HTTPS):\nquestions and answers text, names removed
+ROOM ..> MODELS : loads models at first use
+note bottom of CAM
+  The candidate's join page states what
+  happens; flags, scores and the interviewer's
+  notes are never sent to the candidate.
+end note
+@enduml

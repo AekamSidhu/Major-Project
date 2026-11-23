@@ -1,0 +1,106 @@
+@startuml
+!include ../../../_style.iuml
+' Derived from local-ai/room/host.html (onSpeechStart, emitSegment, closeAnswer, gaze loop, status poll),
+' local-ai/room/guest.html and room.js (connect, makePeer, handleSignal, getMedia), local-ai/room/__init__.py
+' (create_room, transcribe, references, check_answer, answer_similarity, signaling /ws/{room_id}),
+' local-ai/room/checks.py (answer_utterances, question_end, signal_list, flag), local-ai/integrity/signals.py
+' (DeliveryBaseline, fuse), local-ai/integrity/__init__.py (gaze/frame, status, reading),
+' local-ai/room/similarity.py (ReferenceWriter, SimilarityChecker), local-ai/room_server.py (create_room_app).
+title OpenMeet Room: one candidate answer from the invite to the integrity flag
+
+hide footbox
+skinparam maxMessageSize 260
+
+actor "Interviewer" as IV
+participant "host.html\n(interviewer browser)" as HOST
+participant "room_server.py\n(FastAPI, this computer)" as SRV
+participant "Whisper\n(transcriber)" as W
+participant "Echo / reading models,\ngaze tracker" as M
+participant "room model\n(Ollama, references)" as R
+participant "guest.html\n(candidate browser)" as GUEST
+actor "Candidate" as CAND
+
+== Set-up (interviewer computer only) ==
+
+IV -> HOST : opens https://localhost:8443/host
+HOST -> SRV : POST /api/rooms (loopback check)
+SRV --> HOST : room id, host key, invite links
+SRV -> M : monitor.reset() (forget gaze of earlier rooms)
+IV -> CAND : sends invite link /join/{room}?k={guest key}
+CAND -> GUEST : opens the link, types name, allows camera and microphone
+GUEST -> SRV : WSS /ws/{room}?role=guest&k=...&name=...&study_consent (optional)
+HOST -> SRV : WSS /ws/{room}?role=host&k=host key (accepted only from loopback)
+SRV --> GUEST : hello (peer_present)
+SRV --> HOST : peer-joined (name)
+
+== Media: the server only relays the handshake ==
+
+HOST -> SRV : {type: offer, sdp}
+SRV -> GUEST : relay offer
+GUEST -> SRV : {type: answer, sdp}
+SRV -> HOST : relay answer
+HOST <--> GUEST : ICE candidates via the server, then WebRTC media (peer to peer)
+note over HOST, GUEST
+  Video and audio never pass through room_server.py.
+  The interviewer's browser sends only speech segments and
+  candidate video frames to this computer.
+end note
+
+== Gaze, about 10 times a second and once a second ==
+
+loop while connected
+  HOST -> HOST : grab a frame of the candidate's video (JPEG)
+  HOST -> SRV : POST /v1/integrity/gaze/frame (raw JPEG)
+  SRV -> M : add_frame -> iris offset, face found
+  HOST -> SRV : GET /v1/integrity/status (about once a second)
+  SRV --> HOST : gaze state, live reading probability (if enough gaze)
+end
+
+== The candidate speaks (speech cut at pauses) ==
+
+CAND -> HOST : speech (WebRTC audio)
+HOST -> HOST : candidate speech starts: answer opens (start time);\nthe question is the interviewer's text since the last answer
+HOST -> SRV : POST /api/rooms/{room}/references {question}
+SRV -> R : write reference answers to the question (background)
+note right of SRV
+  Started as soon as the question is heard, so
+  the room model is idle again when follow-ups are needed.
+end note
+HOST -> SRV : POST /api/rooms/{room}/transcribe?speaker=candidate&start&end (WAV)
+SRV -> W : transcribe, word timestamps on
+W --> SRV : text, words (segment clock + start)
+SRV --> HOST : {speaker, start, end, text}
+note right of SRV
+  Dropped as phantom ("thank you", "bye", ...)
+  or when the confidence is below 0.35.
+  Kept words land on the meeting clock.
+end note
+
+== The answer ends: the interviewer speaks, or presses End answer ==
+
+IV -> HOST : interviewer speaks (or End answer)
+HOST -> HOST : closeAnswer: wait for the answer's pending transcriptions
+HOST -> SRV : POST /api/rooms/{room}/answers {start, end, text, question, condition?}
+SRV -> M : echo: ai_text of the transcript
+M --> SRV : probability, level
+SRV -> M : reading: gaze series of the answer's window (if 0 < span <= 600 s)
+M --> SRV : reading probability, level (or not enough gaze)
+SRV -> SRV : delivery: this answer's timings against the candidate's\nfirst answers (checks.py / DeliveryBaseline)
+SRV -> SRV : flag = fuse(ai_text, delivery, reading); echo_similarity pending
+SRV --> HOST : answer, with flag and signals (similarity pending)
+
+SRV -> R : similarity: cosine of the answer to the reference answers (background)
+R --> SRV : highest cosine, level (unavailable unless the spec embedder)
+SRV -> SRV : flag recomputed with the four signals
+HOST -> SRV : POST /api/rooms/{room}/answers/{index}/similarity (waits for the job)
+SRV --> HOST : answer with the final flag
+
+== What the candidate sees ==
+
+note over GUEST
+  Nothing about the answer, flag, score or report is sent
+  to the candidate's page. The candidate only sees the
+  call, its status and the join page statement about
+  online or local follow-up questions.
+end note
+@enduml
