@@ -26,6 +26,12 @@ pub async fn generate_followups(state: AppStateRef<'_>) -> CmdResult<String> {
     state.engine.generate_followups()
 }
 
+/// Workplace mode: "Catch me up" over the last `minutes` (1 to 60).
+#[tauri::command]
+pub async fn catch_up(state: AppStateRef<'_>, minutes: u32) -> CmdResult<String> {
+    state.engine.catch_up(minutes)
+}
+
 #[tauri::command]
 pub async fn ask_openmeet(state: AppStateRef<'_>, prompt: String) -> CmdResult<String> {
     state.engine.ask(prompt)

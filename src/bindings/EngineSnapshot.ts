@@ -14,6 +14,7 @@ import type { ScreenObservation } from "./ScreenObservation";
 import type { Suggestion } from "./Suggestion";
 import type { Topic } from "./Topic";
 import type { TranscriptSegment } from "./TranscriptSegment";
+import type { WorkplaceBoard } from "./WorkplaceBoard";
 
 /**
  * Full engine state for windows that (re)load mid-meeting.
@@ -22,4 +23,8 @@ export type EngineSnapshot = { meeting: Meeting | null, state: MeetingState, pau
 /**
  * Answer-integrity flags of the current meeting (latest first).
  */
-integrityFlags: Array<IntegrityFlag>, };
+integrityFlags: Array<IntegrityFlag>, 
+/**
+ * Workplace mode: the live board of the current meeting.
+ */
+workplace: WorkplaceBoard | null, };
