@@ -19,6 +19,7 @@ mss (screen capture); without them the matching endpoints answer 503.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
@@ -131,7 +132,6 @@ def add_routes(
 
     @app.post("/v1/integrity/gaze/frame", dependencies=auth)
     async def frame(request: Request) -> dict[str, Any]:
-        import asyncio
         data = await request.body()
         if not data or len(data) > MAX_FRAME_BYTES:
             raise HTTPException(status_code=400, detail="send one JPEG or PNG frame under 4 MB as the request body")
