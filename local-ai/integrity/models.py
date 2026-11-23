@@ -115,10 +115,17 @@ class ReadingResult:
     level: str
     windows: list[float]
     valid_fraction: float
+    # True when the hand-tuned early detector produced the score (answers of 3-10 s).
+    # Its scores are not on the network's scale, so they are not calibrated.
+    early: bool = False
+
+    @property
+    def calibrated(self) -> bool:
+        return not self.early
 
     def as_dict(self) -> dict[str, Any]:
         return {"reading_probability": self.probability, "level": self.level, "window_probabilities": self.windows,
-                "valid_fraction": self.valid_fraction}
+                "valid_fraction": self.valid_fraction, "early": self.early, "calibrated": self.calibrated}
 
 
 def _early_reading_score(frames: np.ndarray) -> float:
@@ -215,7 +222,7 @@ class ReadingModel:
         if prob <= 0:
             return None
         return ReadingResult(prob, level(prob, self.window_possible, self.window_high),
-                             [prob], vf)
+                             [prob], vf, early=True)
 
     def assess(self, frames: np.ndarray, min_valid: float = 0.6) -> ReadingResult | None:
         """Score a gaze series already on the 10 fps grid, `(frames, 2)` with NaN gaps.
