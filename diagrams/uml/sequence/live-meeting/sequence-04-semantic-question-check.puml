@@ -61,7 +61,7 @@ else confirmed question
   Task ->> Emb : embed_tx.send(EmbedJob) for a remembered answer
   Task -> Sink : QuestionDetected { question }
   opt assistant.auto_answer && engine.mode() == Candidate
-    Task -> Task : answer_question(&engine, &question, engine.style())\n(Primary slot answer, sequence-06)
+    Task -> Task : answer_question(&engine, &question, engine.style())\n(Primary slot answer: not drawn here)
   end
 end
 deactivate Task

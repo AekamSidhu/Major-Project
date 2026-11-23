@@ -1,9 +1,10 @@
 @startuml
 !include ../_style.iuml
-' Derived from: crates/openmeet-store/migrations/0001_initial.sql (schema version 1, the only migration)
-' and crates/openmeet-store/src/migrations.rs (SCHEMA_VERSION = 1, PRAGMA user_version).
+' Derived from: crates/openmeet-store/migrations/0001_initial.sql (schema version 1) and
+' crates/openmeet-store/migrations/0002_integrity_flags.sql (schema version 2, the integrity_flags table),
+' and crates/openmeet-store/src/migrations.rs (MIGRATIONS, SCHEMA_VERSION = 2, PRAGMA user_version).
 ' Every table, column, type, default, key and FOREIGN KEY below is copied from the SQL.
-title OpenMeet SQLite schema v1 - physical ER diagram (crow's foot)
+title OpenMeet SQLite schema v2 - physical ER diagram (crow's foot)
 
 hide circle
 skinparam linetype ortho
@@ -195,6 +196,26 @@ entity "embeddings" as embeddings {
   * updated_at : INTEGER
 }
 
+entity "integrity_flags" as integrity_flags {
+  * id : TEXT <<PK>>
+  --
+  * meeting_id : TEXT <<FK>>
+    question_id : TEXT
+    question_text : TEXT
+  * answer_start_ms : INTEGER
+  * answer_end_ms : INTEGER
+  * answer_words : INTEGER
+  * level : TEXT
+  * elevated : TEXT = '[]'
+  * headline : TEXT
+  * signals : TEXT = '[]'
+  * revision : INTEGER
+  * spec_version : INTEGER
+  * created_at : INTEGER
+  * checked_at : INTEGER
+  * updated_at : INTEGER
+}
+
 package "Not meeting data (kept by delete_all_meeting_data and retention)" {
   entity "privacy_rules" as privacy_rules {
     * id : TEXT <<PK>>
@@ -226,6 +247,7 @@ meetings ||-up-o{ screen_observations
 meetings ||-up-o{ action_items
 meetings ||-up-o| meeting_summaries
 meetings ||-up-o{ embeddings
+meetings ||-up-o{ integrity_flags
 
 privacy_rules -[hidden]down- settings
 
@@ -233,11 +255,13 @@ legend bottom left
   <b>Notation</b>
   ~* = NOT NULL;  <<PK>> primary key;  <<FK>> = meeting_id REFERENCES meetings (id) ON DELETE CASCADE
   <<UK1>> = UNIQUE (meeting_id, item_id, kind, model);  "= x" = DEFAULT x
-  All 14 tables are STRICT. INTEGER timestamps = Unix ms (transcript start_time/end_time = ms from meeting start).
+  All 15 tables are STRICT (v2 adds integrity_flags, migration 0002). INTEGER timestamps = Unix ms (transcript start_time/end_time = ms from meeting start).
   Enums are stored as snake_case TEXT; list columns (parts, segment_ids, followups, entities, summary lists) are JSON TEXT.
   embeddings.vector is the only BLOB (little-endian f32 x dims). No raw audio and no screenshots are stored.
   meeting_summaries.meeting_id is both PK and FK, so a meeting has at most one summary (0..1).
-  The only declared foreign keys are the 11 meeting_id ones drawn here (all ON DELETE CASCADE); other id columns are not enforced (see er-03..er-06).
-  Schema version is tracked with PRAGMA user_version (SCHEMA_VERSION = 1), not with a table.
+  The only declared foreign keys are the 12 meeting_id ones drawn here (all ON DELETE CASCADE); other id columns are not enforced (see er-03).
+  integrity_flags: one row per checked candidate answer (interviewer mode, check turned on); a re-check
+  replaces the row (revision grows). signals and elevated are JSON; no audio, frames or gaze samples are stored.
+  Schema version is tracked with PRAGMA user_version (SCHEMA_VERSION = 2), not with a table.
 endlegend
 @enduml

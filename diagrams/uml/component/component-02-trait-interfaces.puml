@@ -35,6 +35,7 @@ package "openmeet-providers" {
   [OpenAiTranscriber] as OAT
   [OpenAiEmbeddings] as OAE
   [OllamaEmbeddings] as OLE
+  [LocalAiIntegrity] as LAII
 }
 
 package "openmeet-platform" {
@@ -63,6 +64,7 @@ interface VisionProvider as IVP
 interface OcrEngine as IOCR
 interface EmbeddingProvider as IEMB
 interface CapturePrivacy as ICP
+interface IntegrityService as IINT
 
 SINK -- IES
 DB -- IMS
@@ -80,6 +82,7 @@ CPI -- ICP
 LVP -- IVP
 OVP -- IVP
 VAD -- ITP
+LAII -- IINT
 
 FAC -up-( ISR
 
@@ -95,12 +98,15 @@ E -up-( ITP
 E -up-( IVP
 E -up-( IOCR
 E -up-( IEMB
+E -up-( IINT
 
 note as N1
   The engine never names a concrete provider: it receives
   <b>EngineDeps</b> { sink, store, providers: <b>ProviderSet</b>, settings }.
   ProviderSet = llm, fast_llm, transcription, vision, ocr,
-  embeddings (each Option) + issues.
+  embeddings, integrity (each Option) + issues.
+  IntegrityService (openmeet-core/src/integrity.rs) is served by
+  the sidecar's /v1/integrity/* endpoints (LocalAiIntegrity).
   NullStore is used for meetings that are not retained;
   HashingEmbedder is the fallback when ProviderSet.embeddings is None.
   Test/demo doubles (MockLlmProvider, MockTranscriber,

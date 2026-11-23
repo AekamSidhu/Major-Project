@@ -1,3 +1,5 @@
+// Derived from: crates/openmeet-platform/src/screen (capture.rs, diff.rs, rules.rs), crates/openmeet-engine/src/screen.rs,
+//   crates/openmeet-intel/src/vision.rs, crates/openmeet-intel/src/prompts/screen_analysis.rs.
 // DFD Level 2 for process 4.0 (Capture & interpret screen): an explicitly
 // selected source becomes privacy-filtered, change-filtered observations,
 // plus a 10 fps crop of the candidate's video tile for gaze analysis (11.0).

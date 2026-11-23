@@ -65,7 +65,7 @@ Task -> Task : finals.acquire_owned() (Semaphore)
 Task -> Tr : transcribe(request, cancel)\n(timeout TRANSCRIBE_TIMEOUT = 30 s)
 activate Tr
 Tr -> Tr : encode_wav_pcm16(clip.samples)
-Tr -> Srv : multipart POST /v1/audio/transcriptions\n(file, model, language, prompt, response_format=json)
+Tr -> Srv : multipart POST /v1/audio/transcriptions\n(file, model, language, prompt, response_format=json;\nonly when the integrity delivery signal is on:\nresponse_format=verbose_json + timestamp_granularities[]=word)
 activate Srv
 note right of Srv
 TranscriptionProviderKind::LocalAi -> sidecar on loopback

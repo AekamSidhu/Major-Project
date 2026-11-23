@@ -2,6 +2,8 @@
 //   Engine::handle_final(), compression_due(), run_actions(); constants DETECTION_CONTEXT_SEGMENTS,
 //   COMPRESSION_TRIGGER_TOKENS, TOPIC_ANALYSIS_MIN_FINALS, TOPIC_ANALYSIS_INTERVAL_MS
 //   crates/openmeet-engine/src/runtime.rs (accepts_transcript, extend_answer)
+//   crates/openmeet-engine/src/integrity.rs (on_interviewer_question, on_candidate_segment,
+//   run_integrity_actions) for the answer-integrity hooks in interviewer mode
 digraph flowchart_02 {
   graph [fontname="Segoe UI", fontsize=16, labelloc=t, labeljust=c,
          label=<<B>Final transcript segment pipeline — Engine::handle_final()</B><BR/><FONT POINT-SIZE="11">runs for every final draft (TranscriptionEvent::Draft from transcription, or ConvInput::Draft injected by demo / simulation); both modes</FONT>>,
@@ -30,7 +32,9 @@ digraph flowchart_02 {
   dacc  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="accepted as a\nquestion?"];
   ext   [label="rt.extend_answer(segment)\l(append to the open AnswerRecord when\lthe speaker role matches or is Unknown)\l"];
   dturn [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="Interviewer mode, role ≠ User,\nand not (accepted question\nfrom Unknown)?"];
-  turn  [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#E6E9FB" COLOR="#4F5BD5"><TR><TD WIDTH="6"></TD><TD>rt.turn.push(segment); if Active:<BR/>Action::TurnTimer { version, turn_end_silence_ms }<BR/><FONT POINT-SIZE="10">(end-of-turn, flowchart 06)</FONT></TD><TD WIDTH="6"></TD></TR></TABLE>>];
+  turn  [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#E6E9FB" COLOR="#4F5BD5"><TR><TD WIDTH="6"></TD><TD>rt.turn.push(segment);<BR/>integrity::on_candidate_segment (open answer += utterance);<BR/>if Active: Action::TurnTimer { version, turn_end_silence_ms }<BR/><FONT POINT-SIZE="10">(end-of-turn, flowchart 06)</FONT></TD><TD WIDTH="6"></TD></TR></TABLE>>];
+  iq    [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="Interviewer mode and\nasker is the user\n(or role Unknown)?"];
+  iact  [label="integrity::on_interviewer_question\lprevious answer finalized (last check),\lnew question recorded, reference answers\lrequested (Background, IntegrityReference)\l"];
   m1    [shape=point, width=0.05, label=""];
 
   dact  [shape=diamond, style="filled", fillcolor="#FFF8E1", color="#C9A227", label="state =\nActive?"];
@@ -40,7 +44,7 @@ digraph flowchart_02 {
   tact  [label="reset counter, stamp time\lAction::TopicAnalysis\l(lines of the last 300 s, current topics)\l"];
   m2    [shape=point, width=0.05, label=""];
   lat   [label="record latency: AudioToTranscript (measured drafts,\l0..120 s) and TranscriptToDetection\l"];
-  flush [label="apply PersistOps (store) → emit queued MeetingEvents\l→ send EmbedJobs (embed_tx) → run_actions(actions)\l"];
+  flush [label="apply PersistOps (store) → emit queued MeetingEvents\l→ send EmbedJobs (embed_tx) → run_actions(actions)\l→ run_integrity_actions (checks, references, timers)\l"];
   end   [shape=box, style="rounded,filled", fillcolor="#E6E9FB", label="done"];
 
   start -> din -> drt;
@@ -51,7 +55,7 @@ digraph flowchart_02 {
   vrec -> dvact; dvact -> vact [label="yes"]; dvact -> m1 [label="no", arrowhead=none];
   vact -> m1 [arrowhead=none];
   claims -> items -> topics -> detect -> dacc;
-  dacc -> ext [label="no"]; dacc -> dturn [label="yes"]; ext -> dturn;
+  dacc -> ext [label="no"]; dacc -> iq [label="yes"]; iq -> iact [label="yes"]; iq -> dturn [label="no"]; iact -> dturn; ext -> dturn;
   dturn -> turn [label="yes"]; dturn -> m1 [label="no", arrowhead=none]; turn -> m1 [arrowhead=none];
   m1 -> dact;
   dact -> comp [label="yes"]; dact -> m2 [label="no", arrowhead=none];

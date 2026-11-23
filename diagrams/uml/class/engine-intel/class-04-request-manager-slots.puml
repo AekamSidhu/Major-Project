@@ -70,6 +70,8 @@ package "openmeet-core" #FFFFFF {
     QuestionClassification
     TopicAnalysis
     ScreenAnalysis
+    IntegrityCheck
+    IntegrityReference
   }
 }
 interface EventSink <<core trait>> {

@@ -1,3 +1,5 @@
+// Derived from: crates/openmeet-engine/src/conversation.rs, assist.rs, memory.rs, crates/openmeet-intel/src/prompts
+//   (candidate_answer, interviewer_followup, context), crates/openmeet-intel/src/detect.
 // DFD Level 2 for processes 3.0 (Analyse conversation), 5.0 (Assemble
 // context) and 6.0 (Generate suggestions).
 digraph dfd2_suggest {

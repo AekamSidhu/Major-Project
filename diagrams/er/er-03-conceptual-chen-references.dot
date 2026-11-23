@@ -67,7 +67,7 @@ graph ER {
     nor cascades them; load_meeting returns the rows and Rust code resolves the ids.<BR ALIGN="LEFT"/>
     segment_ids is a JSON array column (questions, answers), hence M:N.<BR ALIGN="LEFT"/>
     question_id, supersedes, parent_id, segment_id, source_segment_id are nullable (0..1).<BR ALIGN="LEFT"/>
-    embeddings.item_id + kind: see er-08. screen_observations, topics, participants and<BR ALIGN="LEFT"/>
+    embeddings.item_id + kind name the item a vector belongs to (no row-id reference). screen_observations, topics, participants and<BR ALIGN="LEFT"/>
     meeting_summaries hold no row-id references (summary lists are JSON arrays of strings).<BR ALIGN="LEFT"/>
   >];
   { rank=same; transcript_segments; legend; }

@@ -21,7 +21,7 @@ node "User computer" <<device>> as PC {
     }
 
     node "Python local-AI sidecar\n(optional, child process)" <<executionEnvironment>> as SIDE {
-      artifact "local-ai/server.py\n(FastAPI + uvicorn)" <<artifact>> as SRV
+      artifact "local-ai/server.py\n(FastAPI + uvicorn;\n/v1/audio, /v1/embeddings,\n/v1/integrity/*)" <<artifact>> as SRV
       artifact "local-ai/.venv\n(python, faster-whisper,\nfastembed)" <<artifact>> as VENV
     }
 

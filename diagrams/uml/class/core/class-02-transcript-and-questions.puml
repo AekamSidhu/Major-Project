@@ -2,7 +2,7 @@
 !include ../../../_style.iuml
 ' Derived from crates/openmeet-core/src/types.rs (Mode, AudioSourceKind, SpeakerRole,
 ' TranscriptSegment, TranscriptDraft, QuestionCategory, DetectionMethod, DetectedQuestion,
-' AnswerRecord, VoiceCommand).
+' AnswerRecord, VoiceCommand, WordTiming).
 title openmeet-core: transcript, speakers and detected questions (types.rs)
 
 hide empty members
@@ -18,6 +18,13 @@ class TranscriptDraft <<struct>> {
   +is_final: bool
   +confidence: Option<f32>
   +speaker_role: Option<SpeakerRole>
+  +words: Option<Vec<WordTiming>>  <<Unix ms; from word timestamps>>
+}
+
+class WordTiming <<struct>> {
+  +word: String
+  +start_ms: i64  <<Unix ms in a draft>>
+  +end_ms: i64
 }
 
 class TranscriptSegment <<struct>> {
@@ -122,6 +129,7 @@ TranscriptSegment --> "1" SpeakerRole : speaker_role
 TranscriptSegment --> "1" AudioSourceKind : source
 TranscriptDraft --> "1" AudioSourceKind : source
 TranscriptDraft --> "0..1" SpeakerRole : speaker_role
+TranscriptDraft o-- "0..*" WordTiming : words
 SpeakerRole ..> Mode : label(mode)
 
 DetectedQuestion "0..*" o-- "1..*" TranscriptSegment : segment_ids >

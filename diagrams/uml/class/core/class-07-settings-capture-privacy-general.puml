@@ -1,15 +1,34 @@
 @startuml
 !include ../../../_style.iuml
 ' Derived from crates/openmeet-core/src/settings.rs (AudioSettings, ScreenSettings,
-' ScreenFrequency, PrivacySettings, RetentionPolicy, GeneralSettings), ipc.rs
-' (ScreenSourceSpec, ScreenSourceKind, Rect) and types.rs (UserProfile).
-title openmeet-core: Settings - audio, screen, privacy, general, profile (settings.rs)
+' ScreenFrequency, PrivacySettings, RetentionPolicy, GeneralSettings, IntegritySettings,
+' INTEGRITY_REGION_MIN/MAX), ipc.rs (ScreenSourceSpec, ScreenSourceKind, Rect),
+' types.rs (UserProfile) and integrity.rs (IntegritySignalName, signal_enabled).
+title openmeet-core: Settings - audio, screen, privacy, general, profile, integrity (settings.rs)
 
 hide empty members
 skinparam nodesep 35
 skinparam ranksep 50
 
 class Settings <<struct>>
+
+class IntegritySettings <<struct>> {
+  +enabled: bool = false
+  +ai_text: bool = true
+  +echo_similarity: bool = true
+  +delivery: bool = true
+  +reading: bool = true
+  +candidate_region: Option<Rect> = None
+  --
+  +signal_enabled(signal: IntegritySignalName): bool
+}
+
+enum IntegritySignalName {
+  AiText
+  EchoSimilarity
+  Delivery
+  Reading
+}
 
 class AudioSettings <<struct>> {
   +microphone_enabled: bool = true
@@ -101,8 +120,10 @@ Settings *-- "1" ScreenSettings : screen
 Settings *-- "1" PrivacySettings : privacy
 Settings *-- "1" GeneralSettings : general
 Settings *-- "1" UserProfile : profile
+Settings *-- "1" IntegritySettings : integrity
 
 ScreenSettings --> "1" ScreenFrequency : frequency
+IntegritySettings ..> IntegritySignalName : <<use>> signal_enabled(signal)
 ScreenSettings *-- "0..1" ScreenSourceSpec : source
 ScreenSourceSpec --> "1" ScreenSourceKind : kind
 ScreenSourceSpec *-- "0..1" Rect : region
@@ -133,6 +154,13 @@ end note
 note bottom of ScreenFrequency
   interval_ms: Manual -> None,
   Fps1 -> 1000, Fps2 -> 500, Fps5 -> 200
+end note
+
+note bottom of IntegritySettings
+  Interviewer mode only, opt-in. signal_enabled(s) is
+  enabled && (the signal's own flag). candidate_region is the
+  candidate's video area for gaze; sanitized() clamps its size
+  to 17..8192 px per side. Off by default: no capture runs.
 end note
 
 note bottom of GeneralSettings

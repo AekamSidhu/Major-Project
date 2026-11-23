@@ -3,7 +3,8 @@
 ' Derived from: crates/openmeet-engine/src/engine.rs (EngineDeps, AudioControl, EngineState,
 ' SimState, Inner, Engine, audio_router), screen.rs (spawn_screen_worker), embedder.rs
 ' (spawn_embedder, EmbedJob), conversation.rs (spawn_conversation), lib.rs (re-exports),
-' crates/openmeet-core/src/providers.rs (ProviderSet), events.rs (EventSink), store.rs (MeetingStore).
+' crates/openmeet-core/src/providers.rs (ProviderSet), events.rs (EventSink), store.rs (MeetingStore),
+' integrity.rs (spawn_gaze_worker, GazeCmd; gaze_tx in Inner).
 title openmeet-engine: Engine handle, shared state and background workers
 
 skinparam linetype ortho
@@ -79,6 +80,7 @@ package "openmeet-engine" {
     + sim: Mutex<SimState>
     + deleted: Mutex<VecDeque<Id>>
     + summaries: Mutex<HashMap<Id, CancellationToken>>
+    + gaze_tx: UnboundedSender<GazeCmd>
     + handle: Handle
   }
 
@@ -121,6 +123,11 @@ package "openmeet-engine" {
     rx: watch::Receiver<Option<ScreenFrame>>
     calls Engine::process_screen_frame
   }
+  class spawn_gaze_worker <<async task>> {
+    rx: UnboundedReceiver<GazeCmd>
+    applies Start / Stop / ResetAfterChecks in order
+    calls IntegrityService (gaze/screen, gaze/stop, gaze/reset)
+  }
   class spawn_embedder <<async task>> {
     rx: mpsc::UnboundedReceiver<EmbedJob>
     calls Engine::embed_batch (batches of 16 / 50 ms)
@@ -150,6 +157,7 @@ SimState o-- "0..1" MockLlmProvider : mock
 Inner ..> audio_router : audio_tx / audio_ctl
 Inner ..> spawn_screen_worker : screen_tx
 Inner ..> spawn_embedder : embed_tx
+Inner ..> spawn_gaze_worker : gaze_tx
 audio_router ..> AudioControl
 audio_router o-- "*" TranscriptionSession
 spawn_embedder ..> EmbedJob

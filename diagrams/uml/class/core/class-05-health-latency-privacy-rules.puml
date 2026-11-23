@@ -30,6 +30,7 @@ package "Health" {
     Overlay
     CapturePrivacy
     Hotkeys
+    Integrity
     --
     +label(): &str
   }

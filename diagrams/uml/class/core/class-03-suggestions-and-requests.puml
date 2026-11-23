@@ -105,6 +105,8 @@ enum RequestKind {
   QuestionClassification
   TopicAnalysis
   ScreenAnalysis
+  IntegrityCheck
+  IntegrityReference
 }
 
 enum RequestSlot {

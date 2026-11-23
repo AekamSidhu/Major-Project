@@ -1,3 +1,5 @@
+// Derived from: crates/openmeet-platform/src (audio, screen, ocr, privacy), src-tauri/src/secrets.rs (keyring),
+//   crates/openmeet-providers/src/factory.rs and the provider adapters, crates/openmeet-engine/src (Engine), crates/openmeet-store/src.
 // DFD Level 0 (context diagram): OpenMeet as a single process and the
 // external entities it exchanges data with. Yourdon–DeMarco notation:
 // rectangle = external entity, circle = process. Speech (the interviewer's
@@ -11,7 +13,7 @@ digraph dfd0 {
   node  [fontname="Segoe UI", fontsize=12];
   edge  [fontname="Segoe UI", fontsize=10, color="#3E4756", fontcolor="#3E4756"];
 
-  user   [shape=box, style="filled", fillcolor="#FFFFFF", label="User\n(interviewer or\nworkplace team)"];
+  user   [shape=box, style="filled", fillcolor="#FFFFFF", label="User\n(candidate or\ninterviewer)"];
   os     [shape=box, style="filled", fillcolor="#FFFFFF", label="Operating system\n(audio devices, displays,\nOCR, credential store,\nwindow manager, hotkeys)"];
   local  [shape=box, style="filled", fillcolor="#FFFFFF", label="Local AI services\n(Ollama, OpenMeet\nlocal AI sidecar)"];
   cloud  [shape=box, style="filled,dashed", fillcolor="#FFFFFF", label="Cloud AI providers\n(OpenAI, Anthropic,\nOpenAI-compatible)\noptional"];

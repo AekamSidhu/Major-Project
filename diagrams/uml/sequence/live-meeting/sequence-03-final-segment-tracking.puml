@@ -2,7 +2,7 @@
 !include ../../../_style.iuml
 ' Derived from: crates/openmeet-engine/src/conversation.rs (handle_final, compression_due, remember_answer, run_actions),
 ' crates/openmeet-engine/src/runtime.rs (MeetingRuntime::add_final, open_answer_for, extend_answer, CandidateTurn),
-' crates/openmeet-intel/src/detect.rs (detect, voice::parse_voice_command), crates/openmeet-intel/src/claims.rs,
+' crates/openmeet-intel/src/detect/mod.rs (detect), detect/voice.rs (parse_voice_command), crates/openmeet-intel/src/claims.rs,
 ' crates/openmeet-intel/src/topics.rs (TopicTracker::observe), crates/openmeet-engine/src/embedder.rs
 title Final transcript segment: question detection and conversation tracking (handle_final)
 skinparam maxMessageSize 250
@@ -28,7 +28,7 @@ note right of Conv : embed_jobs += EmbedJob(Segment)
 alt settings.general.voice_commands && role != Remote\n&& parse_voice_command(text) is Some(cmd)
   Conv -> Intel : parse_voice_command(&segment.text)
   Intel --> Conv : Some(VoiceCommand)
-  note right of Conv : events += VoiceCommandRecognized;\nif Active: actions += Action::Voice(cmd)  (sequence-09)
+  note right of Conv : events += VoiceCommandRecognized;\nif Active: actions += Action::Voice(cmd)  (voice commands: not drawn here)
 else ordinary speech
   Conv -> Intel : extract_claims(&segment)
   Intel --> Conv : Vec<Claim>
@@ -64,7 +64,7 @@ else ordinary speech
       Conv -> RT : turn.reset()  (new candidate turn)
     end
     opt Active && Candidate && q.requires_response && assistant.auto_answer
-      note right of Conv : actions += Action::Answer(q)  (sequence-06)
+      note right of Conv : actions += Action::Answer(q)  (answer generation: not drawn here)
     end
   else Active && Candidate && ambiguous && semantic_detection\n(and requires_response, or a non-user speaker when not a question)
     note right of Conv : actions += Action::Semantic { segment, heuristic, recent }\n(sequence-04)
@@ -74,13 +74,14 @@ else ordinary speech
   end
   opt Interviewer && role != User (not an accepted question from Unknown)
     Conv -> RT : turn.push(&segment)  (version += 1)
-    note right of Conv : if Active: actions += Action::TurnTimer\n{ version, turn_end_silence_ms }  (sequence-07)
+    Conv -> RT : integrity::on_candidate_segment (open answer += utterance;\nreturns a turn-end timer; see sequence-01 in integrity/)
+    note right of Conv : if Active: actions += Action::TurnTimer\n{ version, turn_end_silence_ms }  (turn timer: see timing-01)
   end
 end
 
 opt Active
   Conv -> RT : compression_due(rt, &settings)
-  note right of Conv : >= 900 tokens outside the raw window\n-> actions += Action::Compress (sequence-05)
+  note right of Conv : >= 900 tokens outside the raw window\n-> actions += Action::Compress (context compression: not drawn here)
   opt finals_since_topic_analysis >= 12 && >= 180 s since last
     note right of Conv : actions += Action::TopicAnalysis\n{ lines_since(now - 300 s), topics }
   end

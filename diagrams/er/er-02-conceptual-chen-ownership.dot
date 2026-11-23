@@ -1,4 +1,4 @@
-// Derived from: crates/openmeet-store/migrations/0001_initial.sql (primary keys, UNIQUE, and every
+// Derived from: crates/openmeet-store/migrations/0001_initial.sql and 0002_integrity_flags.sql (primary keys, UNIQUE, and every
 // "meeting_id ... REFERENCES meetings (id) ON DELETE CASCADE" clause) and the comments in it
 // ("Not meeting data: kept by delete_all_meeting_data and retention").
 // Chen notation: rectangle = entity (double = weak entity), diamond = relationship (double = identifying),
@@ -14,7 +14,7 @@ graph ER {
   node [shape=box, penwidth=1.4, fillcolor="#E6E9FB", width=1.9];
   meetings [label="meetings", height=0.6, fontsize=14];
   transcript_segments; questions; answers; ai_suggestions; claims;
-  screen_observations; action_items; embeddings;
+  screen_observations; action_items; embeddings; integrity_flags;
   node [peripheries=2];
   participants; topics; meeting_summaries;
   node [peripheries=1];
@@ -25,7 +25,7 @@ graph ER {
   r_top  [label="owns", peripheries=2];
   r_sum  [label="owns", peripheries=2];
   r_seg [label="owns"]; r_q [label="owns"]; r_a [label="owns"]; r_s [label="owns"];
-  r_c [label="owns"]; r_o [label="owns"]; r_ai [label="owns"]; r_e [label="owns"];
+  r_c [label="owns"]; r_o [label="owns"]; r_ai [label="owns"]; r_e [label="owns"]; r_if [label="owns"];
 
   // ---------------- key attributes ----------------
   node [shape=ellipse, fillcolor="#F6F7FD", color="#4F5BD5", fontsize=11, width=0, height=0, margin="0.08,0.03"];
@@ -42,6 +42,7 @@ graph ER {
   k_ai    [label=<<U>id</U>>];
   k_e     [label=<<U>id</U> (INTEGER)>];
   k_eu    [label=<UNIQUE (meeting_id, item_id, kind, model)>, style="filled,dashed"];
+  k_if    [label=<<U>id</U>>];
 
   meetings -- k_meet;
 
@@ -57,6 +58,7 @@ graph ER {
   meetings -- r_o    [headlabel="1", labeldistance=2.2];
   meetings -- r_ai   [headlabel="1", labeldistance=2.2];
   meetings -- r_e    [headlabel="1", labeldistance=2.2];
+  meetings -- r_if   [headlabel="1", labeldistance=2.2];
 
   // owned side: total participation (meeting_id NOT NULL), double line
   edge [color="#3E4756:invis:#3E4756", penwidth=1.1];
@@ -71,12 +73,13 @@ graph ER {
   r_o    -- screen_observations [label="N"];
   r_ai   -- action_items        [label="N"];
   r_e    -- embeddings          [label="N"];
+  r_if   -- integrity_flags     [label="N"];
   edge [color="#3E4756", penwidth=1];
 
   participants -- k_part; topics -- k_top; meeting_summaries -- k_sum;
   transcript_segments -- k_seg; questions -- k_q; answers -- k_a; ai_suggestions -- k_s;
   claims -- k_c; screen_observations -- k_o; action_items -- k_ai;
-  embeddings -- k_e; embeddings -- k_eu;
+  embeddings -- k_e; embeddings -- k_eu; integrity_flags -- k_if;
 
   // ---------------- not meeting data ----------------
   subgraph cluster_standalone {
@@ -93,7 +96,7 @@ graph ER {
   legend [shape=note, style=filled, fillcolor="#FFF8E1", color="#C9A227", fontsize=11, label=<
     <B>Reading the diagram</B><BR ALIGN="LEFT"/>
     Each "owns" diamond is one declared FOREIGN KEY<BR ALIGN="LEFT"/>
-    meeting_id REFERENCES meetings (id) ON DELETE CASCADE (11 in total):<BR ALIGN="LEFT"/>
+    meeting_id REFERENCES meetings (id) ON DELETE CASCADE (12 in total):<BR ALIGN="LEFT"/>
     deleting a meeting deletes every row it owns.<BR ALIGN="LEFT"/>
     Double line = total participation (meeting_id is NOT NULL).<BR ALIGN="LEFT"/>
     Weak entities (double rectangle, identifying double diamond):<BR ALIGN="LEFT"/>

@@ -23,6 +23,7 @@ class Settings <<struct>> {
   +shortcuts: ShortcutSettings
   +general: GeneralSettings
   +profile: UserProfile
+  +integrity: IntegritySettings
   --
   +sanitized(): Settings
   +validate(): Result<(), Vec<String>>
@@ -131,6 +132,7 @@ class OverlaySettings <<struct>>
 class ShortcutSettings <<struct>>
 class GeneralSettings <<struct>>
 class UserProfile <<struct>>
+class IntegritySettings <<struct>>
 
 Settings --> "1" Mode : mode
 Settings *-- "1" AiSettings : ai
@@ -143,6 +145,7 @@ Settings *-- "1" OverlaySettings : overlay
 Settings *-- "1" ShortcutSettings : shortcuts
 Settings *-- "1" GeneralSettings : general
 Settings *-- "1" UserProfile : profile
+Settings *-- "1" IntegritySettings : integrity
 
 AiSettings *-- "1" LlmSettings : llm
 AiSettings *-- "1" VisionSettings : vision

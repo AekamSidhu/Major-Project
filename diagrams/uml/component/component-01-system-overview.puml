@@ -42,8 +42,11 @@ package "Rust library crates" {
   [openmeet-core\n(types, events, traits,\nsettings, IPC DTOs)] as CORE
 }
 
-node "Local AI sidecar\nlocal-ai/server.py (FastAPI)\nfaster-whisper + fastembed\ndefault http://127.0.0.1:8765" as SIDE
+node "Local AI sidecar\nlocal-ai/server.py (FastAPI)\nfaster-whisper + fastembed\n/v1/integrity/* (echo, gaze, reading)\ndefault http://127.0.0.1:8765" as SIDE
 node "Ollama\ndefault http://127.0.0.1:11434" as OLL
+node "Interview room server (separate process)\nlocal-ai/room_server.py (FastAPI)\nHTTPS 8443 on the interviewer's computer;\nnot started by the desktop app" as ROOM
+cloud "Google Gemini API\n(interview room, online mode only)" as GEM
+node "Browser pages: host.html (interviewer),\nguest.html (candidate); WebRTC between them" as RPAGES
 cloud "Cloud / remote LLM APIs\nhttps://api.openai.com\nhttps://api.anthropic.com\nOpenAI-compatible (user URL)" as CLOUD
 database "openmeet.db (SQLite)" as SQLITE
 node "OS services\n(audio, screen, OCR, window APIs,\ncredential store)" as OS
@@ -94,6 +97,11 @@ STO ..> CORE
 LAI ..> SIDE : spawns child process,\nGET /health
 PRV ..> SIDE : HTTP (loopback)
 PRV ..> OLL : HTTP
+ENG ..> PRV : IntegrityService\n(ai_text, reading, gaze)
+PB ..> PRV : build_integrity (when enabled)
+RPAGES ..> ROOM : HTTPS, WSS /ws/{room}\n(room pages and signaling)
+ROOM ..> OLL : follow-ups, reference answers\n(local mode)
+ROOM ..> GEM : online follow-ups only
 PRV ..> CLOUD : HTTP(S), opt-in
 STO --> SQLITE
 PLT ..> OS
