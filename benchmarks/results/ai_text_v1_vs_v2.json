@@ -1,0 +1,535 @@
+{
+ "what": "the AI-written-text model (sidecar EchoModel), v1 (commit 0836f1e) against v2 (working tree), scored on the HC3 test questions of train_content.py",
+ "environment": {
+  "date": "2026-11-23T18:34:19+05:30",
+  "cpu": "13th Gen Intel(R) Core(TM) i9-13900H",
+  "logical_cpus": 20,
+  "ram_gb": 15.7,
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24",
+  "os": "Windows-10-10.0.26300-SP0",
+  "python": "3.11.9",
+  "packages": {
+   "scikit-learn": "1.9.1",
+   "numpy": "2.4.6"
+  },
+  "repo_commit": "f312f96"
+ },
+ "data": {
+  "file": "HC3 all.jsonl (CC BY-SA 4.0)",
+  "split": "train_content.py: split_questions(qid, 0.2, seed 2026), answers as transcripts, at least 15 words, duplicates dropped",
+  "test_answers": 15203,
+  "test_questions": 4761,
+  "chatgpt_answers": 5244,
+  "human_answers": 9959
+ },
+ "models": {
+  "v1": {
+   "file": "echo_tfidf_v1.json",
+   "name": "OpenMeet AI-answer detector v1: TF-IDF (1-2 word grams, 60000 terms) + logistic regression",
+   "source": "0836f1e",
+   "roc_auc": 0.997985524019954,
+   "possible": 0.24939103216004502,
+   "high": 0.4444321836061315,
+   "at_possible": {
+    "detection_rate": 0.9908466819221968,
+    "false_flag_rate": 0.048800080329350334,
+    "balanced_accuracy": 0.9710233007964233,
+    "detected": 5196,
+    "of_ai": 5244,
+    "false_flags": 486,
+    "of_human": 9959,
+    "ci_false_flag_95": [
+     0.0447,
+     0.0532
+    ],
+    "ci_detection_95": [
+     0.9879,
+     0.9931
+    ]
+   },
+   "at_high": {
+    "detection_rate": 0.9778794813119756,
+    "false_flag_rate": 0.01978110252033337,
+    "balanced_accuracy": 0.9790491893958211,
+    "detected": 5128,
+    "of_ai": 5244,
+    "false_flags": 197,
+    "of_human": 9959,
+    "ci_false_flag_95": [
+     0.0172,
+     0.0227
+    ],
+    "ci_detection_95": [
+     0.9735,
+     0.9815
+    ]
+   }
+  },
+  "v2": {
+   "file": "echo_tfidf.json",
+   "name": "OpenMeet AI-answer detector v2: TF-IDF (1-2 word grams, 60000 terms) + logistic regression",
+   "source": "working tree (0ca0fad or later)",
+   "roc_auc": 0.9980319577238455,
+   "possible": 0.24664457862510017,
+   "high": 0.4623592607033633,
+   "at_possible": {
+    "detection_rate": 0.992372234935164,
+    "false_flag_rate": 0.049703785520634605,
+    "balanced_accuracy": 0.9713342247072647,
+    "detected": 5204,
+    "of_ai": 5244,
+    "false_flags": 495,
+    "of_human": 9959,
+    "ci_false_flag_95": [
+     0.0456,
+     0.0541
+    ],
+    "ci_detection_95": [
+     0.9896,
+     0.9944
+    ]
+   },
+   "at_high": {
+    "detection_rate": 0.9776887871853547,
+    "false_flag_rate": 0.01787328044984436,
+    "balanced_accuracy": 0.9799077533677552,
+    "detected": 5127,
+    "of_ai": 5244,
+    "false_flags": 178,
+    "of_human": 9959,
+    "ci_false_flag_95": [
+     0.0155,
+     0.0207
+    ],
+    "ci_detection_95": [
+     0.9733,
+     0.9814
+    ]
+   }
+  }
+ },
+ "by_source": {
+  "finance": {
+   "chatgpt_answers": 904,
+   "human_answers": 781,
+   "v1": {
+    "roc_auc": 0.9986558530588197,
+    "at_possible": {
+     "detection_rate": 0.9933628318584071,
+     "false_flag_rate": 0.04737516005121639,
+     "balanced_accuracy": 0.9729938359035953,
+     "detected": 898,
+     "of_ai": 904,
+     "false_flags": 37,
+     "of_human": 781,
+     "ci_false_flag_95": [
+      0.0346,
+      0.0646
+     ],
+     "ci_detection_95": [
+      0.9856,
+      0.997
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9889380530973452,
+     "false_flag_rate": 0.012804097311139564,
+     "balanced_accuracy": 0.9880669778931028,
+     "detected": 894,
+     "of_ai": 904,
+     "false_flags": 10,
+     "of_human": 781,
+     "ci_false_flag_95": [
+      0.007,
+      0.0234
+     ],
+     "ci_detection_95": [
+      0.9798,
+      0.994
+     ]
+    }
+   },
+   "v2": {
+    "roc_auc": 0.9986742660306165,
+    "at_possible": {
+     "detection_rate": 0.9944690265486725,
+     "false_flag_rate": 0.05121638924455826,
+     "balanced_accuracy": 0.9716263186520571,
+     "detected": 899,
+     "of_ai": 904,
+     "false_flags": 40,
+     "of_human": 781,
+     "ci_false_flag_95": [
+      0.0378,
+      0.069
+     ],
+     "ci_detection_95": [
+      0.9871,
+      0.9976
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9911504424778761,
+     "false_flag_rate": 0.012804097311139564,
+     "balanced_accuracy": 0.9891731725833683,
+     "detected": 896,
+     "of_ai": 904,
+     "false_flags": 10,
+     "of_human": 781,
+     "ci_false_flag_95": [
+      0.007,
+      0.0234
+     ],
+     "ci_detection_95": [
+      0.9826,
+      0.9955
+     ]
+    }
+   }
+  },
+  "medicine": {
+   "chatgpt_answers": 270,
+   "human_answers": 258,
+   "v1": {
+    "roc_auc": 1.0,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "false_flag_rate": 0.01937984496124031,
+     "balanced_accuracy": 0.9903100775193798,
+     "detected": 270,
+     "of_ai": 270,
+     "false_flags": 5,
+     "of_human": 258,
+     "ci_false_flag_95": [
+      0.0083,
+      0.0446
+     ],
+     "ci_detection_95": [
+      0.986,
+      1.0
+     ]
+    },
+    "at_high": {
+     "detection_rate": 1.0,
+     "false_flag_rate": 0.007751937984496124,
+     "balanced_accuracy": 0.9961240310077519,
+     "detected": 270,
+     "of_ai": 270,
+     "false_flags": 2,
+     "of_human": 258,
+     "ci_false_flag_95": [
+      0.0021,
+      0.0278
+     ],
+     "ci_detection_95": [
+      0.986,
+      1.0
+     ]
+    }
+   },
+   "v2": {
+    "roc_auc": 1.0,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "false_flag_rate": 0.015503875968992248,
+     "balanced_accuracy": 0.9922480620155039,
+     "detected": 270,
+     "of_ai": 270,
+     "false_flags": 4,
+     "of_human": 258,
+     "ci_false_flag_95": [
+      0.006,
+      0.0392
+     ],
+     "ci_detection_95": [
+      0.986,
+      1.0
+     ]
+    },
+    "at_high": {
+     "detection_rate": 1.0,
+     "false_flag_rate": 0.003875968992248062,
+     "balanced_accuracy": 0.998062015503876,
+     "detected": 270,
+     "of_ai": 270,
+     "false_flags": 1,
+     "of_human": 258,
+     "ci_false_flag_95": [
+      0.0007,
+      0.0216
+     ],
+     "ci_detection_95": [
+      0.986,
+      1.0
+     ]
+    }
+   }
+  },
+  "open_qa": {
+   "chatgpt_answers": 688,
+   "human_answers": 206,
+   "v1": {
+    "roc_auc": 0.9681149808083088,
+    "at_possible": {
+     "detection_rate": 0.9709302325581395,
+     "false_flag_rate": 0.3155339805825243,
+     "balanced_accuracy": 0.8276981259878076,
+     "detected": 668,
+     "of_ai": 688,
+     "false_flags": 65,
+     "of_human": 206,
+     "ci_false_flag_95": [
+      0.2559,
+      0.3819
+     ],
+     "ci_detection_95": [
+      0.9555,
+      0.9811
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9418604651162791,
+     "false_flag_rate": 0.13592233009708737,
+     "balanced_accuracy": 0.9029690675095958,
+     "detected": 648,
+     "of_ai": 688,
+     "false_flags": 28,
+     "of_human": 206,
+     "ci_false_flag_95": [
+      0.0957,
+      0.1894
+     ],
+     "ci_detection_95": [
+      0.9218,
+      0.957
+     ]
+    }
+   },
+   "v2": {
+    "roc_auc": 0.9699494806954166,
+    "at_possible": {
+     "detection_rate": 0.9811046511627907,
+     "false_flag_rate": 0.32524271844660196,
+     "balanced_accuracy": 0.8279309663580943,
+     "detected": 675,
+     "of_ai": 688,
+     "false_flags": 67,
+     "of_human": 206,
+     "ci_false_flag_95": [
+      0.265,
+      0.3919
+     ],
+     "ci_detection_95": [
+      0.9679,
+      0.9889
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9462209302325582,
+     "false_flag_rate": 0.1407766990291262,
+     "balanced_accuracy": 0.902722115601716,
+     "detected": 651,
+     "of_ai": 688,
+     "false_flags": 29,
+     "of_human": 206,
+     "ci_false_flag_95": [
+      0.0998,
+      0.1949
+     ],
+     "ci_detection_95": [
+      0.9268,
+      0.9607
+     ]
+    }
+   }
+  },
+  "reddit_eli5": {
+   "chatgpt_answers": 3214,
+   "human_answers": 8554,
+   "v1": {
+    "roc_auc": 0.9987196170483384,
+    "at_possible": {
+     "detection_rate": 0.9931549471064095,
+     "false_flag_rate": 0.03694178162263269,
+     "balanced_accuracy": 0.9781065827418884,
+     "detected": 3192,
+     "of_ai": 3214,
+     "false_flags": 316,
+     "of_human": 8554,
+     "ci_false_flag_95": [
+      0.0331,
+      0.0412
+     ],
+     "ci_detection_95": [
+      0.9897,
+      0.9955
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9797759800871189,
+     "false_flag_rate": 0.013794715922375496,
+     "balanced_accuracy": 0.9829906320823717,
+     "detected": 3149,
+     "of_ai": 3214,
+     "false_flags": 118,
+     "of_human": 8554,
+     "ci_false_flag_95": [
+      0.0115,
+      0.0165
+     ],
+     "ci_detection_95": [
+      0.9743,
+      0.9841
+     ]
+    }
+   },
+   "v2": {
+    "roc_auc": 0.9987197261687855,
+    "at_possible": {
+     "detection_rate": 0.9931549471064095,
+     "false_flag_rate": 0.037058685994856205,
+     "balanced_accuracy": 0.9780481305557767,
+     "detected": 3192,
+     "of_ai": 3214,
+     "false_flags": 317,
+     "of_human": 8554,
+     "ci_false_flag_95": [
+      0.0333,
+      0.0413
+     ],
+     "ci_detection_95": [
+      0.9897,
+      0.9955
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9782202862476664,
+     "false_flag_rate": 0.01122281973345803,
+     "balanced_accuracy": 0.9834987332571041,
+     "detected": 3144,
+     "of_ai": 3214,
+     "false_flags": 96,
+     "of_human": 8554,
+     "ci_false_flag_95": [
+      0.0092,
+      0.0137
+     ],
+     "ci_detection_95": [
+      0.9726,
+      0.9827
+     ]
+    }
+   }
+  },
+  "wiki_csai": {
+   "chatgpt_answers": 168,
+   "human_answers": 160,
+   "v1": {
+    "roc_auc": 0.9862723214285715,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "false_flag_rate": 0.39375,
+     "balanced_accuracy": 0.803125,
+     "detected": 168,
+     "of_ai": 168,
+     "false_flags": 63,
+     "of_human": 160,
+     "ci_false_flag_95": [
+      0.3214,
+      0.4711
+     ],
+     "ci_detection_95": [
+      0.9776,
+      1.0
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9940476190476191,
+     "false_flag_rate": 0.24375,
+     "balanced_accuracy": 0.8751488095238096,
+     "detected": 167,
+     "of_ai": 168,
+     "false_flags": 39,
+     "of_human": 160,
+     "ci_false_flag_95": [
+      0.1837,
+      0.3158
+     ],
+     "ci_detection_95": [
+      0.9671,
+      0.9989
+     ]
+    }
+   },
+   "v2": {
+    "roc_auc": 0.9831473214285713,
+    "at_possible": {
+     "detection_rate": 1.0,
+     "false_flag_rate": 0.41875,
+     "balanced_accuracy": 0.790625,
+     "detected": 168,
+     "of_ai": 168,
+     "false_flags": 67,
+     "of_human": 160,
+     "ci_false_flag_95": [
+      0.3451,
+      0.4962
+     ],
+     "ci_detection_95": [
+      0.9776,
+      1.0
+     ]
+    },
+    "at_high": {
+     "detection_rate": 0.9880952380952381,
+     "false_flag_rate": 0.2625,
+     "balanced_accuracy": 0.8627976190476191,
+     "detected": 166,
+     "of_ai": 168,
+     "false_flags": 42,
+     "of_human": 160,
+     "ci_false_flag_95": [
+      0.2005,
+      0.3357
+     ],
+     "ci_detection_95": [
+      0.9576,
+      0.9967
+     ]
+    }
+   }
+  }
+ },
+ "stored_test_metrics": {
+  "v1": {
+   "n_ai": 5244,
+   "n_human": 9959,
+   "threshold": 0.4444321836061315,
+   "balanced_accuracy": 0.9790491893958211,
+   "accuracy": 0.9794119581661515,
+   "recall": 0.9778794813119756,
+   "false_positive_rate": 0.019781102520333382,
+   "roc_auc": 0.997985524019954
+  },
+  "v2": {
+   "balanced": {
+    "n_ai": 5244,
+    "n_human": 9959,
+    "threshold": 0.4623592607033633,
+    "balanced_accuracy": 0.9799077533677552,
+    "recall": 0.9776887871853547,
+    "false_positive_rate": 0.017873280449844375,
+    "roc_auc": 0.9980319577238455
+   },
+   "low_false_positive": {
+    "n_ai": 5244,
+    "n_human": 9959,
+    "threshold": 0.24664457862510017,
+    "balanced_accuracy": 0.9713342247072647,
+    "recall": 0.992372234935164,
+    "false_positive_rate": 0.04970378552063459,
+    "roc_auc": 0.9980319577238455
+   }
+  }
+ }
+}
