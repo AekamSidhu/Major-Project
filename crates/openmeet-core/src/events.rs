@@ -156,6 +156,11 @@ pub enum MeetingEvent {
     IntegrityChecked {
         flag: IntegrityFlag,
     },
+    /// Workplace mode: the live board (decisions, action items, open
+    /// questions, clarifying questions) changed. Carries the whole board.
+    WorkplaceUpdated {
+        board: WorkplaceBoard,
+    },
     /// User-visible notice (errors are never silent).
     Notice {
         level: NoticeLevel,
@@ -205,6 +210,7 @@ impl MeetingEvent {
             MeetingEvent::StyleChanged { .. } => "STYLE_CHANGED",
             MeetingEvent::AudioLevel { .. } => "AUDIO_LEVEL",
             MeetingEvent::IntegrityChecked { .. } => "INTEGRITY_CHECKED",
+            MeetingEvent::WorkplaceUpdated { .. } => "WORKPLACE_UPDATED",
             MeetingEvent::Notice { .. } => "NOTICE",
         }
     }

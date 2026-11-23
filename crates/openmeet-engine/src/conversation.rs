@@ -11,7 +11,7 @@ use openmeet_core::providers::TranscriptionEvent;
 use openmeet_core::types::*;
 use openmeet_intel::claims::{extract_action_items, extract_claims};
 use openmeet_intel::detect::voice::parse_voice_command;
-use openmeet_intel::detect::{DetectionInput, DetectionResult, detect};
+use openmeet_intel::detect::{DetectionInput, DetectionResult, addressed_to_listener, detect};
 use openmeet_intel::prompts::TranscriptLine;
 use openmeet_intel::text::{estimate_tokens, word_count};
 use tokio::sync::mpsc;
@@ -399,6 +399,12 @@ impl Engine {
             } else {
                 // Claims, action items, topics.
                 let claims = extract_claims(&segment);
+                // Workplace mode feeds the board with the same claims.
+                let board_claims = if mode == Mode::Workplace {
+                    claims.clone()
+                } else {
+                    Vec::new()
+                };
                 if !claims.is_empty() {
                     rt.claims.extend(claims.iter().cloned());
                     persist_ops.push(PersistOp::Claims(claims.clone()));
@@ -412,8 +418,14 @@ impl Engine {
                     }
                     events.push(MeetingEvent::ClaimsExtracted { claims });
                 }
-                let items = extract_action_items(&segment);
-                if !items.is_empty() {
+                let items = extract_action_items(&segment, mode);
+                // Workplace mode: the board keeps the items (upserts by id).
+                let board_items = if mode == Mode::Workplace {
+                    items.clone()
+                } else {
+                    Vec::new()
+                };
+                if mode != Mode::Workplace && !items.is_empty() {
                     rt.action_items.extend(items.iter().cloned());
                     persist_ops.push(PersistOp::ActionItems(items));
                     events.push(MeetingEvent::ActionItemsUpdated {
@@ -447,7 +459,7 @@ impl Engine {
                 if result.is_question {
                     let asker_is_user = role == SpeakerRole::User;
                     let accept = match mode {
-                        Mode::Candidate => result.confidence >= threshold,
+                        Mode::Candidate | Mode::Workplace => result.confidence >= threshold,
                         Mode::Interviewer if asker_is_user => result.confidence >= threshold * 0.85,
                         Mode::Interviewer => {
                             result.requires_response && result.confidence >= threshold
@@ -478,6 +490,7 @@ impl Engine {
                         // answers this question.
                         let answers_question = match mode {
                             Mode::Candidate => role != SpeakerRole::User,
+                            Mode::Workplace => role != q.speaker_role,
                             Mode::Interviewer => asker_is_user || role == SpeakerRole::Unknown,
                         };
                         if answers_question && let Some(prev) = rt.open_answer_for(&q) {
@@ -505,6 +518,15 @@ impl Engine {
                             && q.requires_response
                             && settings.assistant.auto_answer
                         {
+                            actions.push(Action::Answer(q));
+                        } else if active
+                            && mode == Mode::Workplace
+                            && q.requires_response
+                            && q.speaker_role != SpeakerRole::User
+                            && settings.assistant.auto_answer
+                            && addressed_to_listener(&q.question)
+                        {
+                            // Only questions put to the user get a suggestion.
                             actions.push(Action::Answer(q));
                         }
                     } else if active
@@ -536,6 +558,32 @@ impl Engine {
 
                 if !is_accepted_question {
                     rt.extend_answer(&segment);
+                }
+
+                // Workplace mode: the live board (decisions, action items,
+                // open questions, clarifying questions).
+                if mode == Mode::Workplace {
+                    let accepted = is_accepted_question
+                        .then(|| rt.questions.last().cloned())
+                        .flatten();
+                    let update = rt.workplace.observe(
+                        &segment,
+                        &board_claims,
+                        board_items,
+                        accepted.as_ref(),
+                    );
+                    if !update.items.is_empty() {
+                        persist_ops.push(PersistOp::ActionItems(update.items.clone()));
+                    }
+                    if update.changed {
+                        rt.action_items = rt.workplace.action_items();
+                        events.push(MeetingEvent::ActionItemsUpdated {
+                            items: rt.action_items.clone(),
+                        });
+                        events.push(MeetingEvent::WorkplaceUpdated {
+                            board: rt.workplace.board(),
+                        });
+                    }
                 }
 
                 // Interviewer mode: accumulate the candidate's turn.

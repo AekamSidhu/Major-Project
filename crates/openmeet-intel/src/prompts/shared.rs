@@ -35,6 +35,9 @@ pub(crate) const DATA_TAGS: &[&str] = &[
     "followups",
     "observations",
     "action_items",
+    "decisions",
+    "open_questions",
+    "board",
     "user_preferences",
 ];
 
@@ -123,6 +126,14 @@ pub(crate) fn role_intro(mode: Mode) -> &'static str {
              \"Candidate\" (or \"Speaker\" when the source is unknown). You help the user \
              understand the conversation and decide what to ask; the user decides what to say."
         }
+        Mode::Workplace => {
+            "You are OpenMeet, a real-time assistant that helps the user (\"You\" in the \
+             transcript) take part in a live team meeting with colleagues — a stand-up, review, \
+             planning session or 1:1. The colleagues appear as \"Others\" (or \"Speaker\" when \
+             the source is unknown). Nobody is being interviewed or evaluated: when a colleague \
+             asks the user something, you suggest what the user could say, as one colleague \
+             answering another; the user decides what to say."
+        }
     }
 }
 
@@ -135,8 +146,22 @@ pub(crate) fn mode_line(mode: Mode) -> &'static str {
         Mode::Interviewer => {
             "Mode: interviewer (the user asks questions; \"Candidate\" is the person interviewed)"
         }
+        Mode::Workplace => {
+            "Mode: workplace (a team meeting with colleagues; \"Others\" are the other \
+             participants; nobody is interviewed)"
+        }
     }
 }
+
+/// Extra answer rule for workplace meetings: colleague tone, no interview
+/// framing, status answers grounded in what was said.
+pub(crate) const WORKPLACE_ANSWER_RULE: &str = "This is a team meeting, not an interview: answer \
+the way one colleague answers another — the status, the facts, the next step, or what the user \
+needs from the team. Never frame the answer as an interview answer (no STAR stories, no selling \
+the user's experience). Status, dates, numbers and commitments may only come from <profile> or \
+from what was said in <transcript>; when they are missing, use bracketed placeholders such as \
+[current status] or [date] and add the caveat. Never commit the user to new work or deadlines \
+they did not mention.";
 
 /// Distinct instructions for each answer style.
 pub(crate) fn style_instruction(style: AnswerStyle) -> &'static str {

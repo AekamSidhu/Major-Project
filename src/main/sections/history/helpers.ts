@@ -228,7 +228,10 @@ export function buildQa(record: MeetingRecord): QaView {
 /** Heading for a spoken answer: the user's own answer or the other side's. */
 export function spokenAnswerLabel(role: SpeakerRole, mode: Mode): string {
   if (role === "user") return "Your answer";
-  if (role === "remote") return mode === "candidate" ? "Interviewer’s reply" : "Candidate’s answer";
+  if (role === "remote") {
+    if (mode === "candidate") return "Interviewer’s reply";
+    return mode === "workplace" ? "Colleague’s reply" : "Candidate’s answer";
+  }
   return "Answer";
 }
 
@@ -238,6 +241,7 @@ const SUGGESTION_KIND_LABELS: Record<SuggestionKind, string> = {
   ask: "Ask OpenMeet",
   refinement: "Refined answer",
   clarification: "Clarifying questions",
+  catch_up: "Catch-up",
 };
 
 export function suggestionKindLabel(kind: SuggestionKind): string {

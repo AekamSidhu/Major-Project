@@ -13,8 +13,8 @@ use crate::timefmt::clock;
 
 /// Stable prompt identifier.
 pub const ID: &str = "question-detection";
-/// Prompt template version.
-pub const VERSION: u32 = 1;
+/// Prompt template version (2: workplace mode).
+pub const VERSION: u32 = 2;
 
 /// Recent lines included for context.
 const MAX_RECENT_LINES: usize = 10;
@@ -49,6 +49,12 @@ fn response_rule(mode: Mode) -> &'static str {
             "Response expected: the user is the interviewer. Questions the \"Candidate\" (or an \
              unidentified \"Speaker\") asks the user — for example about the role, the team or \
              the process — require a response; the user's own questions do not."
+        }
+        Mode::Workplace => {
+            "Response expected: a team meeting with colleagues (\"Others\"). Questions and \
+             requests addressed to the user (\"you\", \"your\", a request for the user's update \
+             or opinion) require a response; questions to someone else or to the room in \
+             general, and the user's own questions, do not."
         }
     }
 }

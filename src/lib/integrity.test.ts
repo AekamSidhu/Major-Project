@@ -79,6 +79,7 @@ describe("live view reducer", () => {
       demoRunning: false,
       processingStopped: false,
       integrityFlags: [quietFlag()],
+      workplace: null,
     });
     let live = reduceLive(snap, { type: "INTEGRITY_CHECKED", flag: raisedFlag() });
     expect(live.integrityFlags.map((f) => f.id)).toEqual(["answer-4", "answer-1"]);

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEven
 import { onMeetingEvent, onUiCommand } from "@/lib/ipc";
 import { parseAnswer } from "@/lib/answer";
 import { isElevated } from "@/lib/integrity";
+import { modeLabel, nextMode } from "@/lib/mode";
 import { applyAppearance, watchSystemTheme } from "@/lib/theme";
 import {
   generateAnswer,
@@ -135,11 +136,11 @@ function Header() {
       </span>
       <button
         type="button"
-        onClick={() => void setMode(core.mode === "candidate" ? "interviewer" : "candidate")}
+        onClick={() => void setMode(nextMode(core.mode))}
         title={withHotkey("Switch mode", modeKey)}
         className="ml-1 rounded-[5px] border border-border px-1.5 py-px text-[0.72rem] font-medium text-muted hover:text-fg"
       >
-        {core.mode === "candidate" ? "Candidate" : "Interviewer"}
+        {modeLabel(core.mode)}
       </button>
       <span data-tauri-drag-region className="flex-1" />
       {screen && (

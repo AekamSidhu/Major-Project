@@ -3,4 +3,4 @@
 /**
  * Which side of the conversation OpenMeet is assisting.
  */
-export type Mode = "candidate" | "interviewer";
+export type Mode = "candidate" | "interviewer" | "workplace";

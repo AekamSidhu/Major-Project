@@ -19,8 +19,8 @@ use crate::timefmt::clock;
 
 /// Stable prompt identifier.
 pub const ID: &str = "topic-analysis";
-/// Prompt template version.
-pub const VERSION: u32 = 1;
+/// Prompt template version (2: workplace mode).
+pub const VERSION: u32 = 2;
 
 /// Token cap for the transcript (the newest lines are kept).
 const MAX_TRANSCRIPT_TOKENS: usize = 6_000;
@@ -40,6 +40,10 @@ fn task(mode: Mode) -> String {
         Mode::Candidate => {
             "Topics marked \"planned\" come from the user's notes: keep them \"pending\" until the \
              conversation actually reaches them."
+        }
+        Mode::Workplace => {
+            "Topics marked \"planned\" come from the meeting agenda in the user's notes: keep them \
+             \"pending\" until the conversation actually reaches them."
         }
     };
     format!(

@@ -287,3 +287,37 @@ describe("tickerText", () => {
     expect(long.endsWith(t.slice(1))).toBe(true);
   });
 });
+
+describe("workplace mode in the overlay", () => {
+  it("offers a suggestion for questions put to the user, not for the user's own", () => {
+    const base = reduceOverlay(INITIAL_STATE, {
+      type: "MODE_CHANGED",
+      mode: "workplace",
+    });
+    const q = {
+      id: "q1",
+      meetingId: "m1",
+      segmentIds: [],
+      isQuestion: true,
+      confidence: 0.9,
+      question: "Can you share the rollout plan by Monday?",
+      parts: [],
+      category: "behavioral" as const,
+      speakerId: null,
+      speakerRole: "remote" as const,
+      requiresResponse: true,
+      method: "heuristic" as const,
+      supersedes: null,
+      detectedAt: 1,
+    };
+    expect(
+      reduceOverlay(base, { type: "QUESTION_DETECTED", question: q }).pendingQuestion?.id,
+    ).toBe("q1");
+    expect(
+      reduceOverlay(base, {
+        type: "QUESTION_DETECTED",
+        question: { ...q, speakerRole: "user" as const },
+      }).pendingQuestion,
+    ).toBeNull();
+  });
+});

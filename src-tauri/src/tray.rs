@@ -25,6 +25,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let candidate = MenuItemBuilder::with_id("mode_candidate", "Candidate Mode").build(app)?;
     let interviewer =
         MenuItemBuilder::with_id("mode_interviewer", "Interviewer Mode").build(app)?;
+    let workplace = MenuItemBuilder::with_id("mode_workplace", "Workplace Mode").build(app)?;
     let settings = MenuItemBuilder::with_id("settings", "Settings…").build(app)?;
     let end = MenuItemBuilder::with_id("end", "End Meeting").build(app)?;
     let stop =
@@ -36,7 +37,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .item(&PredefinedMenuItem::separator(app)?)
         .items(&[&show_overlay, &hide_overlay])
         .item(&PredefinedMenuItem::separator(app)?)
-        .items(&[&candidate, &interviewer])
+        .items(&[&candidate, &interviewer, &workplace])
         .item(&PredefinedMenuItem::separator(app)?)
         .items(&[&settings, &end, &stop])
         .item(&PredefinedMenuItem::separator(app)?)
@@ -101,11 +102,11 @@ fn handle_menu(app: &AppHandle, id: &str) {
                 state.overlay.hide();
                 Ok(())
             }
-            "mode_candidate" | "mode_interviewer" => {
-                let mode = if id == "mode_candidate" {
-                    Mode::Candidate
-                } else {
-                    Mode::Interviewer
+            "mode_candidate" | "mode_interviewer" | "mode_workplace" => {
+                let mode = match id.as_str() {
+                    "mode_candidate" => Mode::Candidate,
+                    "mode_interviewer" => Mode::Interviewer,
+                    _ => Mode::Workplace,
                 };
                 state.engine.set_mode(mode);
                 state.modify_settings(|s| s.mode = mode).await.map(|_| ())

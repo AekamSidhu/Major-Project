@@ -17,8 +17,8 @@ use crate::timefmt::clock;
 
 /// Stable prompt identifier.
 pub const ID: &str = "context-compression";
-/// Prompt template version.
-pub const VERSION: u32 = 1;
+/// Prompt template version (2: workplace mode).
+pub const VERSION: u32 = 2;
 
 /// Cap for the previous summary.
 const MAX_PREVIOUS_TOKENS: usize = 1500;
@@ -27,6 +27,15 @@ const MAX_TRANSCRIPT_TOKENS: usize = 10_000;
 
 /// Builds the compression prompt.
 pub fn build(previous_summary: &str, transcript: &[TranscriptLine], mode: Mode) -> PromptParts {
+    let (labels, neutrality) = match mode {
+        Mode::Candidate | Mode::Interviewer => {
+            ("You, Interviewer, Candidate, Speaker", NON_EVALUATIVE_RULE)
+        }
+        Mode::Workplace => (
+            "You, Others, Speaker",
+            "Stay neutral about people: never rate or judge anyone's performance.",
+        ),
+    };
     let system = assemble(&[
         "You maintain the long-term memory of OpenMeet, a real-time meeting assistant: a compact \
          running summary of a live meeting that later prompts use as context."
@@ -38,10 +47,10 @@ pub fn build(previous_summary: &str, transcript: &[TranscriptLine], mode: Mode) 
 one updated summary.
 Keep: every question that was asked (close to its wording) and who asked it; the key facts of each \
 answer; names, numbers, technologies and systems exactly as stated; decisions, commitments and \
-action items with their owners; open threads; what was shown on screen.
+action items with their owners and due dates; open threads; what was shown on screen.
 Drop: greetings, small talk, filler and repetition.
 Rules: never add facts, interpretations or numbers that are not in the input. Attribute statements \
-to speakers by their labels (You, Interviewer, Candidate, Speaker). {NON_EVALUATIVE_RULE}
+to speakers by their labels ({labels}). {neutrality}
 Output plain text only: short lines starting with \"- \", in chronological order, at most about \
 300 words. No heading, no preamble, no code fences."
         ),

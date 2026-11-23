@@ -9,6 +9,7 @@ use openmeet_core::store::MeetingStore;
 use openmeet_core::types::*;
 use openmeet_intel::prompts::TranscriptLine;
 use openmeet_intel::topics::TopicTracker;
+use openmeet_intel::workplace::WorkplaceTracker;
 use tokio::sync::mpsc;
 
 use crate::conversation::ConvInput;
@@ -67,6 +68,8 @@ pub struct MeetingRuntime {
     pub claims: Vec<Claim>,
     pub gaps: Vec<String>,
     pub action_items: Vec<ActionItem>,
+    /// Workplace mode: the live board (decisions, action items, questions).
+    pub workplace: WorkplaceTracker,
     pub observations: Vec<ScreenObservation>,
     pub topics: TopicTracker,
     pub memory: ContextMemory,
@@ -124,6 +127,7 @@ impl MeetingRuntime {
             claims: Vec::new(),
             gaps: Vec::new(),
             action_items: Vec::new(),
+            workplace: WorkplaceTracker::new(),
             observations: Vec::new(),
             topics,
             memory: ContextMemory::new(),
@@ -276,7 +280,7 @@ impl MeetingRuntime {
     pub fn asked_questions(&self) -> Vec<String> {
         let asker = match self.meeting.mode {
             Mode::Interviewer => SpeakerRole::User,
-            Mode::Candidate => SpeakerRole::Remote,
+            Mode::Candidate | Mode::Workplace => SpeakerRole::Remote,
         };
         self.questions
             .iter()

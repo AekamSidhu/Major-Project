@@ -20,9 +20,11 @@ use openmeet_intel::prompts::interviewer_followup::{FollowupItem, FollowupStream
 use openmeet_intel::prompts::{
     PromptContext, PromptParts, TranscriptLine, ask as ask_prompt, candidate_answer,
     candidate_clarification, context_compression, interviewer_followup, meeting_summary,
-    question_detection, refine as refine_prompt, topic_analysis,
+    question_detection, refine as refine_prompt, topic_analysis, workplace_catchup,
+    workplace_minutes,
 };
 use openmeet_intel::text::{cosine, lexical_similarity, tail_to_tokens, truncate_to_tokens};
+use openmeet_intel::workplace::{decision_lines, extractive_minutes, render_minutes_markdown};
 use tokio_util::sync::CancellationToken;
 
 use crate::conversation::remember_answer;
@@ -72,6 +74,18 @@ enum Builder {
         refinement: Refinement,
         style: AnswerStyle,
     },
+    /// Workplace "Catch me up": the window and the board, owned.
+    CatchUp(CatchUpData),
+}
+
+/// What the catch-up prompt is built from (copied out of the runtime).
+struct CatchUpData {
+    minutes: u32,
+    lines: Vec<TranscriptLine>,
+    earlier: String,
+    decisions: Vec<String>,
+    action_items: Vec<ActionItem>,
+    questions: Vec<OpenQuestion>,
 }
 
 impl Builder {
@@ -85,6 +99,17 @@ impl Builder {
             } => candidate_answer::build(ctx, question, *category, *style, *length, budget),
             Builder::Clarify { question } => candidate_clarification::build(ctx, question, budget),
             Builder::Ask { prompt } => ask_prompt::build(ctx, prompt, budget),
+            Builder::CatchUp(data) => workplace_catchup::build(
+                &workplace_catchup::CatchUpInput {
+                    minutes: data.minutes,
+                    transcript: &data.lines,
+                    earlier_summary: &data.earlier,
+                    decisions: &data.decisions,
+                    action_items: &data.action_items,
+                    questions: &data.questions,
+                },
+                budget,
+            ),
             Builder::Refine {
                 question,
                 previous,
@@ -396,7 +421,65 @@ pub(crate) fn refine(
     )
 }
 
+/// "Catch me up" (workplace mode): what was said and decided in the last
+/// `minutes`, streamed as a suggestion into the primary slot.
+pub(crate) fn catch_up(engine: &Engine, minutes: u32) -> Result<Id, CoreError> {
+    let minutes = minutes.clamp(1, 60);
+    let data = {
+        let st = engine.inner.state.lock();
+        let rt = st
+            .runtime
+            .as_ref()
+            .filter(|r| r.meeting.mode == Mode::Workplace && r.state().is_live())
+            .ok_or_else(|| {
+                CoreError::InvalidState("Catch me up works during a workplace meeting.".into())
+            })?;
+        let window_ms = i64::from(minutes) * 60_000;
+        let since_ms = (rt.now_rel() - window_ms).max(0);
+        let since_unix = now_ms() - window_ms;
+        let board = rt.workplace.board();
+        CatchUpData {
+            minutes,
+            lines: rt.lines_since(since_ms),
+            earlier: rt.memory.long_term_summary.clone(),
+            decisions: decision_lines(&board.decisions, Some(since_unix)),
+            action_items: board
+                .action_items
+                .into_iter()
+                .filter(|a| a.created_at >= since_unix)
+                .collect(),
+            questions: board
+                .open_questions
+                .into_iter()
+                .filter(|q| q.asked_at_ms >= since_ms || !q.answered)
+                .collect(),
+        }
+    };
+    let style = engine.style();
+    start_primary(
+        engine,
+        PrimarySpec {
+            kind: RequestKind::CatchUp,
+            suggestion_kind: SuggestionKind::CatchUp,
+            question_id: None,
+            // The overlay heading shows the window ("Last 5 minutes").
+            question_text: Some(format!("Last {minutes} minutes")),
+            category: None,
+            style: Some(style),
+            parent_id: None,
+            query: "recent discussion, decisions and action items".to_string(),
+            detected_at: None,
+            builder: Builder::CatchUp(data),
+        },
+    )
+}
+
 pub(crate) fn generate_followups(engine: &Engine) -> Result<Id, CoreError> {
+    if engine.mode() == Mode::Workplace {
+        return Err(CoreError::InvalidState(
+            "Follow-up questions are for interviews. Workplace meetings get a follow-up message in the minutes.".into(),
+        ));
+    }
     if engine.mode() == Mode::Candidate {
         return ask(engine, CANDIDATE_QUESTIONS_PROMPT.to_string());
     }
@@ -1512,6 +1595,124 @@ pub(crate) async fn summarize_record(engine: &Engine, record: &MeetingRecord) ->
     summarize_with(engine, record, engine.llm(), "", &[]).await
 }
 
+/// Workplace minutes: the minutes prompt when a model is available, otherwise
+/// (or when its output is unusable) the extractive minutes.
+async fn summarize_minutes(
+    engine: &Engine,
+    record: &MeetingRecord,
+    llm: Option<Arc<dyn LlmProvider>>,
+    long_term: &str,
+) -> MeetingSummary {
+    let Some(llm) = llm else {
+        return extractive_minutes(record);
+    };
+    let mode = Mode::Workplace;
+    let lines: Vec<TranscriptLine> = record
+        .segments
+        .iter()
+        .filter(|s| s.is_final)
+        .map(|s| TranscriptLine {
+            speaker: s.speaker_role.label(mode).to_string(),
+            text: s.text.clone(),
+            at_ms: s.start_time,
+        })
+        .collect();
+    let decision_claims: Vec<Claim> = record
+        .claims
+        .iter()
+        .filter(|c| c.kind == ClaimKind::Decision)
+        .cloned()
+        .collect();
+    let decisions = decision_lines(&decision_claims, None);
+    let questions: Vec<OpenQuestion> = record
+        .questions
+        .iter()
+        .map(|q| {
+            let answer = record
+                .answers
+                .iter()
+                .find(|a| a.question_id.as_deref() == Some(q.id.as_str()));
+            OpenQuestion {
+                id: q.id.clone(),
+                question: q.question.clone(),
+                speaker_role: q.speaker_role,
+                addressed_to_you: q.speaker_role != SpeakerRole::User,
+                asked_at_ms: (q.detected_at - record.meeting.started_at).max(0),
+                answered: answer.is_some(),
+                answer: answer.map(|a| a.text.chars().take(120).collect()),
+                deferred: false,
+            }
+        })
+        .collect();
+    let observations: Vec<String> = record
+        .observations
+        .iter()
+        .map(|o| o.description.clone())
+        .collect();
+    let title = record.meeting.title.clone();
+    let input = workplace_minutes::MinutesInput {
+        title: &title,
+        long_term_summary: long_term,
+        transcript: &lines,
+        decisions: &decisions,
+        action_items: &record.action_items,
+        questions: &questions,
+        topics: &record.topics,
+        observations: &observations,
+    };
+    let parts = workplace_minutes::build(&input, 9000);
+    let ticket = engine
+        .inner
+        .requests
+        .begin(RequestSlot::Background, RequestKind::Summary, |_| None);
+    let info = llm.info();
+    let request = LlmRequest {
+        request_id: ticket.id.clone(),
+        kind: RequestKind::Summary,
+        system: parts.system,
+        messages: vec![ChatMessage::user(parts.user)],
+        max_output_tokens: 3000,
+        temperature: Some(0.2),
+        json_output: true,
+        latency_sensitive: false,
+        seed: None,
+    };
+    engine
+        .inner
+        .requests
+        .set_state(&ticket, AnswerState::Requesting, None);
+    let result = complete(&ticket, llm, request, Duration::from_secs(180)).await;
+    llm_health(engine, &result);
+    let generated_by = format!("{}/{}", info.id, info.model);
+    let parsed = result
+        .as_ref()
+        .ok()
+        .and_then(|t| workplace_minutes::parse(t, &record.meeting.id, &title, &generated_by));
+    engine.inner.requests.set_state(
+        &ticket,
+        if parsed.is_some() {
+            AnswerState::Complete
+        } else {
+            AnswerState::Failed
+        },
+        None,
+    );
+    match parsed {
+        Some(mut s) => {
+            s.markdown = render_minutes_markdown(&s, &title);
+            s
+        }
+        None => {
+            engine.notice(
+                NoticeLevel::Warning,
+                "The AI minutes could not be generated; created basic minutes instead.",
+                Some(Component::Llm),
+            );
+            extractive_minutes(record)
+        }
+    }
+}
+
 fn fallback_summary(record: &MeetingRecord, gaps: &[String]) -> MeetingSummary {
     let mut s = extractive_summary(record);
     merge_gaps(&mut s, gaps);
@@ -1547,6 +1748,9 @@ async fn summarize_with(
     gaps: &[String],
 ) -> MeetingSummary {
     let mode = record.meeting.mode;
+    if mode == Mode::Workplace {
+        return summarize_minutes(engine, record, llm, long_term).await;
+    }
     let Some(llm) = llm else {
         return fallback_summary(record, gaps);
     };

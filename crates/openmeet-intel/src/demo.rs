@@ -54,6 +54,8 @@ pub const URL_SHORTENER: &str = "url-shortener-candidate";
 pub const ARCHITECTURE_SCREEN: &str = "architecture-screen";
 /// Interviewer-mode answer-integrity scenario.
 pub const INTEGRITY: &str = "integrity-interviewer";
+/// Workplace-mode sprint planning scenario.
+pub const SPRINT_PLANNING: &str = "sprint-planning-workplace";
 
 /// Available demo scenarios.
 pub fn scenarios() -> Vec<DemoScenario> {
@@ -75,6 +77,12 @@ pub fn scenarios() -> Vec<DemoScenario> {
             title: "Answer integrity check (interviewer)".into(),
             mode: Mode::Interviewer,
             description: "You are the interviewer with the answer-integrity check on. Three natural answers set the candidate's baseline; the fourth sounds read out, and OpenMeet shows a private flag with its evidence — a reason to ask a follow-up, never a verdict.".into(),
+        },
+        DemoScenario {
+            id: SPRINT_PLANNING.into(),
+            title: "Sprint planning (workplace)".into(),
+            mode: Mode::Workplace,
+            description: "A team plans the sprint. OpenMeet keeps the live board of decisions, action items with owners and dates, and questions still open, flags a vague action item, suggests an answer to a question put to you, and writes the minutes and a follow-up message when the meeting ends.".into(),
         },
         DemoScenario {
             id: ARCHITECTURE_SCREEN.into(),
@@ -121,6 +129,17 @@ pub fn script(scenario_id: &str) -> Option<Vec<DemoStep>> {
             say(Remote, "Good question. For most endpoints I'd fail open and fall back to a local in-memory limiter on each gateway node, so a Redis outage doesn't take the whole API down. For expensive endpoints like bulk exports I'd fail closed instead. And we'd alert on Redis latency and error rates so we notice quickly.", 2_500),
             say(User, "Great. Let's switch to observability. How would you know the limiter is working correctly in production?", 9_000),
             say(Remote, "I'd emit metrics per key and per endpoint: allowed versus throttled requests, Redis script latency, and how often the fallback kicks in. Dashboards in Grafana, plus an alert if the throttle rate jumps suddenly, because that usually means a misconfigured limit rather than abuse.", 2_500),
+        ],
+        SPRINT_PLANNING => vec![
+            say(User, "Morning, everyone. Let's run sprint planning, starting with the billing export migration.", 1_200),
+            say(Remote, "We decided to move the export job to Kafka for this sprint.", 3_000),
+            say(Remote, "Priya will update the runbook by Friday.", 3_000),
+            say(Remote, "Someone should look into the alerting thresholds.", 4_000),
+            say(Remote, "Can you share the rollout plan by Monday?", 4_000),
+            say(User, "Yes, I'll share the rollout plan on Monday.", 6_000),
+            say(Remote, "Do we know if the staging data is ready? Let's take that offline.", 4_000),
+            say(User, "We agreed to freeze the schema for this sprint.", 6_000),
+            say(Remote, "I'll take the alert tuning, I can have it by Wednesday.", 4_000),
         ],
         URL_SHORTENER => vec![
             say(Remote, "Hi, thanks for joining! To get started, could you give me a quick overview of your background?", 1_200),
@@ -460,7 +479,7 @@ mod tests {
                     assert!((1_000..=10_000).contains(delay_ms));
                     let candidate_speaks = match s.mode {
                         Mode::Interviewer => *speaker == SpeakerRole::Remote,
-                        Mode::Candidate => *speaker == SpeakerRole::User,
+                        Mode::Candidate | Mode::Workplace => *speaker == SpeakerRole::User,
                     };
                     if candidate_speaks && s.mode == Mode::Interviewer {
                         assert!(

@@ -105,6 +105,7 @@ pub fn run() {
             commands::meeting::focus_meeting_app,
             commands::assistant::generate_answer,
             commands::assistant::generate_followups,
+            commands::assistant::catch_up,
             commands::assistant::ask_openmeet,
             commands::assistant::clarify_question,
             commands::assistant::refine_answer,

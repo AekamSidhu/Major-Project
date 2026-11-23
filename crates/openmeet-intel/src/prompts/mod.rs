@@ -29,6 +29,8 @@ pub mod question_detection;
 pub mod refine;
 pub mod screen_analysis;
 pub mod topic_analysis;
+pub mod workplace_catchup;
+pub mod workplace_minutes;
 
 mod context;
 pub(crate) mod shared;

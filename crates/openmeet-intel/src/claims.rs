@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 
 use openmeet_core::ids::{new_id, now_ms};
 use openmeet_core::types::{
-    ActionItem, Claim, ClaimKind, ExtractionSource, SpeakerRole, TranscriptSegment,
+    ActionItem, Claim, ClaimKind, ExtractionSource, Mode, SpeakerRole, TranscriptSegment,
 };
 use regex::Regex;
 
@@ -98,6 +98,27 @@ const DECISION: &[&str] = &[
     "we moved to",
     "we migrated to",
     "we replaced",
+    // Spoken agreements in team meetings.
+    "let's go with",
+    "let us go with",
+    "we'll go with",
+    "we will go with",
+    "we're going with",
+    "we are going with",
+    "we agreed",
+    "we've agreed",
+    "we have agreed",
+    "it's decided",
+    "it is decided",
+    "decision is",
+    "the plan is to",
+    "let's stick with",
+    "we'll stick with",
+    "we're sticking with",
+    "final decision",
+    "we're dropping",
+    "we'll drop",
+    "let's drop",
 ];
 const TRADEOFF: &[&str] = &[
     "trade-off",
@@ -242,7 +263,7 @@ fn clip(text: &str) -> String {
 /// statement.
 fn classify_sentence(sentence: &str) -> Option<ClaimKind> {
     let lower = format!(" {} ", normalize(sentence));
-    let raw_lower = sentence.to_lowercase();
+    let raw_lower = sentence.to_lowercase().replace('’', "'");
     if sentence.trim_end().ends_with('?') || word_count(sentence) < 4 {
         return None;
     }
@@ -378,28 +399,296 @@ const REQUEST: &[&str] = &[
     "could you schedule",
 ];
 
-fn owner_label(role: SpeakerRole, self_owned: bool) -> Option<String> {
+/// Owner label of a commitment (`self_owned`) or a request made by `role`.
+pub(crate) fn owner_label(role: SpeakerRole, self_owned: bool) -> Option<String> {
     match (role, self_owned) {
         (SpeakerRole::User, true) | (SpeakerRole::Remote, false) => Some("You".to_string()),
         (SpeakerRole::Remote, true) | (SpeakerRole::User, false) => {
-            Some("Other participant".to_string())
+            Some(OTHER_PARTICIPANT.to_string())
         }
         (SpeakerRole::Unknown, _) => None,
     }
 }
 
+/// Owner label for a commitment made by another participant whose name is
+/// unknown.
+pub(crate) const OTHER_PARTICIPANT: &str = "Other participant";
+
+/// Verbs that make "Priya will …", "I'll …" or "we need to …" a task.
+const TASK_VERBS: &str = r"(?:take|handle|own|update|fix|write|draft|prepare|send|share|review|ping|file|open|create|set up|schedule|follow up|look into|look at|check|investigate|book|organi[sz]e|run|add|move|merge|deploy|ship|finish|test|document|talk to|sync|reach out|loop in|circle back|put together|pair|help|start|coordinate|summari[sz]e|email|call|contact|research|compare|benchmark|migrate|clean up|remove|rename|refactor|reply|respond|confirm|ask|collect|gather|publish|post|present|demo|close|triage|estimate|plan|design|build|implement|configure|upgrade|roll back|roll out|monitor|sort out|figure out|dig into|get|make|do|chase|nudge|decide|agree on|choose|pick|order|tell|invite|go through|walk through|write up|kick off|unblock|escalate|flag|track|measure|verify|validate|double-check|approve|sign off|finali[sz]e|drop|draft)";
+
+/// Capitalized words that are never a person's (or team's) name.
+const NOT_NAMES: &[&str] = &[
+    "I",
+    "We",
+    "You",
+    "They",
+    "He",
+    "She",
+    "It",
+    "Let",
+    "Let's",
+    "Someone",
+    "Somebody",
+    "Everyone",
+    "Everybody",
+    "Anyone",
+    "Anybody",
+    "Nobody",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "Then",
+    "So",
+    "And",
+    "But",
+    "Also",
+    "Okay",
+    "OK",
+    "Ok",
+    "Yes",
+    "No",
+    "Yeah",
+    "Sure",
+    "Well",
+    "Now",
+    "Next",
+    "The",
+    "Our",
+    "My",
+    "Your",
+    "Their",
+    "His",
+    "Her",
+    "There",
+    "Here",
+    "What",
+    "Who",
+    "When",
+    "Where",
+    "Why",
+    "How",
+    "Which",
+    "If",
+    "Maybe",
+    "Probably",
+    "Today",
+    "Tomorrow",
+    "Tonight",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "Great",
+    "Cool",
+    "Right",
+    "Alright",
+    "First",
+    "Finally",
+    "Please",
+    "Thanks",
+    "Hi",
+    "Hey",
+    "Hello",
+    "Actually",
+    "Honestly",
+    "Basically",
+    "Just",
+    "Again",
+    "Once",
+    "After",
+    "Before",
+    "Until",
+    "Since",
+    "Because",
+    "Or",
+    "Nothing",
+    "Everything",
+    "Something",
+    "Team",
+    "Folks",
+    "Guys",
+    "All",
+    "One",
+    "Each",
+    "Every",
+    "Both",
+    "Either",
+    "Neither",
+    "Who's",
+    "Action",
+    "Todo",
+    "Step",
+    "Item",
+];
+
+fn is_name(word: &str) -> bool {
+    let mut chars = word.chars();
+    chars.next().is_some_and(char::is_uppercase)
+        && word
+            .chars()
+            .all(|c| c.is_alphabetic() || c == '-' || c == '\'')
+        && !NOT_NAMES.contains(&word)
+}
+
+static NAMED_COMMIT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"\b([A-Z][A-Za-z'-]+)(?:\s+and\s+([A-Z][A-Za-z'-]+))?\s+(?:will|(?i:is going to|is gonna|are going to|can|could|should|to|needs to|has to|agreed to|offered to|volunteered to))\s+(?i:(?:also|probably|quickly|then)\s+)?(?i:{TASK_VERBS})\b"
+    ))
+    .expect("named commitment pattern is valid")
+});
+static NAMED_REQUEST_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"^\s*(?:(?i:okay|ok|so|and|hey)\s*,?\s+)?([A-Z][A-Za-z'-]+)\s*,\s*(?i:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:also\s+)?{TASK_VERBS})\b"
+    ))
+    .expect("named request pattern is valid")
+});
+static ASSIGN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?:(?i:assign(?:ed|ing)?\s+(?:[a-z'-]+\s+){0,5}?to)|(?i:owner(?:\s+is|:)))\s+([A-Z][A-Za-z'-]+)",
+    )
+    .expect("assignment pattern is valid")
+});
+static OWNS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b([A-Z][A-Za-z'-]+)\s+(?:owns|has|takes|(?i:is taking|is on|can take|will take))\s+(?i:it|this|that)\b")
+        .expect("ownership pattern is valid")
+});
+
+/// A named owner in a commitment or assignment: "Priya will update the
+/// docs", "Priya and Sam will pair on it" ("Priya and Sam"), "assign it to
+/// Sam", "Alex, can you take this?", "Dana is taking it". `None` when no name
+/// is stated (OpenMeet never guesses one).
+pub fn extract_named_owner(sentence: &str) -> Option<String> {
+    let s = sentence.replace('’', "'");
+    if let Some(c) = NAMED_REQUEST_RE.captures(&s)
+        && is_name(&c[1])
+    {
+        return Some(c[1].to_string());
+    }
+    for c in NAMED_COMMIT_RE.captures_iter(&s) {
+        if !is_name(&c[1]) {
+            continue;
+        }
+        return Some(match c.get(2).filter(|m| is_name(m.as_str())) {
+            Some(second) => format!("{} and {}", &c[1], second.as_str()),
+            None => c[1].to_string(),
+        });
+    }
+    for re in [&*ASSIGN_RE, &*OWNS_RE] {
+        if let Some(c) = re.captures(&s)
+            && is_name(&c[1])
+        {
+            return Some(c[1].to_string());
+        }
+    }
+    None
+}
+
+static DUE_RES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    let day = r"(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri)";
+    let month = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?";
+    let ord = r"\d{1,2}(?:st|nd|rd|th)?";
+    let period = r"(?:day|week|month|sprint|quarter|year|the day|the week|the month|the sprint|the quarter|the year)";
+    let event = r"(?:release|demo|launch|deadline|standup|stand-up|retro|review|planning|offsite|cutover|freeze|code freeze|next meeting|next sync|next standup|next stand-up|next sprint|weekend|holidays)";
+    [
+        format!(
+            r"(?i)\b(?:by|before|until|no later than)\s+(?:end of {period}|eod|eow|cob|tomorrow(?: morning| afternoon| evening)?|tonight|today|(?:this|next)\s+(?:week|sprint|month|quarter)|(?:this\s+|next\s+)?{day}(?:\s+(?:morning|afternoon|evening))?|{month}\s+{ord}|(?:the\s+)?{ord}(?:\s+of\s+{month})?|q[1-4]|(?:the\s+)?(?:next\s+|this\s+)?{event})\b"
+        ),
+        format!(r"(?i)\b(?:end of {period}|eod|eow)\b"),
+        format!(r"(?i)\b(?:on|this|next)\s+{day}\b"),
+        r"(?i)\b(?:this|next)\s+(?:week|sprint|month|quarter)\b".to_string(),
+        r"(?i)\b(?:within|in)\s+(?:a|an|one|two|three|four|five|a couple of|\d+)\s+(?:hours?|days?|weeks?|months?|sprints?)\b".to_string(),
+        r"(?i)\b(?:tomorrow(?: morning| afternoon)?|tonight|later today|today)\b".to_string(),
+        r"(?i)\b(?:asap|as soon as possible)\b".to_string(),
+    ]
+    .iter()
+    .map(|p| Regex::new(p).expect("due-date pattern is valid"))
+    .collect()
+});
+
+/// When something is due, as said ("by Friday", "next sprint", "end of
+/// day", "by March 3rd", "in two weeks"); the earliest-starting, longest
+/// phrase. Never resolved to a calendar date.
+pub fn extract_due(text: &str) -> Option<String> {
+    let mut best: Option<(usize, usize)> = None;
+    for re in DUE_RES.iter() {
+        if let Some(m) = re.find(text) {
+            let better = match best {
+                None => true,
+                Some((s, e)) => m.start() < s || (m.start() == s && m.end() > e),
+            };
+            if better {
+                best = Some((m.start(), m.end()));
+            }
+        }
+    }
+    best.map(|(s, e)| text[s..e].trim().to_string())
+}
+
+static WORKPLACE_SELF_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"(?i)\b(?:i'll|i will|i'm going to|i am going to|i'm gonna|i can|let me|i've got to|i need to)\s+(?:also\s+|just\s+|quickly\s+|go\s+ahead\s+and\s+|try\s+to\s+)?{TASK_VERBS}\b"
+    ))
+    .expect("commitment pattern is valid")
+});
+static WORKPLACE_TEAM_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"(?i)\b(?:we need to|we should|we have to|we've got to|we must|someone needs to|someone should|somebody needs to|somebody should|someone has to|need someone to|let's make sure (?:we |to )?|make sure (?:we|to)|can someone|could someone|can somebody|could somebody|let's)\s+(?:also\s+|probably\s+|still\s+)?{TASK_VERBS}\b"
+    ))
+    .expect("team task pattern is valid")
+});
+
 /// Commitments and requests ("I'll send the design doc", "let's schedule a
-/// follow-up", "can you share the slides?") in a FINAL segment.
-pub fn extract_action_items(segment: &TranscriptSegment) -> Vec<ActionItem> {
+/// follow-up", "can you share the slides?") in a FINAL segment, with the
+/// owner and due date when stated.
+///
+/// In workplace mode the phrasing of team meetings counts too: any "I'll /
+/// I can + task" commitment, "Priya will update the docs", "Alex, can you
+/// take this?", "we need to update the runbook", "someone should check the
+/// alerts". Named owners ("Priya") take precedence over the speaker.
+pub fn extract_action_items(segment: &TranscriptSegment, mode: Mode) -> Vec<ActionItem> {
+    let workplace = mode == Mode::Workplace;
     let mut out: Vec<ActionItem> = Vec::new();
     let now = now_ms();
     for sentence in split_sentences(&segment.text) {
         let lower = sentence.to_lowercase().replace('’', "'");
+        let question = sentence.trim_end().ends_with('?');
+        let named = extract_named_owner(&sentence);
+        let request_owner = || {
+            if workplace
+                && segment.speaker_role != SpeakerRole::User
+                && !crate::detect::addressed_to_listener(&sentence)
+            {
+                None
+            } else {
+                owner_label(segment.speaker_role, false)
+            }
+        };
         let owner = if contains_any(&lower, SELF_COMMIT) {
             Some(owner_label(segment.speaker_role, true))
         } else if contains_any(&lower, REQUEST) {
-            Some(owner_label(segment.speaker_role, false))
-        } else if contains_any(&lower, TEAM_COMMIT) {
+            Some(request_owner())
+        } else if contains_any(&lower, TEAM_COMMIT) || (workplace && named.is_some()) {
+            Some(None)
+        } else if workplace && !question && WORKPLACE_SELF_RE.is_match(&lower) {
+            Some(owner_label(segment.speaker_role, true))
+        } else if workplace && WORKPLACE_TEAM_RE.is_match(&lower) {
             Some(None)
         } else {
             None
@@ -416,7 +705,8 @@ pub fn extract_action_items(segment: &TranscriptSegment) -> Vec<ActionItem> {
             id: new_id(),
             meeting_id: segment.meeting_id.clone(),
             text,
-            owner,
+            owner: named.or(owner),
+            due: extract_due(&sentence),
             source_segment_id: Some(segment.id.clone()),
             created_at: now,
         });
@@ -522,17 +812,196 @@ mod tests {
 
     #[test]
     fn action_items_with_owners() {
-        let items = extract_action_items(&seg(
-            "Great talking to you. I'll send over the design doc tomorrow. Can you share the slides with me? Let's schedule a follow-up next week.",
-            SpeakerRole::User,
-        ));
+        let items = extract_action_items(
+            &seg(
+                "Great talking to you. I'll send over the design doc tomorrow. Can you share the slides with me? Let's schedule a follow-up next week.",
+                SpeakerRole::User,
+            ),
+            Mode::Candidate,
+        );
         assert_eq!(items.len(), 3);
         assert_eq!(items[0].owner.as_deref(), Some("You"));
+        assert_eq!(items[0].due.as_deref(), Some("tomorrow"));
         assert_eq!(items[1].owner.as_deref(), Some("Other participant"));
+        assert_eq!(items[1].due, None);
         assert_eq!(items[2].owner, None);
+        assert_eq!(items[2].due.as_deref(), Some("next week"));
         assert!(
-            extract_action_items(&seg("We talked about caching.", SpeakerRole::User)).is_empty()
+            extract_action_items(
+                &seg("We talked about caching.", SpeakerRole::User),
+                Mode::Candidate
+            )
+            .is_empty()
         );
+    }
+
+    #[test]
+    fn interview_answers_do_not_become_team_tasks() {
+        // Workplace phrasing is only widened in workplace mode.
+        for mode in [Mode::Candidate, Mode::Interviewer] {
+            let items = extract_action_items(
+                &seg(
+                    "We need to handle retries there. I can add a cache in front.",
+                    SpeakerRole::Remote,
+                ),
+                mode,
+            );
+            assert!(items.is_empty(), "{mode:?}: {items:?}");
+        }
+    }
+
+    #[test]
+    fn workplace_action_items_table() {
+        // (speaker, sentence, expected owner, expected due); None = not an action item.
+        type Case = (
+            SpeakerRole,
+            &'static str,
+            Option<(Option<&'static str>, Option<&'static str>)>,
+        );
+        let cases: &[Case] = &[
+            (
+                SpeakerRole::Remote,
+                "Priya will pair with Sam on it and have a fix ready by Thursday.",
+                Some((Some("Priya"), Some("by Thursday"))),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Priya and Sam will review the migration plan next week.",
+                Some((Some("Priya and Sam"), Some("next week"))),
+            ),
+            (
+                SpeakerRole::Remote,
+                "So we need to update the runbook.",
+                Some((None, None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Someone should check the alert thresholds before the release.",
+                Some((None, Some("before the release"))),
+            ),
+            (
+                SpeakerRole::User,
+                "I'll draft the announcement by end of day.",
+                Some((Some("You"), Some("by end of day"))),
+            ),
+            (
+                SpeakerRole::User,
+                "I can take the runbook update.",
+                Some((Some("You"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "I'll look into the flaky test.",
+                Some((Some("Other participant"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Alex, can you file a ticket for the timeout?",
+                Some((Some("Alex"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Can you share the dashboard link after the call?",
+                Some((Some("You"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Could someone send me the dashboard link?",
+                Some((None, None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Let's assign the cleanup to Dana.",
+                Some((Some("Dana"), None)),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Action item: Sam to benchmark the new cache in two weeks.",
+                Some((Some("Sam"), Some("in two weeks"))),
+            ),
+            (
+                SpeakerRole::Remote,
+                "Let's go with the token refresh fix this sprint.",
+                None,
+            ),
+            (
+                SpeakerRole::Remote,
+                "We shipped the export last week.",
+                None,
+            ),
+            (
+                SpeakerRole::Remote,
+                "Monday will be busy for everyone.",
+                None,
+            ),
+            (
+                SpeakerRole::Remote,
+                "Who can take the runbook update?",
+                None,
+            ),
+            (SpeakerRole::User, "I think it went well overall.", None),
+        ];
+        for (role, text, expected) in cases {
+            let items = extract_action_items(&seg(text, *role), Mode::Workplace);
+            match expected {
+                None => assert!(items.is_empty(), "{text}: {items:?}"),
+                Some((owner, due)) => {
+                    assert_eq!(items.len(), 1, "{text}: {items:?}");
+                    assert_eq!(items[0].owner.as_deref(), *owner, "{text}");
+                    assert_eq!(items[0].due.as_deref(), *due, "{text}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn due_dates_as_spoken() {
+        for (text, due) in [
+            ("I'll send it by Friday.", Some("by Friday")),
+            ("Ship it by the 15th please", Some("by the 15th")),
+            ("Let's have it done by March 3rd.", Some("by March 3rd")),
+            ("before next standup", Some("before next standup")),
+            ("we can do it next sprint", Some("next sprint")),
+            ("I'll get to it on Monday", Some("on Monday")),
+            ("by EOD", Some("by EOD")),
+            ("let's aim for end of the week", Some("end of the week")),
+            ("within two days", Some("within two days")),
+            ("I'll do it ASAP", Some("ASAP")),
+            ("We talked about the roadmap.", None),
+            ("It took two weeks last time.", None),
+        ] {
+            assert_eq!(extract_due(text).as_deref(), due, "{text}");
+        }
+    }
+
+    #[test]
+    fn named_owners_are_never_guessed() {
+        for (text, owner) in [
+            ("Priya will update the docs.", Some("Priya")),
+            ("Hey Sam, could you review the PR?", Some("Sam")),
+            ("The owner is Dana.", Some("Dana")),
+            ("Dana is taking it.", Some("Dana")),
+            ("We will update the docs.", None),
+            ("Then we'll update the docs.", None),
+            ("Tomorrow will be quiet.", None),
+            ("Let's update the docs.", None),
+        ] {
+            assert_eq!(extract_named_owner(text).as_deref(), owner, "{text}");
+        }
+    }
+
+    #[test]
+    fn meeting_decisions_are_claims() {
+        for text in [
+            "Okay, let's go with the token refresh fix this sprint.",
+            "We agreed to freeze the schema until the launch.",
+            "So the plan is to migrate billing first.",
+            "We're dropping the legacy CSV export.",
+        ] {
+            let c = extract_claims(&seg(text, SpeakerRole::Remote));
+            assert_eq!(c.len(), 1, "{text}");
+            assert_eq!(c[0].kind, ClaimKind::Decision, "{text}");
+        }
     }
 
     #[test]

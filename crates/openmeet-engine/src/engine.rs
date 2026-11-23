@@ -967,6 +967,11 @@ impl Engine {
         crate::assist::generate_answer(self, req)
     }
 
+    /// Workplace mode: "Catch me up", a summary of the last `minutes`.
+    pub fn catch_up(&self, minutes: u32) -> Result<Id, CoreError> {
+        crate::assist::catch_up(self, minutes)
+    }
+
     /// Interviewer: follow-ups for the candidate's latest answer.
     /// Candidate: questions the user could ask the interviewer.
     pub fn generate_followups(&self) -> Result<Id, CoreError> {
@@ -1070,7 +1075,7 @@ impl Engine {
     }
 
     pub fn toggle_mode(&self) -> Mode {
-        let next = self.mode().toggled();
+        let next = self.mode().next();
         self.set_mode(next);
         next
     }
@@ -1155,6 +1160,7 @@ impl Engine {
                     demo_running: rt.demo && rt.state().is_live(),
                     processing_stopped: st.processing_stopped,
                     integrity_flags: rt.integrity.snapshot_flags(),
+                    workplace: (rt.meeting.mode == Mode::Workplace).then(|| rt.workplace.board()),
                 }
             }
             None => EngineSnapshot {
@@ -1177,6 +1183,7 @@ impl Engine {
                 demo_running: false,
                 processing_stopped: st.processing_stopped,
                 integrity_flags: Vec::new(),
+                workplace: None,
             },
         }
     }
@@ -1264,6 +1271,7 @@ fn default_title(mode: Mode) -> String {
     match mode {
         Mode::Candidate => "Meeting".to_string(),
         Mode::Interviewer => "Interview".to_string(),
+        Mode::Workplace => "Team meeting".to_string(),
     }
 }
 

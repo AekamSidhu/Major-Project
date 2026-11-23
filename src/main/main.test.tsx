@@ -49,6 +49,7 @@ const EMPTY_SNAPSHOT: EngineSnapshot = {
   demoRunning: false,
   processingStopped: false,
   integrityFlags: [],
+  workplace: null,
 };
 
 describe("reduceLive", () => {

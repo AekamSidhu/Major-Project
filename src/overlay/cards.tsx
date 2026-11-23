@@ -3,7 +3,14 @@
 // topic tracker.
 
 import { useMemo, useState } from "react";
-import type { AnswerStyle, FollowUpQuestion, IntegrityFlag, Refinement, Topic } from "@/bindings";
+import type {
+  AnswerStyle,
+  FollowUpQuestion,
+  IntegrityFlag,
+  Mode,
+  Refinement,
+  Topic,
+} from "@/bindings";
 import { answerToPlainText, parseAnswer, type ParsedAnswer } from "@/lib/answer";
 import { IntegrityFlagView } from "@/lib/IntegrityFlagView";
 import { answerRangeLabel, flagSummary, isElevated } from "@/lib/integrity";
@@ -13,6 +20,7 @@ import {
   copyText,
   dismiss,
   generateAnswer,
+  catchUp,
   generateFollowups,
   openMainWindow,
   refine,
@@ -79,6 +87,9 @@ function useCopied(): [boolean, (text: string) => void] {
 
 function headerFor(p: PrimaryRequest): { label: string; text: string | null } {
   switch (p.kind) {
+    case "catch_up":
+      // The heading is the window: "Last 5 minutes".
+      return { label: p.questionText ?? "Catch-up", text: null };
     case "ask_ai":
       return { label: "Ask OpenMeet", text: p.questionText };
     case "clarification":
@@ -105,7 +116,16 @@ function Thinking({ label }: { label: string }) {
   );
 }
 
-function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
+function Sections({
+  a,
+  streaming,
+  recap = false,
+}: {
+  a: ParsedAnswer;
+  streaming: boolean;
+  /** A catch-up: the answer section is a recap, not something to say aloud. */
+  recap?: boolean;
+}) {
   const [showExample, setShowExample] = useState(true);
   const caretOn = (key: ParsedAnswer["current"]) => streaming && a.current === key;
   return (
@@ -127,7 +147,7 @@ function Sections({ a, streaming }: { a: ParsedAnswer; streaming: boolean }) {
       )}
       {(a.answer || (streaming && a.current === "answer")) && (
         <div>
-          <SectionLabel>Suggested answer</SectionLabel>
+          <SectionLabel>{recap ? "Recap" : "Suggested answer"}</SectionLabel>
           <p
             className={cx(
               "mt-1 text-[0.92rem] leading-relaxed whitespace-pre-wrap text-fg",
@@ -227,7 +247,7 @@ export function PrimaryCard({
 }: {
   p: PrimaryRequest;
   style: AnswerStyle;
-  mode: "candidate" | "interviewer";
+  mode: Mode;
 }) {
   const parsed = useMemo(() => parseAnswer(p.text), [p.text]);
   const [copied, copy] = useCopied();
@@ -254,7 +274,9 @@ export function PrimaryCard({
       </div>
 
       {thinking && <Thinking label="Thinking…" />}
-      {!thinking && p.text.trim() && <Sections a={parsed} streaming={p.state === "streaming"} />}
+      {!thinking && p.text.trim() && (
+        <Sections a={parsed} streaming={p.state === "streaming"} recap={p.kind === "catch_up"} />
+      )}
 
       {p.state === "failed" && (
         <div
@@ -281,29 +303,32 @@ export function PrimaryCard({
 
       {!thinking && (p.text.trim() || p.state === "complete") && (
         <div className="space-y-1.5">
-          <div
-            className="flex flex-wrap items-center gap-1"
-            role="group"
-            aria-label="Answer controls"
-          >
-            <ChipButton
-              disabled={running}
-              title={withHotkey("Regenerate", regenerateKey)}
-              onClick={() => void refine(p.requestId, "regenerate")}
+          {/* A catch-up is a recap: no answer refinements (Retry re-runs it). */}
+          {p.kind !== "catch_up" && (
+            <div
+              className="flex flex-wrap items-center gap-1"
+              role="group"
+              aria-label="Answer controls"
             >
-              <RefreshIcon /> Regenerate
-            </ChipButton>
-            {REFINEMENTS.map((r) => (
               <ChipButton
-                key={r.value}
-                disabled={!canRefine}
-                title={r.title}
-                onClick={() => void refine(p.requestId, r.value)}
+                disabled={running}
+                title={withHotkey("Regenerate", regenerateKey)}
+                onClick={() => void refine(p.requestId, "regenerate")}
               >
-                {r.label}
+                <RefreshIcon /> Regenerate
               </ChipButton>
-            ))}
-          </div>
+              {REFINEMENTS.map((r) => (
+                <ChipButton
+                  key={r.value}
+                  disabled={!canRefine}
+                  title={r.title}
+                  onClick={() => void refine(p.requestId, r.value)}
+                >
+                  {r.label}
+                </ChipButton>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             {mode === "candidate" && (p.kind === "candidate_answer" || p.kind === "refinement") ? (
               <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Answer style">
@@ -492,7 +517,7 @@ export function TopicsStrip({
 }
 
 /** Empty state while listening, with manual triggers (spec §93). */
-export function ListeningActions({ mode }: { mode: "candidate" | "interviewer" }) {
+export function ListeningActions({ mode }: { mode: Mode }) {
   const answerKey = useHotkey("generate_answer");
   const followKey = useHotkey("generate_followups");
   return (
@@ -503,6 +528,10 @@ export function ListeningActions({ mode }: { mode: "candidate" | "interviewer" }
           onClick={() => void generateAnswer(null)}
         >
           Answer latest question
+        </ActionButton>
+      ) : mode === "workplace" ? (
+        <ActionButton title="Summarize the last five minutes" onClick={() => void catchUp(5)}>
+          Catch me up
         </ActionButton>
       ) : (
         <ActionButton

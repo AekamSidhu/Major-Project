@@ -4,7 +4,8 @@ import type { ResponseLength } from "./ResponseLength";
 
 export type AssistantSettings = { answerStyle: AnswerStyle, responseLength: ResponseLength, 
 /**
- * Candidate mode: generate a suggestion as soon as a question is detected.
+ * Candidate and workplace modes: generate a suggestion as soon as a
+ * question to the user is detected.
  */
 autoAnswer: boolean, 
 /**

@@ -13,6 +13,7 @@ use openmeet_core::store::{EmbeddingRecord, MeetingStore};
 use openmeet_core::types::{
     ActionItem, AnswerRecord, Claim, DetectedQuestion, InterviewerSummary, Meeting, MeetingRecord,
     MeetingSummary, Participant, ScreenObservation, Suggestion, Topic, TranscriptSegment,
+    WorkplaceMinutes,
 };
 use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
 use tracing::debug;
@@ -165,13 +166,14 @@ const UPSERT_OBSERVATION: &str = "
         updated_at = excluded.updated_at";
 
 const UPSERT_ACTION_ITEM: &str = "
-    INSERT INTO action_items (id, meeting_id, text, owner, source_segment_id, created_at,
+    INSERT INTO action_items (id, meeting_id, text, owner, due, source_segment_id, created_at,
                               updated_at)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
     ON CONFLICT (id) DO UPDATE SET
         meeting_id = excluded.meeting_id,
         text = excluded.text,
         owner = excluded.owner,
+        due = excluded.due,
         source_segment_id = excluded.source_segment_id,
         created_at = excluded.created_at,
         updated_at = excluded.updated_at";
@@ -179,9 +181,9 @@ const UPSERT_ACTION_ITEM: &str = "
 const UPSERT_SUMMARY: &str = "
     INSERT INTO meeting_summaries (meeting_id, overview, key_topics, questions_asked, answers,
                                    decisions, action_items, open_questions, technical_topics,
-                                   follow_up_suggestions, interviewer, markdown, generated_at,
-                                   generated_by, created_at, updated_at)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
+                                   follow_up_suggestions, interviewer, workplace, markdown,
+                                   generated_at, generated_by, created_at, updated_at)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16)
     ON CONFLICT (meeting_id) DO UPDATE SET
         overview = excluded.overview,
         key_topics = excluded.key_topics,
@@ -193,6 +195,7 @@ const UPSERT_SUMMARY: &str = "
         technical_topics = excluded.technical_topics,
         follow_up_suggestions = excluded.follow_up_suggestions,
         interviewer = excluded.interviewer,
+        workplace = excluded.workplace,
         markdown = excluded.markdown,
         generated_at = excluded.generated_at,
         generated_by = excluded.generated_by,
@@ -281,7 +284,7 @@ const SELECT_OBSERVATIONS: &str = "
     ORDER BY observed_at, id";
 
 const SELECT_ACTION_ITEMS: &str = "
-    SELECT id, meeting_id, text, owner, source_segment_id, created_at
+    SELECT id, meeting_id, text, owner, due, source_segment_id, created_at
     FROM action_items WHERE meeting_id = ?1
     ORDER BY created_at, id";
 
@@ -294,8 +297,8 @@ const SELECT_INTEGRITY_FLAGS: &str = "
 
 const SELECT_SUMMARY: &str = "
     SELECT meeting_id, overview, key_topics, questions_asked, answers, decisions, action_items,
-           open_questions, technical_topics, follow_up_suggestions, interviewer, markdown,
-           generated_at, generated_by
+           open_questions, technical_topics, follow_up_suggestions, interviewer, workplace,
+           markdown, generated_at, generated_by
     FROM meeting_summaries WHERE meeting_id = ?1";
 
 // ---------------------------------------------------------------------------
@@ -587,6 +590,7 @@ impl MeetingStore for Database {
                         item.meeting_id,
                         item.text,
                         item.owner,
+                        item.due,
                         item.source_segment_id,
                         item.created_at,
                         now,
@@ -614,6 +618,7 @@ impl MeetingStore for Database {
                 Json(&summary.technical_topics),
                 Json(&summary.follow_up_suggestions),
                 summary.interviewer.as_ref().map(Json),
+                summary.workplace.as_ref().map(Json),
                 summary.markdown,
                 summary.generated_at,
                 summary.generated_by,
@@ -897,6 +902,7 @@ fn action_item_from_row(row: &Row<'_>) -> rusqlite::Result<ActionItem> {
         meeting_id: row.get("meeting_id")?,
         text: row.get("text")?,
         owner: row.get("owner")?,
+        due: row.get("due")?,
         source_segment_id: row.get("source_segment_id")?,
         created_at: row.get("created_at")?,
     })
@@ -917,6 +923,9 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<MeetingSummary> {
         interviewer: row
             .get::<_, Option<Json<InterviewerSummary>>>("interviewer")?
             .map(|i| i.0),
+        workplace: row
+            .get::<_, Option<Json<WorkplaceMinutes>>>("workplace")?
+            .map(|w| w.0),
         markdown: row.get("markdown")?,
         generated_at: row.get("generated_at")?,
         generated_by: row.get("generated_by")?,

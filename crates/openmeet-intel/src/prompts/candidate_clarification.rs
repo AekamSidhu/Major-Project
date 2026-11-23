@@ -11,8 +11,8 @@ use crate::text::estimate_tokens;
 
 /// Stable prompt identifier.
 pub const ID: &str = "candidate-clarification";
-/// Prompt template version.
-pub const VERSION: u32 = 1;
+/// Prompt template version (2: workplace mode).
+pub const VERSION: u32 = 2;
 
 const TASK: &str = "\
 Task: the question on the \"Question:\" line is ambiguous or underspecified. Help the user respond \

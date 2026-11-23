@@ -396,6 +396,12 @@ export const MODE_OPTIONS: ReadonlyArray<{ value: Mode; label: string; descripti
     description:
       "You are interviewing. OpenMeet suggests follow-up questions and tracks covered topics.",
   },
+  {
+    value: "workplace",
+    label: "Workplace",
+    description:
+      "Team meetings (stand-ups, reviews, planning, 1:1s). OpenMeet keeps the decisions, action items and open questions, and writes the minutes. Nobody is interviewed or scored.",
+  },
 ];
 
 export const ANSWER_STYLE_OPTIONS: ReadonlyArray<{ value: AnswerStyle; label: string }> = [

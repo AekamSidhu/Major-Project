@@ -497,3 +497,28 @@ fn text_is_stored_verbatim() {
     assert_eq!(segments.last().unwrap().text, long);
     assert_eq!(db.list_meetings(10, 0).unwrap().len(), 1);
 }
+
+#[test]
+fn workplace_meeting_minutes_and_due_dates_round_trip() {
+    let db = Database::open_in_memory().unwrap();
+    let mut m = meeting("m1", NOW);
+    m.mode = Mode::Workplace;
+    db.save_meeting(&m).unwrap();
+    let mut item = action_item("m1", "ai1", NOW);
+    item.due = Some("by Friday".into());
+    db.save_action_items(std::slice::from_ref(&item)).unwrap();
+    let mut s = summary("m1", NOW);
+    s.workplace = Some(WorkplaceMinutes {
+        action_items: vec![MinutesActionItem {
+            task: "Ship the release notes".into(),
+            owner: Some("Priya".into()),
+            due: Some("by Friday".into()),
+        }],
+        follow_up_message: "Hi all, thanks for the stand-up.".into(),
+    });
+    db.save_summary(&s).unwrap();
+    let loaded = db.load_meeting("m1").unwrap();
+    assert_eq!(loaded.meeting.mode, Mode::Workplace);
+    assert_eq!(loaded.action_items, vec![item]);
+    assert_eq!(loaded.summary, Some(s));
+}

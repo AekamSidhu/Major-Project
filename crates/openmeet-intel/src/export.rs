@@ -28,6 +28,7 @@ fn mode_label(mode: Mode) -> &'static str {
     match mode {
         Mode::Candidate => "Candidate",
         Mode::Interviewer => "Interviewer",
+        Mode::Workplace => "Workplace",
     }
 }
 
@@ -451,6 +452,9 @@ fn dedup_push(list: &mut Vec<String>, item: String, max: usize) {
 /// decisions, action items, technical topics; interviewer coverage notes.
 /// `generated_by` is "extractive".
 pub fn extractive_summary(record: &MeetingRecord) -> MeetingSummary {
+    if record.meeting.mode == Mode::Workplace {
+        return crate::workplace::extractive_minutes(record);
+    }
     let m = &record.meeting;
     let mode = m.mode;
     let finals: Vec<&TranscriptSegment> = record.segments.iter().filter(|s| s.is_final).collect();
@@ -666,6 +670,7 @@ pub fn extractive_summary(record: &MeetingRecord) -> MeetingSummary {
         technical_topics,
         follow_up_suggestions,
         interviewer,
+        workplace: None,
         markdown: String::new(),
         generated_at: now_ms(),
         generated_by: "extractive".to_string(),
@@ -704,7 +709,7 @@ mod tests {
         };
         let (asker, answerer) = match mode {
             Mode::Interviewer => (SpeakerRole::User, SpeakerRole::Remote),
-            Mode::Candidate => (SpeakerRole::Remote, SpeakerRole::User),
+            Mode::Candidate | Mode::Workplace => (SpeakerRole::Remote, SpeakerRole::User),
         };
         let q = DetectedQuestion {
             id: "q1".into(),

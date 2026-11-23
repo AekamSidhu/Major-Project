@@ -26,13 +26,32 @@ pub enum Mode {
     Candidate,
     /// Assists the person asking questions.
     Interviewer,
+    /// Ordinary team meetings (stand-ups, reviews, planning, 1:1s) where
+    /// nobody is interviewed: decisions, action items, open questions,
+    /// catch-up summaries and meeting minutes.
+    Workplace,
 }
 
 impl Mode {
-    pub fn toggled(self) -> Mode {
+    /// Every mode in cycle order.
+    pub const ALL: [Mode; 3] = [Mode::Candidate, Mode::Interviewer, Mode::Workplace];
+
+    /// Next mode in the cycle (hotkey, overlay badge): candidate →
+    /// interviewer → workplace → candidate.
+    pub fn next(self) -> Mode {
         match self {
             Mode::Candidate => Mode::Interviewer,
-            Mode::Interviewer => Mode::Candidate,
+            Mode::Interviewer => Mode::Workplace,
+            Mode::Workplace => Mode::Candidate,
+        }
+    }
+
+    /// Display label, e.g. "Workplace".
+    pub fn label(self) -> &'static str {
+        match self {
+            Mode::Candidate => "Candidate",
+            Mode::Interviewer => "Interviewer",
+            Mode::Workplace => "Workplace",
         }
     }
 }
@@ -69,6 +88,7 @@ impl SpeakerRole {
             (SpeakerRole::User, _) => "You",
             (SpeakerRole::Remote, Mode::Candidate) => "Interviewer",
             (SpeakerRole::Remote, Mode::Interviewer) => "Candidate",
+            (SpeakerRole::Remote, Mode::Workplace) => "Others",
             (SpeakerRole::Unknown, _) => "Speaker",
         }
     }
@@ -402,6 +422,8 @@ pub enum RequestKind {
     IntegrityCheck,
     /// LLM reference answer for the echo-similarity signal (background).
     IntegrityReference,
+    /// Workplace mode: "Catch me up" summary of the last minutes.
+    CatchUp,
 }
 
 /// Logical UI slot a request renders into. Starting a request in a slot
@@ -450,6 +472,8 @@ pub enum SuggestionKind {
     Ask,
     Refinement,
     Clarification,
+    /// Workplace mode: summary of the last minutes ("Catch me up").
+    CatchUp,
 }
 
 /// A completed AI suggestion (persisted in `ai_suggestions`).
@@ -614,9 +638,119 @@ pub struct ActionItem {
     pub meeting_id: Id,
     pub text: String,
     pub owner: Option<String>,
+    /// When it is due, as said in the meeting ("by Friday", "next sprint");
+    /// never resolved to a calendar date.
+    #[serde(default)]
+    pub due: Option<String>,
     pub source_segment_id: Option<Id>,
     #[ts(type = "number")]
     pub created_at: i64,
+}
+
+// ---------------------------------------------------------------------------
+// Workplace mode: live board and minutes
+// ---------------------------------------------------------------------------
+
+/// Why a decision or action item needs clarifying.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum VagueIssue {
+    /// Nobody was named to do it.
+    NoOwner,
+    /// No due date or time frame was stated.
+    NoDueDate,
+    /// What is to be done (or what was decided) is unclear ("look into it",
+    /// "let's go with that").
+    UnclearScope,
+    /// Stated tentatively ("probably", "for now"), so it may not be final.
+    Tentative,
+}
+
+/// What a clarifying question is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum WorkItemKind {
+    Decision,
+    ActionItem,
+}
+
+/// A question asked in a workplace meeting and whether it was answered.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct OpenQuestion {
+    /// Id of the detected question.
+    pub id: Id,
+    pub question: String,
+    pub speaker_role: SpeakerRole,
+    /// Asked of the user (a colleague addressed "you").
+    pub addressed_to_you: bool,
+    /// Milliseconds since meeting start.
+    #[ts(type = "number")]
+    pub asked_at_ms: i64,
+    /// Answered later in the meeting.
+    pub answered: bool,
+    /// What answered it (first words of the reply), when answered.
+    pub answer: Option<String>,
+    /// Deferred ("let's take that offline", "not sure yet"): still open.
+    pub deferred: bool,
+}
+
+/// A suggested clarifying question for a vague decision or action item.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ClarifyingQuestion {
+    pub id: Id,
+    /// The decision (claim) or action item it is about.
+    pub target_id: Id,
+    pub target_kind: WorkItemKind,
+    pub target_text: String,
+    pub issues: Vec<VagueIssue>,
+    /// The question the user could ask, e.g. "Who will take “update the
+    /// runbook”, and by when?"
+    pub question: String,
+    #[ts(type = "number")]
+    pub created_at: i64,
+}
+
+/// Live state of a workplace meeting (replaced as a whole on every update).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorkplaceBoard {
+    /// Decisions (claims of kind `decision`), oldest first.
+    pub decisions: Vec<Claim>,
+    /// Action items with owner and due date when stated, oldest first.
+    pub action_items: Vec<ActionItem>,
+    /// Questions asked in the meeting, oldest first (answered ones included).
+    pub open_questions: Vec<OpenQuestion>,
+    /// Clarifying questions for vague decisions / action items that are still
+    /// vague, oldest first.
+    pub clarifications: Vec<ClarifyingQuestion>,
+}
+
+/// An action item in the meeting minutes.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct MinutesActionItem {
+    pub task: String,
+    pub owner: Option<String>,
+    pub due: Option<String>,
+}
+
+/// Workplace-mode part of the post-meeting summary: the minutes.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct WorkplaceMinutes {
+    /// Action items with owner and due date when stated.
+    pub action_items: Vec<MinutesActionItem>,
+    /// Draft follow-up message (plain text) the user can copy and send.
+    pub follow_up_message: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -774,6 +908,11 @@ pub struct MeetingSummary {
     pub technical_topics: Vec<String>,
     pub follow_up_suggestions: Vec<String>,
     pub interviewer: Option<InterviewerSummary>,
+    /// Workplace mode: the minutes (structured action items, follow-up
+    /// message draft). `overview`, `decisions` and `open_questions` hold the
+    /// rest of the minutes.
+    #[serde(default)]
+    pub workplace: Option<WorkplaceMinutes>,
     /// Rendered markdown of the whole summary.
     pub markdown: String,
     #[ts(type = "number")]
@@ -1094,6 +1233,40 @@ mod tests {
             Some(QuestionCategory::Tradeoff)
         );
         assert_eq!(QuestionCategory::parse_lenient("nonsense"), None);
+    }
+
+    #[test]
+    fn modes_cycle_and_label_speakers() {
+        let mut m = Mode::Candidate;
+        let mut seen = Vec::new();
+        for _ in 0..Mode::ALL.len() {
+            seen.push(m);
+            m = m.next();
+        }
+        assert_eq!(m, Mode::Candidate);
+        assert_eq!(seen, Mode::ALL.to_vec());
+        assert_eq!(Mode::Workplace.label(), "Workplace");
+        assert_eq!(
+            serde_json::to_value(Mode::Workplace).unwrap(),
+            serde_json::json!("workplace")
+        );
+        assert_eq!(SpeakerRole::Remote.label(Mode::Workplace), "Others");
+        assert_eq!(SpeakerRole::User.label(Mode::Workplace), "You");
+        assert_eq!(SpeakerRole::Unknown.label(Mode::Workplace), "Speaker");
+    }
+
+    #[test]
+    fn older_records_without_workplace_fields_still_load() {
+        let item: ActionItem = serde_json::from_value(serde_json::json!({
+            "id": "a", "meetingId": "m", "text": "Send notes", "owner": null,
+            "sourceSegmentId": null, "createdAt": 1
+        }))
+        .unwrap();
+        assert_eq!(item.due, None);
+        let mut v = serde_json::to_value(MeetingSummary::default()).unwrap();
+        v.as_object_mut().unwrap().remove("workplace");
+        let s: MeetingSummary = serde_json::from_value(v).unwrap();
+        assert!(s.workplace.is_none());
     }
 
     #[test]

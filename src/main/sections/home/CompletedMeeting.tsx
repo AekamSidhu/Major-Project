@@ -87,7 +87,19 @@ export function CompletedMeeting({ live }: { live: LiveState }) {
           <Badge tone={badge.tone}>{badge.label}</Badge>
         </div>
         {summary ? (
-          <SummaryView summary={summary} />
+          <>
+            <SummaryView summary={summary} />
+            {summary.workplace?.followUpMessage && (
+              <div className="mt-4 border-t border-border pt-3">
+                <h3 className="mb-1.5 text-[0.82rem] font-semibold text-fg-soft">
+                  Follow-up message
+                </h3>
+                <p className="text-[0.84rem] leading-relaxed whitespace-pre-line text-fg-soft">
+                  {summary.workplace.followUpMessage}
+                </p>
+              </div>
+            )}
+          </>
         ) : failure ? (
           <InlineError>Summary failed: {failure}</InlineError>
         ) : live.state === "summarizing" ? (

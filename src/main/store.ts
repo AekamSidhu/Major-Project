@@ -12,6 +12,7 @@ import type {
   MeetingState,
   MeetingSummary,
   Mode,
+  WorkplaceBoard,
   AnswerStyle,
   PauseReason,
   IntegrityFlag,
@@ -83,6 +84,8 @@ export interface LiveState {
   levels: Partial<Record<AudioSourceKind, number>>;
   /** Answer-integrity flags of the meeting, latest answer first. */
   integrityFlags: IntegrityFlag[];
+  /** Workplace mode: the live board (null in other modes). */
+  workplace: WorkplaceBoard | null;
 }
 
 const EMPTY_LIVE: LiveState = {
@@ -101,6 +104,7 @@ const EMPTY_LIVE: LiveState = {
   demoRunning: false,
   levels: {},
   integrityFlags: [],
+  workplace: null,
 };
 
 export function liveFromSnapshot(s: EngineSnapshot): LiveState {
@@ -120,6 +124,7 @@ export function liveFromSnapshot(s: EngineSnapshot): LiveState {
     demoRunning: s.demoRunning,
     levels: {},
     integrityFlags: sortFlags(s.integrityFlags),
+    workplace: s.workplace,
   };
 }
 
@@ -201,6 +206,8 @@ export function reduceLive(live: LiveState, ev: MeetingEvent): LiveState {
     case "INTEGRITY_CHECKED":
       if (live.meeting && ev.flag.meetingId !== live.meeting.id) return live;
       return { ...live, integrityFlags: upsertFlag(live.integrityFlags, ev.flag) };
+    case "WORKPLACE_UPDATED":
+      return { ...live, workplace: ev.board };
     default:
       return live;
   }

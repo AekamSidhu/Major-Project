@@ -431,7 +431,9 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
     case "QUESTION_DETECTED": {
       const q = ev.question;
       if (state.meetingId && q.meetingId !== state.meetingId) return state;
-      if (state.mode !== "candidate" || !q.requiresResponse || !q.isQuestion) return state;
+      const answerable =
+        state.mode === "candidate" || (state.mode === "workplace" && q.speakerRole !== "user");
+      if (!answerable || !q.requiresResponse || !q.isQuestion) return state;
       if (state.primary && state.primary.questionId === q.id) return state;
       return { ...state, pendingQuestion: q };
     }
@@ -604,6 +606,10 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
       return state.pendingQuestion ? { ...state, pendingQuestion: null } : state;
 
     // -- answer integrity (interviewer mode) ----------------------------------
+    case "WORKPLACE_UPDATED":
+      // The workplace board is shown in the main window, not the overlay.
+      return state;
+
     case "INTEGRITY_CHECKED": {
       const f = ev.flag;
       if (state.meetingId && f.meetingId !== state.meetingId) return state;
@@ -832,7 +838,14 @@ export type RetryPlan =
   | { kind: "refine"; requestId: string; refinement: Refinement }
   | { kind: "answer"; question: string | null }
   | { kind: "ask"; prompt: string }
-  | { kind: "clarify" };
+  | { kind: "clarify" }
+  | { kind: "catch_up"; minutes: number };
+
+/** The window of a catch-up, from its heading ("Last 5 minutes"); 5 if unknown. */
+export function catchUpMinutes(text: string | null): number {
+  const n = Number(/^Last (\d+) minutes$/.exec(text ?? "")?.[1]);
+  return Number.isInteger(n) && n >= 1 && n <= 60 ? n : 5;
+}
 
 /** What "Retry" re-runs for a failed / cancelled primary request. */
 export function retryPlan(p: PrimaryRequest): RetryPlan {
@@ -843,6 +856,8 @@ export function retryPlan(p: PrimaryRequest): RetryPlan {
         : { kind: "refine", requestId: p.requestId, refinement: "regenerate" };
     case "clarification":
       return { kind: "clarify" };
+    case "catch_up":
+      return { kind: "catch_up", minutes: catchUpMinutes(p.questionText) };
     case "refinement":
       return p.parentId
         ? { kind: "refine", requestId: p.parentId, refinement: p.refinement ?? "regenerate" }

@@ -60,9 +60,7 @@ export function homeView(
   return "start";
 }
 
-export function modeLabel(mode: Mode): string {
-  return mode === "candidate" ? "Candidate" : "Interviewer";
-}
+export { modeLabel } from "@/lib/mode";
 
 /** Badge text + tone for the live meeting state. */
 export function meetingStateBadge(
@@ -109,7 +107,15 @@ export function speakerLabel(role: SpeakerRole, mode: Mode): string {
     case "user":
       return "You";
     case "remote":
-      return mode === "candidate" ? "Interviewer" : "Candidate";
+      switch (mode) {
+        case "candidate":
+          return "Interviewer";
+        case "interviewer":
+          return "Candidate";
+        case "workplace":
+          return "Others";
+      }
+      return "Others";
     case "unknown":
       return "Speaker";
   }

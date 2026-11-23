@@ -76,6 +76,11 @@ export function SummaryTab({
   return (
     <div>
       {error && <InlineError className="mb-3">Could not generate the summary: {error}</InlineError>}
+      {summary?.workplace?.followUpMessage && (
+        <div className="mb-4">
+          <FollowUpMessage text={summary.workplace.followUpMessage} />
+        </div>
+      )}
       {summary ? (
         <Panel>
           <div className="mb-3 flex justify-end">{button}</div>
@@ -270,6 +275,33 @@ export function QaTab({ record }: { record: MeetingRecord }) {
 // Follow-ups
 // ---------------------------------------------------------------------------
 
+/** The workplace follow-up message draft, with a copy button. */
+function FollowUpMessage({ text }: { text: string }) {
+  const notify = useMain((s) => s.notify);
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      notify("error", `Could not copy: ${errorMessage(e)}`);
+    }
+  };
+  return (
+    <Panel>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <SubHeading>Follow-up message</SubHeading>
+        <Button size="sm" variant="ghost" onClick={() => void copy()}>
+          <Icon name={copied ? "check" : "copy"} className="size-3.5" />
+          <span aria-live="polite">{copied ? "Copied" : "Copy message"}</span>
+        </Button>
+      </div>
+      <p className="text-[0.84rem] leading-relaxed whitespace-pre-line text-fg-soft">{text}</p>
+    </Panel>
+  );
+}
+
 function FollowupItem({ f }: { f: FollowUpQuestion }) {
   const notify = useMain((s) => s.notify);
   const [copied, setCopied] = useState(false);
@@ -324,7 +356,9 @@ export function FollowupsTab({ record }: { record: MeetingRecord }) {
       <EmptyState title="No follow-ups">
         {record.meeting.mode === "interviewer"
           ? "No follow-up questions were suggested in this meeting."
-          : "Follow-up questions are suggested in interviewer mode."}
+          : record.meeting.mode === "workplace"
+            ? "Workplace meetings write a follow-up message in the summary instead."
+            : "Follow-up questions are suggested in interviewer mode."}
       </EmptyState>
     );
   }

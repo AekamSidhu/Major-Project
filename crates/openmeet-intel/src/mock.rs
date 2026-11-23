@@ -614,6 +614,42 @@ fn followup_text(user: &str) -> String {
     lines.join("\n") + "\n"
 }
 
+/// Workplace minutes JSON built from the board blocks of the prompt (the
+/// decisions and action items tracked live), so the output is grounded.
+fn minutes_text(user: &str) -> String {
+    use crate::prompts::shared::extract_block_items;
+    let decisions = extract_block_items(user, "decisions");
+    let items: Vec<serde_json::Value> = extract_block_items(user, "action_items")
+        .into_iter()
+        .map(|line| {
+            let mut parts = line.split(" | ");
+            let task = parts.next().unwrap_or_default().trim().to_string();
+            let field = |key: &str| {
+                parts
+                    .clone()
+                    .find_map(|p| p.trim().strip_prefix(key).map(|v| v.trim().to_string()))
+                    .filter(|v| v != "not stated" && !v.is_empty())
+            };
+            json!({"task": task, "owner": field("owner:"), "due": field("due:")})
+        })
+        .collect();
+    let mut message = String::from("Hi all,\n\nThanks for the meeting. Here is what we agreed:\n");
+    for d in &decisions {
+        message.push_str(&format!("- {d}\n"));
+    }
+    message.push_str("\nBest regards");
+    json!({
+        "overview": "The team went through the agenda and recorded the decisions and action items.",
+        "keyTopics": [],
+        "decisions": decisions,
+        "actionItems": items,
+        "openQuestions": [],
+        "toClarify": [],
+        "followUpMessage": message,
+    })
+    .to_string()
+}
+
 fn summary_text(user: &str) -> String {
     let meeting = extract_block(user, "meeting").unwrap_or_default();
     let title = meeting
@@ -778,16 +814,42 @@ pub(crate) fn default_response(request: &LlmRequest) -> String {
         RequestKind::Refinement => refine_text(&user),
         RequestKind::Clarification => clarification_text(&question),
         RequestKind::InterviewerFollowups => followup_text(&user),
+        RequestKind::Summary if request.system.contains("minute-taker") => minutes_text(&user),
         RequestKind::Summary => summary_text(&user),
         RequestKind::QuestionClassification => classification_text(&user),
         RequestKind::Compression => compression_text(&user),
         RequestKind::ScreenAnalysis => screen_text(&user),
+        RequestKind::CatchUp => catch_up_text(&user),
         RequestKind::TopicAnalysis => topic_analysis_text(&user),
         // The reference recipe sends the bare question as the user message.
         RequestKind::IntegrityReference => reference_answer_text(user.trim()),
         // Integrity checks never call an LLM themselves.
         RequestKind::IntegrityCheck => String::new(),
     }
+}
+
+/// Deterministic "catch me up" answer in the sectioned format the overlay
+/// renders.
+fn catch_up_text(user: &str) -> String {
+    use crate::prompts::shared::extract_block_items;
+    let decisions = extract_block_items(user, "decisions");
+    let items = extract_block_items(user, "action_items");
+    if decisions.is_empty() && items.is_empty() {
+        return "[[ANSWER]]\nLittle was said in this time.".to_string();
+    }
+    let mut points: Vec<String> = decisions
+        .iter()
+        .map(|d| format!("- Decided: {d}"))
+        .collect();
+    points.extend(items.iter().map(|i| format!("- Action: {i}")));
+    format!(
+        "[[ANSWER]]\nSince then {} decision{} and {} action item{} came up on the board.\n[[KEY_POINTS]]\n{}",
+        decisions.len(),
+        if decisions.len() == 1 { "" } else { "s" },
+        items.len(),
+        if items.len() == 1 { "" } else { "s" },
+        points.join("\n")
+    )
 }
 
 /// A plausible spoken reference answer (echo-similarity signal).

@@ -13,8 +13,8 @@ use crate::text::{estimate_tokens, truncate_to_tokens};
 
 /// Stable prompt identifier.
 pub const ID: &str = "answer-refine";
-/// Prompt template version.
-pub const VERSION: u32 = 1;
+/// Prompt template version (2: workplace mode).
+pub const VERSION: u32 = 2;
 
 /// Cap for the previous answer included in the prompt.
 const MAX_PREVIOUS_TOKENS: usize = 1800;
