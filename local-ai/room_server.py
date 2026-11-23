@@ -131,6 +131,8 @@ def main() -> None:
     parser.add_argument("--no-https", action="store_true", help="plain http on localhost only")
     parser.add_argument("--host", default=None, help="override bind address (default: 127.0.0.1 for http, 0.0.0.0 for https)")
     parser.add_argument("--whisper-model", default=os.environ.get("OPENMEET_ROOM_WHISPER", "small.en"))
+    parser.add_argument("--transcription", choices=("local", "groq"), default=os.environ.get("OPENMEET_ROOM_TRANSCRIPTION", "local"),
+                        help="transcription backend: local (faster-whisper on this computer) or groq (Groq cloud API, needs OPENMEET_GROQ_API_KEY)")
     parser.add_argument("--followups", choices=("local", "online", "rules"), default=None,
                         help="where follow-up questions and reference answers come from (default: OPENMEET_ROOM_FOLLOWUPS or local)")
     parser.add_argument("--study", type=Path, default=None, metavar="DIR",
@@ -162,9 +164,22 @@ def main() -> None:
         else:
             print(f"  Tunnel failed: {tunnel.error or 'unknown error'}. Falling back to LAN only.")
 
+    transcriber = None
+    if args.transcription == "groq":
+        from room.followups import _env_file_values, ENV_FILE
+        env = {**_env_file_values(ENV_FILE), **os.environ}
+        groq_key = env.get("OPENMEET_GROQ_API_KEY", "")
+        if not groq_key:
+            raise SystemExit("--transcription groq needs OPENMEET_GROQ_API_KEY (environment or ~/.openmeet/room.env)")
+        groq_model = env.get("OPENMEET_GROQ_WHISPER_MODEL", "whisper-large-v3")
+        transcriber = server.GroqTranscriber(groq_key, model=groq_model)
+        print(f"  transcription: {groq_model} (Groq cloud API)")
+    else:
+        print(f"  transcription: {args.whisper_model} (local, faster-whisper)")
+
     try:
-        app = create_room_app(args.port, scheme, args.whisper_model, followups=args.followups, study_dir=args.study,
-                              tunnel_url=tunnel_url)
+        app = create_room_app(args.port, scheme, args.whisper_model, transcriber=transcriber,
+                              followups=args.followups, study_dir=args.study, tunnel_url=tunnel_url)
     except ValueError as error:  # a study folder inside the repository
         parser.error(str(error))
     host = args.host or ("127.0.0.1" if args.no_https else "0.0.0.0")
