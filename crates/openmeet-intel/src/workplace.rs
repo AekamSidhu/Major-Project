@@ -458,23 +458,7 @@ impl WorkplaceTracker {
 
         match question {
             Some(q) => {
-                if let Some(old) = &q.supersedes {
-                    self.questions.retain(|t| &t.q.id != old);
-                }
-                self.questions.push(TrackedQuestion {
-                    q: OpenQuestion {
-                        id: q.id.clone(),
-                        question: q.question.trim().to_string(),
-                        speaker_role: q.speaker_role,
-                        addressed_to_you: q.requires_response,
-                        asked_at_ms: at,
-                        answered: false,
-                        answer: None,
-                        deferred: false,
-                    },
-                    seen_any: 0,
-                    seen_other: 0,
-                });
+                self.push_question(q, at);
                 update.changed = true;
             }
             None => {
@@ -562,6 +546,38 @@ impl WorkplaceTracker {
             update.changed = true;
         }
         update
+    }
+
+    /// Adds a question that the semantic check confirmed after its segment
+    /// was observed. The segment is not counted again: only later segments
+    /// count as replies or as time passing.
+    pub fn add_confirmed_question(&mut self, q: &DetectedQuestion, at_ms: i64) -> WorkplaceUpdate {
+        self.push_question(q, at_ms);
+        WorkplaceUpdate {
+            changed: true,
+            ..WorkplaceUpdate::default()
+        }
+    }
+
+    /// Tracks a new open question (a question replaces the one it supersedes).
+    fn push_question(&mut self, q: &DetectedQuestion, at: i64) {
+        if let Some(old) = &q.supersedes {
+            self.questions.retain(|t| &t.q.id != old);
+        }
+        self.questions.push(TrackedQuestion {
+            q: OpenQuestion {
+                id: q.id.clone(),
+                question: q.question.trim().to_string(),
+                speaker_role: q.speaker_role,
+                addressed_to_you: q.requires_response,
+                asked_at_ms: at,
+                answered: false,
+                answer: None,
+                deferred: false,
+            },
+            seen_any: 0,
+            seen_other: 0,
+        });
     }
 
     /// Resolves (or defers) the most recent open question this segment

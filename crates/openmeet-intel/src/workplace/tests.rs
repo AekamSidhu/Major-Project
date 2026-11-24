@@ -418,6 +418,53 @@ fn questions_are_answered_deferred_or_left_open() {
 }
 
 #[test]
+fn a_question_confirmed_after_its_segment_joins_the_board() {
+    let mut t = WorkplaceTracker::new();
+    let s = seg(
+        "s1",
+        SpeakerRole::Remote,
+        100,
+        "Could you walk us through the rollout",
+    );
+    t.observe(&s, &[], vec![], None);
+    assert!(t.board().open_questions.is_empty());
+    let q = DetectedQuestion {
+        id: "q1".into(),
+        meeting_id: "m".into(),
+        segment_ids: vec!["s1".into()],
+        is_question: true,
+        confidence: 0.8,
+        question: "Could you walk us through the rollout?".into(),
+        parts: vec![],
+        category: QuestionCategory::General,
+        speaker_id: None,
+        speaker_role: SpeakerRole::Remote,
+        requires_response: true,
+        method: DetectionMethod::Semantic,
+        supersedes: None,
+        detected_at: 0,
+    };
+    let update = t.add_confirmed_question(&q, s.start_time);
+    assert!(update.changed);
+    let open = t.board().open_questions;
+    assert_eq!(open.len(), 1, "{open:?}");
+    assert!(open[0].addressed_to_you && !open[0].answered);
+    // Later replies count as before: a reply from the user answers it.
+    t.observe(
+        &seg(
+            "s2",
+            SpeakerRole::User,
+            103,
+            "Yes, I will walk them through it on Monday.",
+        ),
+        &[],
+        vec![],
+        None,
+    );
+    assert!(t.board().open_questions[0].answered);
+}
+
+#[test]
 fn unrelated_chatter_does_not_answer_a_question() {
     use SpeakerRole::{Remote, User};
     // (lines, answered?)

@@ -67,17 +67,19 @@ struct Harness {
     llm: MockLlmProvider,
 }
 
-/// How a harness is wired: with or without an AI provider, and whether the
-/// LLM confirms ambiguous questions.
+/// How a harness is wired: with or without an AI provider, whether the LLM
+/// confirms ambiguous questions, and the heuristic detection threshold.
 #[derive(Clone, Copy)]
 struct Setup {
     model: bool,
     semantic: bool,
+    threshold: f32,
 }
 
 const WITH_MODEL: Setup = Setup {
     model: true,
     semantic: false,
+    threshold: 0.6,
 };
 
 fn harness() -> Harness {
@@ -91,6 +93,7 @@ fn harness_with(setup: Setup) -> Harness {
     llm.set_chunk_delay_ms(1);
     let mut settings = Settings::default();
     settings.assistant.semantic_detection = setup.semantic;
+    settings.assistant.detection_threshold = setup.threshold;
     settings.assistant.turn_end_silence_ms = 400;
     settings.privacy.retention = RetentionPolicy::SevenDays;
     // Integrity is ON with every signal, and a mock service is wired in, so
@@ -351,6 +354,7 @@ async fn minutes_without_a_model_keep_the_board_state() {
     let h = harness_with(Setup {
         model: false,
         semantic: false,
+        threshold: 0.6,
     });
     let meeting = h.engine.start_meeting(start_request()).await.unwrap();
     transcript(&h, SpeakerRole::Remote, "We decided to freeze the schema.");
@@ -404,6 +408,7 @@ async fn catch_up_without_a_provider_is_extracted_from_the_transcript() {
     let h = harness_with(Setup {
         model: false,
         semantic: false,
+        threshold: 0.6,
     });
     h.engine.start_meeting(start_request()).await.unwrap();
     transcript(
@@ -453,4 +458,77 @@ async fn catch_up_without_a_provider_is_extracted_from_the_transcript() {
         "no failure is reported for the recap"
     );
     assert!(h.llm.requests().is_empty(), "no provider was called");
+}
+
+/// "Could you walk us through the rollout" is ambiguous to the heuristics
+/// (confidence 0.62): below a 0.7 threshold it is not a question by rule.
+const AMBIGUOUS_REQUEST: &str = "Could you walk us through the rollout";
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn semantic_detection_confirms_an_ambiguous_question_on_the_board() {
+    let h = harness_with(Setup {
+        model: true,
+        semantic: true,
+        threshold: 0.7,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(&h, SpeakerRole::Remote, AMBIGUOUS_REQUEST);
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::QuestionDetected { question }
+                if question.method == DetectionMethod::Semantic)
+        })
+        .await
+        .expect("the LLM confirms the question");
+    let MeetingEvent::QuestionDetected { question } = ev else {
+        unreachable!()
+    };
+    assert!(question.question.contains("rollout"), "{question:?}");
+    assert!(question.requires_response);
+    let b = board(&h);
+    assert!(
+        b.open_questions
+            .iter()
+            .any(|q| q.question.contains("rollout") && q.addressed_to_you && !q.answered),
+        "confirmed question on the board: {:?}",
+        b.open_questions
+    );
+    // Put to the user: a colleague-worded suggestion follows.
+    h.sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::AnswerComplete { suggestion, .. }
+                if suggestion.kind == SuggestionKind::Answer)
+        })
+        .await
+        .expect("suggestion for the confirmed question");
+    assert!(
+        h.llm
+            .requests()
+            .iter()
+            .any(|r| r.kind == RequestKind::QuestionClassification),
+        "the semantic check ran"
+    );
+    assert_eq!(h.sink.count("INTEGRITY_CHECKED"), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn semantic_detection_off_leaves_an_ambiguous_question_alone() {
+    let h = harness_with(Setup {
+        model: true,
+        semantic: false,
+        threshold: 0.7,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(&h, SpeakerRole::Remote, AMBIGUOUS_REQUEST);
+    wait_for_segment(&h, "walk us through").await;
+    assert_eq!(h.sink.count("QUESTION_DETECTED"), 0);
+    assert!(board(&h).open_questions.is_empty());
+    assert!(
+        !h.llm
+            .requests()
+            .iter()
+            .any(|r| r.kind == RequestKind::QuestionClassification),
+        "no semantic check when the setting is off"
+    );
 }

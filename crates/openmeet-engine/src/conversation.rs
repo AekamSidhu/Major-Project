@@ -451,6 +451,9 @@ impl Engine {
                     mode,
                     last_question: rt.questions.last(),
                 });
+                // Ambiguous detections are confirmed by the LLM (when enabled)
+                // in candidate and workplace mode.
+                let semantic_mode = matches!(mode, Mode::Candidate | Mode::Workplace);
                 // Final transcript received -> detection decided.
                 detection_ms = Some(received.elapsed().as_secs_f64() * 1000.0);
                 let threshold = settings.assistant.detection_threshold;
@@ -530,7 +533,7 @@ impl Engine {
                             actions.push(Action::Answer(q));
                         }
                     } else if active
-                        && mode == Mode::Candidate
+                        && semantic_mode
                         && result.requires_response
                         && result.ambiguous
                         && settings.assistant.semantic_detection
@@ -543,7 +546,7 @@ impl Engine {
                         });
                     }
                 } else if active
-                    && mode == Mode::Candidate
+                    && semantic_mode
                     && role != SpeakerRole::User
                     && result.ambiguous
                     && settings.assistant.semantic_detection

@@ -14,7 +14,9 @@ use openmeet_core::ipc::{ActiveRequestView, GenerateAnswerRequest};
 use openmeet_core::providers::{ChatMessage, LlmChunk, LlmProvider, LlmRequest};
 use openmeet_core::types::*;
 use openmeet_intel::claims::extract_claims;
-use openmeet_intel::detect::{DetectionResult, classify_category, has_deictic_reference};
+use openmeet_intel::detect::{
+    DetectionResult, addressed_to_listener, classify_category, has_deictic_reference,
+};
 use openmeet_intel::export::extractive_summary;
 use openmeet_intel::prompts::interviewer_followup::{FollowupItem, FollowupStreamParser};
 use openmeet_intel::prompts::{
@@ -1322,7 +1324,7 @@ pub(crate) fn spawn_semantic_check(
         let settings = engine.settings();
         let mut persist_ops = Vec::new();
         let mut embed_jobs: Vec<EmbedJob> = Vec::new();
-        let (question, store) = {
+        let (question, store, board) = {
             let mut st = engine.inner.state.lock();
             let Some(rt) = st
                 .runtime
@@ -1375,7 +1377,12 @@ pub(crate) fn spawn_semantic_check(
                 text: format!("{} asked: {}", rt.speaker_label(q.speaker_role), q.question),
                 at_ms: segment.start_time,
             });
-            (q, rt.store.clone())
+            // Workplace mode: the confirmed question joins the live board.
+            let board = (rt.mode() == Mode::Workplace).then(|| {
+                rt.workplace.add_confirmed_question(&q, segment.start_time);
+                rt.workplace.board()
+            });
+            (q, rt.store.clone(), board)
         };
         for op in persist_ops {
             engine.persist(&store, op);
@@ -1386,7 +1393,21 @@ pub(crate) fn spawn_semantic_check(
         engine.emit(MeetingEvent::QuestionDetected {
             question: question.clone(),
         });
-        if settings.assistant.auto_answer && engine.mode() == Mode::Candidate {
+        if let Some(board) = board {
+            engine.emit(MeetingEvent::WorkplaceUpdated { board });
+        }
+        // Suggestions: candidate mode always; workplace mode only for questions
+        // put to the user (never for the user's own questions).
+        let suggest = match engine.mode() {
+            Mode::Candidate => true,
+            Mode::Workplace => {
+                question.requires_response
+                    && question.speaker_role != SpeakerRole::User
+                    && addressed_to_listener(&question.question)
+            }
+            Mode::Interviewer => false,
+        };
+        if settings.assistant.auto_answer && suggest {
             let _ = answer_question(&engine, &question, engine.style());
         }
     });
