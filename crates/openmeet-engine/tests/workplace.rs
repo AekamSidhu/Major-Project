@@ -351,6 +351,39 @@ async fn stopping_a_workplace_meeting_stores_and_exports_minutes() {
     let md = render(&record, ExportFormat::Markdown, &ExportParts::default());
     assert!(md.contains("Workplace mode"), "{md}");
     assert!(md.contains("Sam"), "minutes exported: {md}");
+
+    // Plain text export: the same minutes as plain lists.
+    let text = render(&record, ExportFormat::Text, &ExportParts::default());
+    assert!(text.contains("Workplace mode"), "{text}");
+    assert!(
+        text.contains("freeze the schema"),
+        "decisions exported: {text}"
+    );
+    assert!(
+        text.contains("Sam, by Thursday"),
+        "action items exported: {text}"
+    );
+    assert!(!text.contains("Interview"), "no interview sections: {text}");
+
+    // JSON export: the minutes are part of the summary, with owner and due date.
+    let json = render(&record, ExportFormat::Json, &ExportParts::default());
+    let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON export");
+    assert_eq!(v["format"], "openmeet.meeting.v1");
+    assert_eq!(v["meeting"]["mode"], "workplace");
+    let items = &v["summary"]["workplace"]["actionItems"];
+    assert_eq!(items[0]["owner"], "Sam", "{v}");
+    assert_eq!(items[0]["due"], "by Thursday", "{v}");
+    assert!(
+        v["summary"]["workplace"]["followUpMessage"]
+            .as_str()
+            .is_some_and(|m| m.contains("freeze the schema")),
+        "{v}"
+    );
+    assert!(
+        v["summary"]["decisions"]
+            .to_string()
+            .contains("freeze the schema")
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
