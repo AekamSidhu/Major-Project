@@ -125,7 +125,7 @@ implemented in `../integrity/signals.py`), fused into one flag
 | Signal | How the room computes it | Calibrated |
 |---|---|---|
 | AI-written text | TF-IDF + logistic regression on the answer's transcript | on HC3 (public data) |
-| Similar to an AI answer | When the candidate starts answering, the follow-up model writes 2 answers to the interviewer's question (`similarity.py`, the recipe in `signals.py`); the answer and those are embedded with `BAAI/bge-small-en-v1.5`; the highest cosine counts | on HC3, see `thresholds.json` |
+| Similar to an AI answer | Once the interviewer's question is transcribed during the candidate's answer, the follow-up model writes 2 answers to it (`similarity.py`, the recipe in `signals.py`; `/answers` reuses them when the question is the same); the answer and those are embedded with `BAAI/bge-small-en-v1.5`; the highest cosine counts | on HC3, see `thresholds.json` |
 | Delivery | From Whisper's word timings: delay after the question, words a minute, pauses a minute, fillers, against the candidate's own first three answers | no |
 | Reading | The reading network on the gaze during the answer | on GazeBase (public data) |
 
