@@ -364,7 +364,7 @@ def add_room_routes(app: FastAPI, transcriber: Any, monitor: Any, echo_factory: 
 
     @app.post("/api/rooms/{room_id}/references", dependencies=[Depends(host_only)])
     def references(room_id: str, req: ReferenceRequest) -> dict[str, Any]:
-        """Start writing reference answers to a question (the host calls this when the candidate starts answering)."""
+        """Start writing reference answers to a question. The host calls this during the candidate's answer, once the question's transcripts are back; /answers reuses them if the question is the same."""
         room = room_or_404(room_id)
         started = similarity is not None and similarity.writer.available and bool(req.question.strip())
         if started:

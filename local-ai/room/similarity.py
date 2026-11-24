@@ -1,11 +1,13 @@
 """Echo similarity in the room: how close is an answer to what an LLM answers to the same question?
 
-As soon as the candidate starts answering, the room's follow-up model (Llama
-3.2 through Ollama by default; Gemini in online mode, which is then sent the
-interviewer's question only) writes `references` answers to the
-interviewer's question, following the recipe in integrity/signals.py. When
-the answer ends, the answer and the references are embedded with the
-sidecar's fastembed model and compared (spec/integrity: the highest cosine).
+Once the question's transcripts are back during the candidate's answer, the
+room's follow-up model (Llama 3.2 through Ollama by default; Gemini in online
+mode, which is then sent the interviewer's question only) writes `references`
+answers to the interviewer's question, following the recipe in
+integrity/signals.py. The same question text reuses those references (see
+`SimilarityChecker.references`); a different text starts new ones. When the
+answer ends, the answer and the references are embedded with the sidecar's
+fastembed model and compared (spec/integrity: the highest cosine).
 
 The thresholds in spec/integrity/thresholds.json were measured with one
 reference model and one embedding model. With another embedder the signal is
