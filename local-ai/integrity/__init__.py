@@ -100,12 +100,13 @@ def add_routes(
     echo: EchoModel | None = None,
     reading: ReadingModel | None = None,
     gaze_model: Path | None = None,
+    gaze_tta: bool = False,
 ) -> GazeMonitor:
     echo_model = _Lazy(lambda: echo or EchoModel())
     reading_model = _Lazy(lambda: reading or ReadingModel())
     if gaze_model is not None:
-        learned = _Lazy(lambda: GazeNet(gaze_model))
-        gaze_method = {"name": "learned_resnet18", "model": Path(gaze_model).name}
+        learned = _Lazy(lambda: GazeNet(gaze_model, tta=gaze_tta))
+        gaze_method = {"name": "learned_resnet18", "model": Path(gaze_model).name, "tta": bool(gaze_tta)}
         default_factory: Callable[[], Tracker] = lambda: LearnedGazeTracker(learned.get(), FaceTracker(model_dir))  # noqa: E731
     else:
         learned = None

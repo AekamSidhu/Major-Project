@@ -144,7 +144,7 @@ def trace_from_pitchyaw(py: np.ndarray) -> tuple[float, float]:
 class GazeNet:
     """The ONNX gaze model. Input `face` (N, 224, 224, 3) uint8 RGB; output `pitch_yaw` (N, 2) radians."""
 
-    def __init__(self, path: Path, threads: int = 2, tta: bool = True) -> None:
+    def __init__(self, path: Path, threads: int = 2, tta: bool = False) -> None:
         import onnxruntime as ort
 
         path = Path(path)
@@ -159,7 +159,7 @@ class GazeNet:
 
     def predict(self, faces: np.ndarray) -> np.ndarray:
         """Pitch and yaw (radians) for a batch of crops. With `tta`, the mirrored crop is averaged in (yaw negated),
-        as the 4.54 degree result was measured."""
+        as the 4.54 degree training result was measured. Off by default for live use: it doubles the network's CPU time."""
         faces = np.asarray(faces, dtype=np.uint8)
         n = len(faces)
         batch = np.concatenate([faces, faces[:, :, ::-1]]) if self.tta else faces
@@ -168,6 +168,16 @@ class GazeNet:
             return out
         plain, mirrored = out[:n], out[n:] * np.array([1.0, -1.0], dtype=np.float32)
         return (plain + mirrored) / 2
+
+
+TTA_ENV = "OPENMEET_GAZE_TTA"
+
+
+def tta_requested(environ=None) -> bool:
+    """True when the environment asks for test-time augmentation (OPENMEET_GAZE_TTA=1). Off otherwise."""
+    import os
+
+    return (os.environ if environ is None else environ).get(TTA_ENV) == "1"
 
 
 class LandmarkSource(Protocol):

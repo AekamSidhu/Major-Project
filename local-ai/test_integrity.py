@@ -396,4 +396,22 @@ def test_learned_gaze_status_reports_a_loaded_model(tmp_path):
     _tiny_gaze_onnx(tmp_path / "tiny.onnx")
     app = server.create_app(transcriber=FakeTranscriber(), embedder=FakeEmbedder(), gaze_model=tmp_path / "tiny.onnx")
     method = TestClient(app).get("/v1/integrity/status").json()["gaze_method"]
-    assert method == {"name": "learned_resnet18", "model": "tiny.onnx", "ready": True, "error": None}
+    assert method == {"name": "learned_resnet18", "model": "tiny.onnx", "tta": False, "ready": True, "error": None}
+
+
+def test_tta_is_off_unless_the_flag_or_env_is_set(tmp_path, monkeypatch):
+    from integrity.learned_gaze import tta_requested
+
+    _tiny_gaze_onnx(tmp_path / "tiny.onnx")
+    assert GazeNet(tmp_path / "tiny.onnx").tta is False
+    assert tta_requested({}) is False and tta_requested({"OPENMEET_GAZE_TTA": "0"}) is False
+    assert tta_requested({"OPENMEET_GAZE_TTA": "1"}) is True
+    monkeypatch.delenv("OPENMEET_GAZE_TTA", raising=False)
+    assert tta_requested() is False
+
+    off = TestClient(server.create_app(transcriber=FakeTranscriber(), embedder=FakeEmbedder(),
+                                       gaze_model=tmp_path / "tiny.onnx"))
+    assert off.get("/v1/integrity/status").json()["gaze_method"]["tta"] is False
+    on = TestClient(server.create_app(transcriber=FakeTranscriber(), embedder=FakeEmbedder(),
+                                      gaze_model=tmp_path / "tiny.onnx", gaze_tta=True))
+    assert on.get("/v1/integrity/status").json()["gaze_method"]["tta"] is True

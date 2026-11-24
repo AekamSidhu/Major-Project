@@ -133,6 +133,7 @@ sidecar or the room is given the model file:
     python server.py --gaze-model PATH/openmeet_gaze_resnet18.onnx
     python room_server.py --gaze-model PATH/openmeet_gaze_resnet18.onnx
     # or the environment variable OPENMEET_GAZE_MODEL=PATH/...
+    # optional, about twice the network's CPU time: --gaze-tta (or OPENMEET_GAZE_TTA=1)
 
 Where the file comes from: it is built by the training code on the
 `feature/gaze-detection` branch (`training/gaze-detection/checkpoints/gaze/`).
@@ -153,8 +154,11 @@ crop goes to the ONNX model, which returns pitch and yaw. Those are read in
 the normalised frame, so head roll is removed as with the eye-corner frame of
 the iris offsets, and scaled to the iris-offset units (about 0.4 eye widths per
 unit of sine of the gaze angle), so the reading detector receives the same
-kind of series. Test-time augmentation (the mirrored crop, averaged) is on,
-as in the training evaluation; it doubles the network's CPU time.
+kind of series. Test-time augmentation (the mirrored crop, averaged) is **off**
+by default: the 4.54 degree training figure was measured with it, but at
+10 fps it doubles the network's CPU time against a 100 ms frame budget. Turn
+it on with `--gaze-tta` or `OPENMEET_GAZE_TTA=1`. The error without TTA was not
+measured here. `/v1/integrity/status` reports `tta` in `gaze_method`.
 
 Not the same as the training preprocessing: the MPIIFaceGaze camera was
 calibrated and undistorted; here the lens is assumed to have no distortion

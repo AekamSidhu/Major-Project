@@ -211,6 +211,10 @@ For comparison, published results on this dataset range from about 3.9° to
 - **Licence: CC BY-NC-SA 4.0 (non-commercial, share-alike).** The weights are
   derived from MPIIFaceGaze and ETH-XGaze, so they are not in the repository
   (which is Apache 2.0). Use them for research and non-commercial purposes.
+- **Test-time augmentation is off in the live sidecar by default.** The 4.54
+  degree error above was measured with it (mirrored crop averaged in). Live
+  frames run at 10 fps, so the sidecar leaves it off; `--gaze-tta` or
+  `OPENMEET_GAZE_TTA=1` turns it on. The error without it was not measured.
 - **Measured:** the 4.54 degree error above (MPIIFaceGaze stills, the dataset's
   own normalisation). The live pipeline is an approximation of that
   normalisation (see `local-ai/integrity/README.md`), so 4.54 does not carry
@@ -218,9 +222,11 @@ For comparison, published results on this dataset range from about 3.9° to
   crop is upright and framed like the training crops, mirroring flips the
   horizontal sign as it should, and roll and shift leave the output stable.
 - **Not measured:** accuracy on live webcam video; reading accuracy with this
-  backend (there is no labelled interview video yet); the vertical direction
+  backend (there is no labelled interview video yet); the face-centre
+  definition. **Open question:** the vertical direction is not validated
   against any ground truth (on the sample photo it disagrees with the iris
-  offsets, and head pitch is one possible reason); the face-centre definition.
+  offsets, and head pitch is one possible reason). Reading detection relies
+  mainly on the horizontal sweeps.
 - **Open differences from the iris method:** the learned gaze includes head
   turns (the iris offsets are eye-in-head), so head movement can reach the
   reading detector. The detector was trained on eye-tracker data with the

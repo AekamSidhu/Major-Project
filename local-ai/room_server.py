@@ -86,7 +86,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
                     followup_writer=None, followups: str | None = None, reference_writer=None, embedder=None,
                     embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None,
                     tunnel_url: str | None = None, cloud_transcription: bool = False,
-                    gaze_model: Path | None = None) -> FastAPI:
+                    gaze_model: Path | None = None, gaze_tta: bool = False) -> FastAPI:
     from room.followups import FollowupWriter
     from room.similarity import ReferenceWriter, SimilarityChecker
     from room.study import StudyRecorder
@@ -112,7 +112,7 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
     host_only_auth = interviewer_only(interviewer_names())  # integrity API: this computer only
 
     monitor = add_integrity_routes(app, host_only_auth, server.MODEL_DIR, tracker_factory=tracker_factory, clock=clock or time.time,
-                                   gaze_model=gaze_model)
+                                   gaze_model=gaze_model, gaze_tta=gaze_tta)
     app.state.rooms = add_room_routes(
         app,
         transcriber=transcriber or server.WhisperTranscriber(whisper_model),
@@ -132,6 +132,8 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
 
 
 def main() -> None:
+    from integrity.learned_gaze import tta_requested
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=int(os.environ.get("OPENMEET_ROOM_PORT", "8443")))
     parser.add_argument("--no-https", action="store_true", help="plain http on localhost only")
@@ -150,11 +152,16 @@ def main() -> None:
     parser.add_argument("--gaze-model", type=Path, default=os.environ.get("OPENMEET_GAZE_MODEL") or None, metavar="PATH",
                         help="use the learned gaze model (ONNX file you provide, non-commercial licence: see integrity/README.md) "
                              "instead of the MediaPipe iris offsets (default: OPENMEET_GAZE_MODEL or none)")
+    parser.add_argument("--gaze-tta", action="store_true", default=tta_requested(),
+                        help="average the mirrored face into each learned gaze estimate (about twice the CPU; "
+                             "the 4.54 degree figure used it). Default off; OPENMEET_GAZE_TTA=1 also turns it on")
     args = parser.parse_args()
     if args.tunnel and args.no_https:
         parser.error("--tunnel needs https (drop --no-https)")
     if args.gaze_model is not None and not args.gaze_model.is_file():
         parser.error(f"--gaze-model: no file at {args.gaze_model}")
+    if args.gaze_tta and args.gaze_model is None:
+        parser.error("--gaze-tta needs --gaze-model")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -191,7 +198,8 @@ def main() -> None:
     try:
         app = create_room_app(args.port, scheme, args.whisper_model, transcriber=transcriber,
                               followups=args.followups, study_dir=args.study, tunnel_url=tunnel_url,
-                              cloud_transcription=args.transcription == "groq", gaze_model=args.gaze_model)
+                              cloud_transcription=args.transcription == "groq", gaze_model=args.gaze_model,
+                              gaze_tta=args.gaze_tta)
     except ValueError as error:  # a study folder inside the repository
         parser.error(str(error))
     host = args.host or ("127.0.0.1" if args.no_https else "0.0.0.0")

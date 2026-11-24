@@ -418,6 +418,7 @@ def create_app(
     integrity_tracker: Any = None,
     clock: Any = time.time,
     gaze_model: Path | None = None,
+    gaze_tta: bool = False,
 ) -> FastAPI:
     app = FastAPI(title="OpenMeet local AI", version=__version__, docs_url=None, redoc_url=None)
     transcriber = transcriber or WhisperTranscriber(whisper_model)
@@ -529,7 +530,8 @@ def create_app(
     # Answer-integrity checks: AI-written answers and reading (optional extras).
     from integrity import add_routes as add_integrity_routes
 
-    add_integrity_routes(app, check_auth, MODEL_DIR, tracker_factory=integrity_tracker, clock=clock, gaze_model=gaze_model)
+    add_integrity_routes(app, check_auth, MODEL_DIR, tracker_factory=integrity_tracker, clock=clock, gaze_model=gaze_model,
+                           gaze_tta=gaze_tta)
     return app
 
 
@@ -544,6 +546,8 @@ def is_loopback(host: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="OpenMeet local AI sidecar")
+    from integrity.learned_gaze import tta_requested
+
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=int(os.environ.get("OPENMEET_LOCAL_AI_PORT", "8765")))
     parser.add_argument("--allow-remote", action="store_true", help="allow binding to a non-loopback address")
@@ -553,6 +557,9 @@ def main() -> None:
     parser.add_argument("--gaze-model", type=Path, default=os.environ.get("OPENMEET_GAZE_MODEL") or None, metavar="PATH",
                         help="use the learned gaze model (ONNX file you provide, non-commercial licence: see integrity/README.md) "
                              "instead of the MediaPipe iris offsets (default: OPENMEET_GAZE_MODEL or none)")
+    parser.add_argument("--gaze-tta", action="store_true", default=tta_requested(),
+                        help="average the mirrored face into each learned gaze estimate (about twice the CPU; "
+                             "the 4.54 degree figure used it). Default off; OPENMEET_GAZE_TTA=1 also turns it on")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -563,6 +570,8 @@ def main() -> None:
         parser.error("refusing to bind to a non-loopback address without --allow-remote")
     if args.gaze_model is not None and not args.gaze_model.is_file():
         parser.error(f"--gaze-model: no file at {args.gaze_model}")
+    if args.gaze_tta and args.gaze_model is None:
+        parser.error("--gaze-tta needs --gaze-model")
 
     if args.download_models:
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -578,6 +587,7 @@ def main() -> None:
         whisper_model=args.whisper_model,
         embed_model=args.embed_model,
         gaze_model=args.gaze_model,
+        gaze_tta=args.gaze_tta,
     )
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", access_log=False)
 
