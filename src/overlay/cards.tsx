@@ -264,6 +264,9 @@ export function PrimaryCard({
     >
       <div>
         <SectionLabel>{header.label}</SectionLabel>
+        {p.extracted && (
+          <p className="mt-0.5 text-[0.78rem] text-muted">Extracted from the transcript (no AI)</p>
+        )}
         {header.text && (
           <p className="mt-0.5 text-[0.88rem] leading-snug font-medium text-fg">
             {p.kind === "candidate_answer" || p.kind === "refinement"

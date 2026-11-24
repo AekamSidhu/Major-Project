@@ -58,7 +58,7 @@ const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
   generate_answer: "Generate answer",
   generate_followups: "Generate follow-ups",
   ask_ai: "Ask OpenMeet",
-  toggle_mode: "Toggle candidate / interviewer mode",
+  toggle_mode: "Switch mode (candidate / interviewer / workplace)",
   toggle_click_through: "Toggle click-through",
   capture_screen: "Capture screen manually",
   pause_resume: "Pause / resume processing",

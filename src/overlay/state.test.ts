@@ -289,6 +289,38 @@ describe("tickerText", () => {
 });
 
 describe("workplace mode in the overlay", () => {
+  it("marks a catch-up recap built without a model as extracted", () => {
+    const withModel = run([
+      started("c1", "catch_up", "Last 5 minutes"),
+      {
+        type: "ANSWER_COMPLETE",
+        requestId: "c1",
+        suggestion: suggestion("c1", "[[ANSWER]]\nRecap"),
+      },
+    ]);
+    expect(withModel.primary?.extracted).toBe(false);
+    const extracted = run([
+      started("c2", "catch_up", "Last 5 minutes"),
+      {
+        type: "ANSWER_COMPLETE",
+        requestId: "c2",
+        suggestion: { ...suggestion("c2", "[[ANSWER]]\nRecap"), provider: "extractive" },
+      },
+    ]);
+    expect(extracted.primary?.extracted).toBe(true);
+    expect(extracted.primary?.final).toBe(true);
+  });
+
+  it("names the spoken catch-up window in the voice command notice", () => {
+    const state = reduceOverlay(INITIAL_STATE, {
+      type: "VOICE_COMMAND_RECOGNIZED",
+      command: { kind: "catch_up", text: 10 },
+    });
+    expect(state.notices.map((n) => n.message)).toContain(
+      "Voice command: catch me up (last 10 minutes)",
+    );
+  });
+
   it("offers a suggestion for questions put to the user, not for the user's own", () => {
     const base = reduceOverlay(INITIAL_STATE, {
       type: "MODE_CHANGED",

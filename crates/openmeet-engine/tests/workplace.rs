@@ -68,18 +68,21 @@ struct Harness {
 }
 
 /// How a harness is wired: with or without an AI provider, whether the LLM
-/// confirms ambiguous questions, and the heuristic detection threshold.
+/// confirms ambiguous questions, the heuristic detection threshold, and
+/// whether spoken commands from the user's microphone are on.
 #[derive(Clone, Copy)]
 struct Setup {
     model: bool,
     semantic: bool,
     threshold: f32,
+    voice: bool,
 }
 
 const WITH_MODEL: Setup = Setup {
     model: true,
     semantic: false,
     threshold: 0.6,
+    voice: false,
 };
 
 fn harness() -> Harness {
@@ -94,6 +97,7 @@ fn harness_with(setup: Setup) -> Harness {
     let mut settings = Settings::default();
     settings.assistant.semantic_detection = setup.semantic;
     settings.assistant.detection_threshold = setup.threshold;
+    settings.general.voice_commands = setup.voice;
     settings.assistant.turn_end_silence_ms = 400;
     settings.privacy.retention = RetentionPolicy::SevenDays;
     // Integrity is ON with every signal, and a mock service is wired in, so
@@ -355,6 +359,7 @@ async fn minutes_without_a_model_keep_the_board_state() {
         model: false,
         semantic: false,
         threshold: 0.6,
+        voice: false,
     });
     let meeting = h.engine.start_meeting(start_request()).await.unwrap();
     transcript(&h, SpeakerRole::Remote, "We decided to freeze the schema.");
@@ -409,6 +414,7 @@ async fn catch_up_without_a_provider_is_extracted_from_the_transcript() {
         model: false,
         semantic: false,
         threshold: 0.6,
+        voice: false,
     });
     h.engine.start_meeting(start_request()).await.unwrap();
     transcript(
@@ -470,6 +476,7 @@ async fn semantic_detection_confirms_an_ambiguous_question_on_the_board() {
         model: true,
         semantic: true,
         threshold: 0.7,
+        voice: false,
     });
     h.engine.start_meeting(start_request()).await.unwrap();
     transcript(&h, SpeakerRole::Remote, AMBIGUOUS_REQUEST);
@@ -518,6 +525,7 @@ async fn semantic_detection_off_leaves_an_ambiguous_question_alone() {
         model: true,
         semantic: false,
         threshold: 0.7,
+        voice: false,
     });
     h.engine.start_meeting(start_request()).await.unwrap();
     transcript(&h, SpeakerRole::Remote, AMBIGUOUS_REQUEST);
@@ -531,4 +539,71 @@ async fn semantic_detection_off_leaves_an_ambiguous_question_alone() {
             .any(|r| r.kind == RequestKind::QuestionClassification),
         "no semantic check when the setting is off"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn voice_commands_catch_up_and_follow_up_in_workplace_mode() {
+    let h = harness_with(Setup {
+        model: true,
+        semantic: false,
+        threshold: 0.6,
+        voice: true,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(
+        &h,
+        SpeakerRole::Remote,
+        "Someone should look into the alerts.",
+    );
+    wait_for_segment(&h, "alerts").await;
+
+    // "Follow up" asks for the clarifying question of the latest vague item.
+    transcript(&h, SpeakerRole::User, "OpenMeet, give me a follow-up");
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::VoiceCommandRecognized { command }
+                if *command == VoiceCommand::FollowUp)
+        })
+        .await
+        .expect("follow-up command recognized");
+    assert!(matches!(ev, MeetingEvent::VoiceCommandRecognized { .. }));
+    let notice = h
+        .sink
+        .wait_for(WAIT, |e| match e {
+            MeetingEvent::Notice { message, .. } => message.contains("clarifying question"),
+            _ => false,
+        })
+        .await
+        .expect("clarifying question notice");
+    let MeetingEvent::Notice { message, .. } = notice else {
+        unreachable!()
+    };
+    assert!(message.contains("alerts"), "{message}");
+    assert!(
+        !h.llm
+            .requests()
+            .iter()
+            .any(|r| r.kind == RequestKind::InterviewerFollowups),
+        "no interview follow-ups are generated"
+    );
+
+    // "Catch me up on the last ten minutes" starts a recap of that window.
+    transcript(
+        &h,
+        SpeakerRole::User,
+        "OpenMeet, catch me up on the last ten minutes",
+    );
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::AnswerComplete { suggestion, .. }
+                if suggestion.kind == SuggestionKind::CatchUp)
+        })
+        .await
+        .expect("catch-up from the voice command");
+    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else {
+        unreachable!()
+    };
+    assert_eq!(suggestion.question_text.as_deref(), Some("Last 10 minutes"));
 }
