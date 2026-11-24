@@ -25,7 +25,9 @@ their inputs and how to run them are in [Reproduce](#reproduce). Read
   stops on the CPU and 0.7 s on the GPU; all 12 questions were detected
   (section 2, with percentiles). In the first room run the question's text was
   not back in time in 3 of its 8 turns; that was a timing race in the room's host
-  page, fixed and rerun (section 2).
+  page, fixed and rerun (section 2). The echo reference answers now start while
+  the candidate is still answering, so the echo signal arrives about 1.6 s after
+  the card instead of about 8 s (section 2, on a busy machine).
 - **AI-written text.** The shipped model (v2) and the first model (v1) each
   catch 97.8% of ChatGPT answers at their `high` level on the HC3 test
   questions, and flag 1.8% (v2) and 2.0% (v1) of human answers (section 3).
@@ -126,7 +128,7 @@ Three views of the same pipeline:
 - **The sidecar's endpoints** one at a time: embeddings, the AI-written-text
   model, one video frame through the gaze tracker (MediaPipe) at 10 frames a
   second, and the reading network.
-- **The interview room** end to end (the question is read when the answer closes, as the host page does now; `--question-at start` reproduces the first run's rule): a scripted 8-answer interview played
+- **The interview room** end to end (the question is read when the answer closes, as the host page does now; `--question-at start` reproduces the first run's rule; the reference answers start when the question's transcripts are back during the answer, `--references settled`, and `--references answer` is the rule before that): a scripted 8-answer interview played
   against the room's HTTP API in real time, following the host page's own rules
   (speech cut into pieces by a Python copy of its segmenter, a video frame 10
   times a second, the answer closed when the interviewer speaks again, then echo
@@ -229,28 +231,28 @@ Dropped by the guardrails (local): none; rules output under the same guardrails:
 
 | Step (turns 1-7) | ms (median / p90 / p95) | n |
 |---|---|---|
-| answer closed -> its last transcripts back | 2,175 / 4,246 / 4,549 | 7 |
-| POST /answers (AI text, delivery, reading, flag) | 49 / 261 / 388 | 7 |
-| answer closed -> card shown | 2,209 / 4,330 / 4,627 | 7 |
-| card -> echo similarity filled in | 7,687 / 10,354 / 11,166 | 7 |
-| card -> follow-ups shown | 4,834 / 6,990 / 8,081 | 7 |
-| every transcription request (both speakers, all turns) | 3,812 / 6,787 / 7,167 | 25 |
-| every gaze frame | 42 / 66 / 81 | 3041 |
+| answer closed -> its last transcripts back | 4,947 / 13,463 / 18,099 | 7 |
+| POST /answers (AI text, delivery, reading, flag) | 54 / 378 / 606 | 7 |
+| answer closed -> card shown | 4,974 / 13,993 / 18,400 | 7 |
+| card -> echo similarity filled in | 1,599 / 2,466 / 2,791 | 7 |
+| card -> follow-ups shown | 3,819 / 4,648 / 4,972 | 7 |
+| every transcription request (both speakers, all turns) | 6,587 / 28,522 / 33,545 | 25 |
+| every gaze frame | 55 / 89 / 106 | 3277 |
 
-The question's text was back 3.62 s (median; max 6.92 s) after the interviewer stopped.
+The question's text was back 7.03 s (median; max 11.64 s) after the interviewer stopped.
 
 | Turn | Answer | Candidate starts after | Question known | Pieces (late) | Flag | AI text | Echo similarity | Delivery | Reading | Follow-ups |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | q02 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.613) | baseline | possible | 3 (ai) |
-| 2 | q03 (written) | 2.5 s | yes | 2 (0) | possible | low (2%) | low (0.768) | baseline | possible | 2 (ai) |
-| 3 | q04 (written) | 2.5 s | yes | 1 (0) | possible | low (5%) | low (0.686) | baseline | possible | 3 (rules) |
-| 4 | q05 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.621) | low | possible | 2 (rules) |
-| 5 | q01 (llama3.2, read out) | 2.5 s | yes | 3 (0) | high | high (96%) | possible (0.889) | low | possible | 1 (rules) |
+| 2 | q03 (written) | 2.5 s | yes | 2 (0) | possible | low (2%) | low (0.755) | baseline | high | 1 (ai) |
+| 3 | q04 (written) | 2.5 s | yes | 1 (0) | possible | low (5%) | low (0.686) | baseline | possible | 3 (ai) |
+| 4 | q05 (written) | 2.5 s | yes | 2 (0) | possible | low (0%) | low (0.621) | low | possible | 3 (rules) |
+| 5 | q01 (llama3.2, read out) | 2.5 s | yes | 3 (0) | high | high (96%) | low (0.859) | low | possible | 3 (ai) |
 | 6 | q07 (written) | 2.5 s | yes | 1 (0) | possible | low (12%) | low (0.738) | low | possible | 1 (rules) |
 | 7 | q06 (llama3.2, read out) | 2.5 s | yes | 4 (0) | high | high (82%) | high (0.955) | low | low | 1 (rules) |
-| 8 | q08 (written) | 0.8 s | yes | 2 (0) | possible | low (15%) | low (0.758) | low | high | 1 (rules) |
+| 8 | q08 (written) | 0.8 s | yes | 2 (0) | possible | low (15%) | low (0.748) | low | possible | 2 (ai) |
 
-*Run 2026-11-23 22:55, commit ca17a3d; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastembed 0.9.1, onnxruntime 1.32.0, mediapipe 1.2.3, langchain-ollama 1.1.0, fastapi 0.163.1, uvicorn 0.54.0; Ollama 0.34.0.*
+*Run 2026-11-24 18:01, commit 919a79c; 13th Gen Intel(R) Core(TM) i9-13900H, 15.7 GB RAM, NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, 621.24; Windows-10-10.0.26300-SP0; Python 3.11.9; faster-whisper 1.2.1, ctranslate2 4.9.0, fastembed 0.9.1, onnxruntime 1.32.0, mediapipe 1.2.3, langchain-ollama 1.1.0, fastapi 0.163.1, uvicorn 0.54.0; Ollama 0.34.0.*
 <!-- /tables -->
 
 ![Median and 90th percentile of each live stage](../benchmarks/results/pipeline_latency.png)
@@ -267,15 +269,26 @@ host page: it read the question when the candidate began speaking, and a
 question took about 1.8 s to transcribe on the CPU, so a slow one arrived after
 that point and was dropped. The host page now reads the question when the answer
 closes, taking the interviewer's segments that began before the candidate
-(`--question-at close`, the default). The table is a rerun with that rule, and in it the question's text was transcribed back in 8 of its 8 turns.
-That rerun was made while another job used the CPU (free RAM 3.3 GB; the median
-transcription request took 3.8 s, against 1.8 s in the first run), so its
-timings are not a clean comparison. Its cost is visible in the table: the card
-came 2.2 s (median) after the answer closed, against 0.54 s in the first run,
-because the card waits for the question's transcript; and the echo reference
-answers now start when the answer is posted, so echo similarity was filled in
-7.7 s (median) after the card, against 0.12 s. An rerun on an idle machine has not been made. The first run's table is in the git history. The room run is
-8 answers, so these are findings about these runs, not rates.
+(`--question-at close`, the default). It also sends that question to the
+reference answers as soon as its transcripts are back, during the answer
+(`--references settled`, the default). The table is a rerun with those rules
+(commit 919a79c): the question's text was transcribed back in 8 of its 8 turns,
+and the echo similarity was scored for all 8 answers. The machine was busy during
+the run (another agent's Rust build; free RAM 2.9 GB), and the median transcription
+request took 6.6 s (25 requests). So the card, which waits for the question's
+transcript, came 5.0 s (median) after the answer closed, and the timings are not
+a clean comparison with the first run.
+
+The change itself is measured on the same machine state: the same rerun with
+`--references answer` (the reference answers start when `/answers` arrives, as
+before) ran with free RAM 1.5 GB and the same settings. There, echo similarity was
+filled in 8.3 s (median) after the card. With `--references settled` it was 1.6 s
+(median) after the card, while the card itself took about the same time (median
+5.0 s after close in the settled run, 5.9 s in the baseline). The baseline run is
+not kept in the repository. In the settled run turn 8, the quick turn-taking case,
+was the one where the question at close differed from the text sent early, so
+its references were requested again at close (this run did not record why).
+The room run is 8 answers, so these are findings about these runs, not rates.
 
 ## 3. Detection rate and false flags
 

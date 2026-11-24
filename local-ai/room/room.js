@@ -100,7 +100,10 @@ export function questionAsked(heard, answerStart) {
 
 /** The question's text from the segments that make it. The early and the closing request both use it, so they match. */
 export function questionText(asked) {
-  return asked.map((r) => r.text).filter(Boolean).join(" ");
+  return asked
+    .map((r) => r.text)
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**

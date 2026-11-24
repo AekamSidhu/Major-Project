@@ -106,6 +106,12 @@ CLAIMS = [
           lambda v: "all 12 questions were detected" if v == 12 else f"{v} questions detected"),
         claim("transcribed back in 8 of its 8 turns", R / "room_e2e.json", ["answers"],
           lambda rows: f"transcribed back in {sum(bool(r['question_transcribed']) for r in rows)} of its {len(rows)} turns"),
+    claim("5.0 s (median) after the answer closed", R / "room_e2e.json", ["turns_1_to_7", "close_to_card_ms", "median"],
+          lambda v: f"{v / 1000:.1f} s (median) after the answer closed"),
+    claim("1.6 s (median) after the card", R / "room_e2e.json", ["turns_1_to_7", "card_to_similarity_ms", "median"],
+          lambda v: f"{v / 1000:.1f} s (median) after the card"),
+    claim("6.6 s (25 requests)", R / "room_e2e.json", ["segment_transcription_ms", "median"],
+          lambda v: f"{v / 1000:.1f} s"),
     # 6. Reproducibility of the committed v2 model (section 3)
     claim("0.4900 / 0.2476 for HC3", R / "retrain_v2_rerun.json", ["thresholds", "balanced"],
           lambda v: f"{v:.4f} / 0.2476 for HC3"),
