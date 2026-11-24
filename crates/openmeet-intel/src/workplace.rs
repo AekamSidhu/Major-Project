@@ -928,22 +928,48 @@ pub fn follow_up_message(
     out
 }
 
-/// Minutes without an LLM: summary line, decisions (claims of kind
-/// `decision`), action items with owner and due date, questions that got no
-/// answer, clarifying questions for what is still vague, and a follow-up
-/// message draft. `generated_by` is "extractive".
+/// Minutes without an LLM, from the recorded meeting: decisions (claims of
+/// kind `decision`), action items, questions that got no answer, clarifying
+/// questions for what is still vague, and a follow-up message draft.
+/// `generated_by` is "extractive".
 pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary {
+    build_extractive_minutes(record, None)
+}
+
+/// Minutes without an LLM for a workplace meeting, built from its live board
+/// so that the state the board tracked is kept: a question that was answered
+/// is not open, and a deferred one is listed as deferred.
+pub fn extractive_minutes_from_board(
+    record: &MeetingRecord,
+    board: &WorkplaceBoard,
+) -> MeetingSummary {
+    build_extractive_minutes(record, Some(board))
+}
+
+fn build_extractive_minutes(
+    record: &MeetingRecord,
+    board: Option<&WorkplaceBoard>,
+) -> MeetingSummary {
     let m = &record.meeting;
     let mut decisions = Vec::new();
-    for c in record
-        .claims
-        .iter()
-        .filter(|c| c.kind == ClaimKind::Decision)
-    {
-        dedup_push(&mut decisions, c.text.clone(), 15);
+    let decision_texts: Vec<&str> = match board {
+        Some(b) => b.decisions.iter().map(|c| c.text.as_str()).collect(),
+        None => record
+            .claims
+            .iter()
+            .filter(|c| c.kind == ClaimKind::Decision)
+            .map(|c| c.text.as_str())
+            .collect(),
+    };
+    for text in decision_texts {
+        dedup_push(&mut decisions, text.to_string(), 15);
     }
+    let action_items: Vec<ActionItem> = match board {
+        Some(b) => b.action_items.clone(),
+        None => record.action_items.clone(),
+    };
     let mut items: Vec<MinutesActionItem> = Vec::new();
-    for a in &record.action_items {
+    for a in &action_items {
         let task = task_phrase(&a.text);
         if items
             .iter()
@@ -957,26 +983,43 @@ pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary {
             due: a.due.clone(),
         });
     }
-    let answered: HashSet<&str> = record
-        .answers
-        .iter()
-        .filter_map(|a| a.question_id.as_deref())
-        .collect();
-    let superseded: HashSet<&str> = record
-        .questions
-        .iter()
-        .filter_map(|q| q.supersedes.as_deref())
-        .collect();
     let mut questions_asked = Vec::new();
     let mut open_questions = Vec::new();
-    for q in record
-        .questions
-        .iter()
-        .filter(|q| !superseded.contains(q.id.as_str()))
-    {
-        dedup_push(&mut questions_asked, q.question.clone(), 25);
-        if !answered.contains(q.id.as_str()) {
-            dedup_push(&mut open_questions, q.question.clone(), 15);
+    match board {
+        Some(b) => {
+            for q in &b.open_questions {
+                dedup_push(&mut questions_asked, q.question.clone(), 25);
+                if !q.answered {
+                    let text = if q.deferred {
+                        format!("{} (deferred)", q.question.trim())
+                    } else {
+                        q.question.clone()
+                    };
+                    dedup_push(&mut open_questions, text, 15);
+                }
+            }
+        }
+        None => {
+            let answered: HashSet<&str> = record
+                .answers
+                .iter()
+                .filter_map(|a| a.question_id.as_deref())
+                .collect();
+            let superseded: HashSet<&str> = record
+                .questions
+                .iter()
+                .filter_map(|q| q.supersedes.as_deref())
+                .collect();
+            for q in record
+                .questions
+                .iter()
+                .filter(|q| !superseded.contains(q.id.as_str()))
+            {
+                dedup_push(&mut questions_asked, q.question.clone(), 25);
+                if !answered.contains(q.id.as_str()) {
+                    dedup_push(&mut open_questions, q.question.clone(), 15);
+                }
+            }
         }
     }
     let mut key_topics = Vec::new();
@@ -990,25 +1033,34 @@ pub fn extractive_minutes(record: &MeetingRecord) -> MeetingSummary {
         dedup_push(&mut key_topics, t.name.clone(), 8);
     }
     let mut to_clarify = Vec::new();
-    for c in record
-        .claims
-        .iter()
-        .filter(|c| c.kind == ClaimKind::Decision)
-    {
-        if let Some(q) =
-            clarifying_question(WorkItemKind::Decision, &c.text, None, &decision_issues(c))
-        {
-            dedup_push(&mut to_clarify, q, 10);
+    match board {
+        Some(b) => {
+            for c in &b.clarifications {
+                dedup_push(&mut to_clarify, c.question.clone(), 10);
+            }
         }
-    }
-    for a in &record.action_items {
-        if let Some(q) = clarifying_question(
-            WorkItemKind::ActionItem,
-            &task_phrase(&a.text),
-            a.owner.as_deref(),
-            &action_item_issues(a),
-        ) {
-            dedup_push(&mut to_clarify, q, 10);
+        None => {
+            for c in record
+                .claims
+                .iter()
+                .filter(|c| c.kind == ClaimKind::Decision)
+            {
+                if let Some(q) =
+                    clarifying_question(WorkItemKind::Decision, &c.text, None, &decision_issues(c))
+                {
+                    dedup_push(&mut to_clarify, q, 10);
+                }
+            }
+            for a in &action_items {
+                if let Some(q) = clarifying_question(
+                    WorkItemKind::ActionItem,
+                    &task_phrase(&a.text),
+                    a.owner.as_deref(),
+                    &action_item_issues(a),
+                ) {
+                    dedup_push(&mut to_clarify, q, 10);
+                }
+            }
         }
     }
     let plural = |n: usize, one: &str, many: &str| {

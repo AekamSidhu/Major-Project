@@ -616,6 +616,70 @@ fn minutes_without_anything_recorded_say_so() {
 }
 
 #[test]
+fn minutes_from_the_board_keep_deferred_and_answered_questions() {
+    let mut r = record();
+    r.claims.clear();
+    r.action_items.clear();
+    r.questions.clear();
+    r.answers.clear();
+    let question = |id: &str, text: &str, answered: bool, deferred: bool| OpenQuestion {
+        id: id.into(),
+        question: text.into(),
+        speaker_role: SpeakerRole::Remote,
+        addressed_to_you: true,
+        asked_at_ms: 1_000,
+        answered,
+        answer: answered.then(|| "Dana".to_string()),
+        deferred,
+    };
+    let board = WorkplaceBoard {
+        decisions: vec![decision("We agreed to freeze the schema.")],
+        action_items: vec![item("Update the runbook.", None, None)],
+        open_questions: vec![
+            question("q1", "Can you send the deck?", false, true),
+            question("q2", "Who owns the cutover?", true, false),
+            question("q3", "Do we have a date for the cutover?", false, false),
+        ],
+        clarifications: vec![],
+    };
+    let s = extractive_minutes_from_board(&r, &board);
+    assert_eq!(s.generated_by, "extractive");
+    assert_eq!(s.decisions, vec!["We agreed to freeze the schema."]);
+    assert_eq!(
+        s.questions_asked,
+        vec![
+            "Can you send the deck?",
+            "Who owns the cutover?",
+            "Do we have a date for the cutover?"
+        ]
+    );
+    assert_eq!(
+        s.open_questions,
+        vec![
+            "Can you send the deck? (deferred)",
+            "Do we have a date for the cutover?"
+        ]
+    );
+    assert_eq!(
+        s.action_items,
+        vec!["Update the runbook — owner to be confirmed"]
+    );
+    assert!(
+        s.overview
+            .contains("1 decision, 1 action item and 2 open questions")
+    );
+    let md = &s.markdown;
+    assert!(md.contains("- Can you send the deck? (deferred)"), "{md}");
+    assert!(!md.contains("Who owns the cutover? (deferred)"), "{md}");
+    // Without the board the recorded meeting is used as before.
+    let from_record = extractive_minutes(&record());
+    assert_eq!(
+        from_record.open_questions,
+        vec!["Do we have a date for the cutover?"]
+    );
+}
+
+#[test]
 fn catch_up_without_a_model_lists_what_happened_recently() {
     let lines = vec![
         TranscriptLine {

@@ -9,7 +9,7 @@ use std::time::Duration;
 use openmeet_core::events::{EventSink, MeetingEvent};
 use openmeet_core::integrity::{IntegrityLevel, IntegrityService};
 use openmeet_core::ipc::{ExportFormat, ExportParts, SimulationAction, StartMeetingRequest};
-use openmeet_core::providers::ProviderSet;
+use openmeet_core::providers::{LlmProvider, ProviderSet};
 use openmeet_core::settings::{RetentionPolicy, Settings};
 use openmeet_core::store::{MeetingStore, MemoryStore};
 use openmeet_core::types::*;
@@ -67,13 +67,30 @@ struct Harness {
     llm: MockLlmProvider,
 }
 
+/// How a harness is wired: with or without an AI provider, and whether the
+/// LLM confirms ambiguous questions.
+#[derive(Clone, Copy)]
+struct Setup {
+    model: bool,
+    semantic: bool,
+}
+
+const WITH_MODEL: Setup = Setup {
+    model: true,
+    semantic: false,
+};
+
 fn harness() -> Harness {
+    harness_with(WITH_MODEL)
+}
+
+fn harness_with(setup: Setup) -> Harness {
     let sink = Arc::new(TestSink::default());
     let store = Arc::new(MemoryStore::new());
     let llm = MockLlmProvider::new();
     llm.set_chunk_delay_ms(1);
     let mut settings = Settings::default();
-    settings.assistant.semantic_detection = false;
+    settings.assistant.semantic_detection = setup.semantic;
     settings.assistant.turn_end_silence_ms = 400;
     settings.privacy.retention = RetentionPolicy::SevenDays;
     // Integrity is ON with every signal, and a mock service is wired in, so
@@ -93,7 +110,9 @@ fn harness() -> Harness {
             sink: sink.clone(),
             store: store.clone(),
             providers: ProviderSet {
-                llm: Some(Arc::new(llm.clone())),
+                llm: setup
+                    .model
+                    .then(|| Arc::new(llm.clone()) as Arc<dyn LlmProvider>),
                 integrity: Some(Arc::new(integrity) as Arc<dyn IntegrityService>),
                 ..Default::default()
             },
@@ -325,4 +344,113 @@ async fn stopping_a_workplace_meeting_stores_and_exports_minutes() {
     let md = render(&record, ExportFormat::Markdown, &ExportParts::default());
     assert!(md.contains("Workplace mode"), "{md}");
     assert!(md.contains("Sam"), "minutes exported: {md}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn minutes_without_a_model_keep_the_board_state() {
+    let h = harness_with(Setup {
+        model: false,
+        semantic: false,
+    });
+    let meeting = h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(&h, SpeakerRole::Remote, "We decided to freeze the schema.");
+    wait_for_segment(&h, "freeze the schema").await;
+    transcript(
+        &h,
+        SpeakerRole::Remote,
+        "Can you share the rollout plan by Monday?",
+    );
+    wait_for_segment(&h, "rollout plan").await;
+    // The user puts the question off: it stays open, marked as deferred.
+    transcript(&h, SpeakerRole::User, "Let's take that offline.");
+    wait_for_segment(&h, "take that offline").await;
+    h.engine.stop_meeting().await.unwrap();
+
+    let ev = h
+        .sink
+        .wait_for(Duration::from_secs(20), |e| {
+            matches!(e, MeetingEvent::SummaryReady { .. })
+        })
+        .await
+        .expect("minutes generated");
+    let MeetingEvent::SummaryReady { summary } = ev else {
+        unreachable!()
+    };
+    assert_eq!(summary.meeting_id, meeting.id);
+    assert_eq!(summary.generated_by, "extractive", "no model was used");
+    assert_eq!(summary.decisions, vec!["We decided to freeze the schema."]);
+    assert!(
+        summary
+            .open_questions
+            .iter()
+            .any(|q| q.contains("rollout plan") && q.ends_with("(deferred)")),
+        "deferred question kept: {:?}",
+        summary.open_questions
+    );
+    assert_eq!(
+        summary.open_questions,
+        vec!["Can you share the rollout plan by Monday? (deferred)"]
+    );
+    assert!(
+        summary.markdown.contains("(deferred)"),
+        "{}",
+        summary.markdown
+    );
+    assert!(summary.workplace.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn catch_up_without_a_provider_is_extracted_from_the_transcript() {
+    let h = harness_with(Setup {
+        model: false,
+        semantic: false,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(
+        &h,
+        SpeakerRole::Remote,
+        "We decided to move billing to Kafka.",
+    );
+    wait_for_segment(&h, "move billing").await;
+    h.engine.catch_up(5).unwrap();
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::AnswerComplete { suggestion, .. }
+                if suggestion.kind == SuggestionKind::CatchUp)
+        })
+        .await
+        .expect("catch-up recap without a model");
+    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else {
+        unreachable!()
+    };
+    assert_eq!(suggestion.provider, "extractive");
+    assert!(
+        suggestion.content.contains("[[ANSWER]]"),
+        "{}",
+        suggestion.content
+    );
+    assert!(
+        suggestion
+            .content
+            .contains("Decided: We decided to move billing to Kafka."),
+        "{}",
+        suggestion.content
+    );
+    assert!(
+        suggestion.content.contains("without an AI model"),
+        "{}",
+        suggestion.content
+    );
+    assert!(
+        !h.sink.events.lock().iter().any(|e| matches!(
+            e,
+            MeetingEvent::AnswerStateChanged {
+                state: AnswerState::Failed,
+                ..
+            }
+        )),
+        "no failure is reported for the recap"
+    );
+    assert!(h.llm.requests().is_empty(), "no provider was called");
 }
