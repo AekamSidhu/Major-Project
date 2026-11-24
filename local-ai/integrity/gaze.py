@@ -83,15 +83,21 @@ class FaceTracker:
         self._landmarker = vision.FaceLandmarker.create_from_options(options)
         self._last_ms = -1
 
-    def track(self, rgb: np.ndarray, timestamp_ms: int) -> tuple[float, float, bool]:
+    def points(self, rgb: np.ndarray, timestamp_ms: int) -> np.ndarray | None:
+        """(478, 2) landmark pixels of the face in `rgb`, or None when no face is found."""
         timestamp_ms = max(int(timestamp_ms), self._last_ms + 1)
         self._last_ms = timestamp_ms
         image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
         result = self._landmarker.detect_for_video(image, timestamp_ms)
         if not result.face_landmarks:
-            return float("nan"), float("nan"), False
+            return None
         h, w = rgb.shape[:2]
-        points = np.array([(p.x * w, p.y * h) for p in result.face_landmarks[0]])
+        return np.array([(p.x * w, p.y * h) for p in result.face_landmarks[0]])
+
+    def track(self, rgb: np.ndarray, timestamp_ms: int) -> tuple[float, float, bool]:
+        points = self.points(rgb, timestamp_ms)
+        if points is None:
+            return float("nan"), float("nan"), False
         x, y = iris_offset(points)
         return x, y, True
 

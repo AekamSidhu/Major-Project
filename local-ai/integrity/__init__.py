@@ -3,7 +3,7 @@
 Adds to the sidecar:
 
     GET  /integrity                       the live check page (HTML)
-    GET  /v1/integrity/status             which models are ready, live gaze state
+    GET  /v1/integrity/status             which models are ready, which gaze method, live gaze state
     POST /v1/integrity/echo               {"text"} -> does the answer read like an LLM wrote it?
     POST /v1/integrity/gaze/frame         one JPEG/PNG frame (raw body) from the browser
     POST /v1/integrity/gaze/screen        {"left","top","width","height"} capture that region at 10 fps
@@ -15,6 +15,11 @@ Everything runs on this machine. Frames are turned into gaze samples and
 dropped; samples live in memory for ten minutes. Nothing is logged except
 timings. Optional packages: onnxruntime (reading), mediapipe (gaze),
 mss (screen capture); without them the matching endpoints answer 503.
+
+Gaze method: the MediaPipe iris offsets (default), or the learned gaze model
+when a model file is given (`gaze_model`, see learned_gaze.py). With a model
+file there is no fallback: a file that does not load is reported in the status
+and the frame endpoints answer 503.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from .gaze import FaceTracker, GazeMonitor, Region, Tracker, decode_image
+from .learned_gaze import GazeNet, LearnedGazeTracker
 from .models import EARLY_FRAMES, FPS, WINDOW_FRAMES, EchoModel, ReadingModel
 
 LOG = logging.getLogger("openmeet.local_ai.integrity")
@@ -93,10 +99,19 @@ def add_routes(
     clock: Callable[[], float] = time.time,
     echo: EchoModel | None = None,
     reading: ReadingModel | None = None,
+    gaze_model: Path | None = None,
 ) -> GazeMonitor:
     echo_model = _Lazy(lambda: echo or EchoModel())
     reading_model = _Lazy(lambda: reading or ReadingModel())
-    monitor = GazeMonitor(tracker_factory or (lambda: FaceTracker(model_dir)), clock)
+    if gaze_model is not None:
+        learned = _Lazy(lambda: GazeNet(gaze_model))
+        gaze_method = {"name": "learned_resnet18", "model": Path(gaze_model).name}
+        default_factory: Callable[[], Tracker] = lambda: LearnedGazeTracker(learned.get(), FaceTracker(model_dir))  # noqa: E731
+    else:
+        learned = None
+        gaze_method = {"name": "mediapipe_iris", "model": None}
+        default_factory = lambda: FaceTracker(model_dir)  # noqa: E731
+    monitor = GazeMonitor(tracker_factory or default_factory, clock)
     auth = [Depends(check_auth)]
 
     @app.get("/ui/{name}", include_in_schema=False)
@@ -113,6 +128,10 @@ def add_routes(
     def status() -> dict[str, Any]:
         out: dict[str, Any] = {"echo_ready": echo_model.ready(), "reading_ready": reading_model.ready(),
                                "echo_error": echo_model.error, "reading_error": reading_model.error, "gaze": monitor.status()}
+        if learned is None:
+            out["gaze_method"] = gaze_method
+        else:
+            out["gaze_method"] = {**gaze_method, "ready": learned.ready(), "error": learned.error}
         if out["reading_ready"]:
             model = reading_model.get()
             now = out["gaze"]["now"]

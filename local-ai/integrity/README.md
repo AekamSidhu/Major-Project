@@ -108,7 +108,7 @@ before the thresholds mean anything in a real interview.
 
 ## API
 
-    GET  /v1/integrity/status        models ready, live gaze, last-10-s reading score
+    GET  /v1/integrity/status        models ready, gaze method, live gaze, last-10-s reading score
     POST /v1/integrity/echo          {"text": "..."}  (the AI-written-text model)
     POST /v1/integrity/gaze/frame    one JPEG/PNG frame as the request body
     POST /v1/integrity/gaze/screen   {"left","top","width","height"}
@@ -122,6 +122,57 @@ same as for a plain request; a clip that fits one 30 s window keeps its
 first decode, because faster-whisper otherwise re-decodes the silent tail
 and invents words. The caller (the room, or the desktop app) computes
 delivery and echo similarity with the spec's definitions.
+
+## Learned gaze model (optional, opt-in)
+
+The gaze behind the reading signal comes from MediaPipe iris points by
+default. A learned gaze model can replace it: a ResNet-18 that reads gaze
+from a normalised face crop (`learned_gaze.py`). It is used only when the
+sidecar or the room is given the model file:
+
+    python server.py --gaze-model PATH/openmeet_gaze_resnet18.onnx
+    python room_server.py --gaze-model PATH/openmeet_gaze_resnet18.onnx
+    # or the environment variable OPENMEET_GAZE_MODEL=PATH/...
+
+Where the file comes from: it is built by the training code on the
+`feature/gaze-detection` branch (`training/gaze-detection/checkpoints/gaze/`).
+It is **not** in this repository and must not be committed here.
+
+**Licence: CC BY-NC-SA 4.0, non-commercial only.** The weights are derived
+from MPIIFaceGaze and ETH-XGaze, both CC BY-NC-SA 4.0. The code in this
+repository is Apache 2.0; the weights are not. Use them for research and
+non-commercial purposes, cite both datasets, and share derivatives under the
+same licence.
+
+What it does, per frame: MediaPipe's six pose points (nose tip, chin, outer
+eye corners, mouth corners) fit a generic metric 3D face model with
+`cv2.solvePnP`, assuming a camera whose focal length is the frame width. The
+face is warped into the training framing (a virtual camera 600 mm away, focal
+960 px, head rolled upright; the notebook's `normalise()`). The 224x224 RGB
+crop goes to the ONNX model, which returns pitch and yaw. Those are read in
+the normalised frame, so head roll is removed as with the eye-corner frame of
+the iris offsets, and scaled to the iris-offset units (about 0.4 eye widths per
+unit of sine of the gaze angle), so the reading detector receives the same
+kind of series. Test-time augmentation (the mirrored crop, averaged) is on,
+as in the training evaluation; it doubles the network's CPU time.
+
+Not the same as the training preprocessing: the MPIIFaceGaze camera was
+calibrated and undistorted; here the lens is assumed to have no distortion
+and the focal length to equal the frame width; the 3D face model is generic,
+not MPIIFaceGaze's; and the face centre is taken as the mean of the six model
+points, which is the definition we believe the dataset uses (not checked here).
+The 4.54 degree error in `../../training/gaze-detection/results/` was measured
+on the dataset's own normalisation and does not apply directly to live frames.
+
+`/v1/integrity/status` reports `gaze_method`: `mediapipe_iris`, or
+`learned_resnet18` with `ready` and `error`. A model file that cannot be
+loaded is an error, not a fallback: the gaze endpoints answer 503 until it is
+fixed. Startup refuses a `--gaze-model` path that is not a file.
+
+The tests (`../test_integrity.py`) need no weights: they check the warp
+against the notebook's formulas, the roll removal, the gaze convention, the
+network wrapper with a tiny ONNX model built in the test (needs `onnx`, from
+`requirements-dev.txt`), and the status and fallback behaviour.
 
 ## Privacy
 

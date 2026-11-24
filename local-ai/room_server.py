@@ -85,7 +85,8 @@ def self_signed_cert(folder: Path) -> tuple[Path, Path]:
 def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None, tracker_factory=None, clock=None,  # type: ignore[no-untyped-def]
                     followup_writer=None, followups: str | None = None, reference_writer=None, embedder=None,
                     embed_model: str = server.DEFAULT_EMBED_MODEL, study_dir: Path | None = None,
-                    tunnel_url: str | None = None, cloud_transcription: bool = False) -> FastAPI:
+                    tunnel_url: str | None = None, cloud_transcription: bool = False,
+                    gaze_model: Path | None = None) -> FastAPI:
     from room.followups import FollowupWriter
     from room.similarity import ReferenceWriter, SimilarityChecker
     from room.study import StudyRecorder
@@ -110,7 +111,8 @@ def create_room_app(port: int, scheme: str, whisper_model: str, transcriber=None
 
     host_only_auth = interviewer_only(interviewer_names())  # integrity API: this computer only
 
-    monitor = add_integrity_routes(app, host_only_auth, server.MODEL_DIR, tracker_factory=tracker_factory, clock=clock or time.time)
+    monitor = add_integrity_routes(app, host_only_auth, server.MODEL_DIR, tracker_factory=tracker_factory, clock=clock or time.time,
+                                   gaze_model=gaze_model)
     app.state.rooms = add_room_routes(
         app,
         transcriber=transcriber or server.WhisperTranscriber(whisper_model),
@@ -145,9 +147,14 @@ def main() -> None:
                         help="publish the join page through a Cloudflare quick tunnel (off by default)")
     parser.add_argument("--no-tunnel", action="store_true",
                         help="no-op: the tunnel is off unless --tunnel is given")
+    parser.add_argument("--gaze-model", type=Path, default=os.environ.get("OPENMEET_GAZE_MODEL") or None, metavar="PATH",
+                        help="use the learned gaze model (ONNX file you provide, non-commercial licence: see integrity/README.md) "
+                             "instead of the MediaPipe iris offsets (default: OPENMEET_GAZE_MODEL or none)")
     args = parser.parse_args()
     if args.tunnel and args.no_https:
         parser.error("--tunnel needs https (drop --no-https)")
+    if args.gaze_model is not None and not args.gaze_model.is_file():
+        parser.error(f"--gaze-model: no file at {args.gaze_model}")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "httpcore", "huggingface_hub", "urllib3", "faster_whisper"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -184,7 +191,7 @@ def main() -> None:
     try:
         app = create_room_app(args.port, scheme, args.whisper_model, transcriber=transcriber,
                               followups=args.followups, study_dir=args.study, tunnel_url=tunnel_url,
-                              cloud_transcription=args.transcription == "groq")
+                              cloud_transcription=args.transcription == "groq", gaze_model=args.gaze_model)
     except ValueError as error:  # a study folder inside the repository
         parser.error(str(error))
     host = args.host or ("127.0.0.1" if args.no_https else "0.0.0.0")
