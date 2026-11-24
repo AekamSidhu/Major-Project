@@ -368,6 +368,7 @@ class _FixedFace:
         return pts
 
 
+@needs_cv2
 def test_learned_tracker_gives_finite_gaze_and_handles_blinks_and_no_face(tmp_path):
     _tiny_gaze_onnx(tmp_path / "tiny.onnx")
     net = GazeNet(tmp_path / "tiny.onnx")
