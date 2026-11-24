@@ -223,6 +223,16 @@ def _project(rvec, t, cam):
     return cv2.projectPoints(MODEL_POINTS_MM, rvec, t, cam, None)[0].reshape(-1, 2)
 
 
+# OpenCV comes with MediaPipe (requirements-integrity.txt), which CI does not install.
+try:
+    import cv2 as _cv2  # noqa: F401
+    _HAS_CV2 = True
+except ImportError:
+    _HAS_CV2 = False
+needs_cv2 = pytest.mark.skipif(not _HAS_CV2, reason="OpenCV not installed (comes with requirements-integrity.txt)")
+
+
+@needs_cv2
 @pytest.mark.parametrize("roll_deg", [0.0, 25.0, -40.0])
 def test_normalising_warp_matches_training_code(roll_deg):
     import cv2
@@ -248,6 +258,7 @@ def test_normalising_warp_matches_training_code(roll_deg):
     assert np.abs(normalised_crop(img, W).astype(int) - crop_ref.astype(int)).max() <= 1
 
 
+@needs_cv2
 @pytest.mark.parametrize("roll_deg", [-40.0, -10.0, 0.0, 15.0, 40.0])
 def test_normalised_frame_removes_head_roll(roll_deg):
     cam = camera_matrix(640, 480)
