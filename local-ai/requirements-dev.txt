@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest>=8
 httpx2>=0.1
+# Tests: builds a tiny ONNX model with the gaze model's signature (integrity/learned_gaze.py)
+onnx>=1.16
