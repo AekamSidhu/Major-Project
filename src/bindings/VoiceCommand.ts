@@ -3,4 +3,4 @@
 /**
  * Optional spoken commands ("OpenMeet, explain that").
  */
-export type VoiceCommand = { "kind": "explain" } | { "kind": "follow_up" } | { "kind": "answer" } | { "kind": "concise" } | { "kind": "detailed" } | { "kind": "ask", "text": string };
+export type VoiceCommand = { "kind": "explain" } | { "kind": "follow_up" } | { "kind": "answer" } | { "kind": "concise" } | { "kind": "detailed" } | { "kind": "ask", "text": string } | { "kind": "catch_up", "text": number };

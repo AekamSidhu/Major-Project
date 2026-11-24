@@ -418,6 +418,53 @@ fn questions_are_answered_deferred_or_left_open() {
 }
 
 #[test]
+fn a_question_confirmed_after_its_segment_joins_the_board() {
+    let mut t = WorkplaceTracker::new();
+    let s = seg(
+        "s1",
+        SpeakerRole::Remote,
+        100,
+        "Could you walk us through the rollout",
+    );
+    t.observe(&s, &[], vec![], None);
+    assert!(t.board().open_questions.is_empty());
+    let q = DetectedQuestion {
+        id: "q1".into(),
+        meeting_id: "m".into(),
+        segment_ids: vec!["s1".into()],
+        is_question: true,
+        confidence: 0.8,
+        question: "Could you walk us through the rollout?".into(),
+        parts: vec![],
+        category: QuestionCategory::General,
+        speaker_id: None,
+        speaker_role: SpeakerRole::Remote,
+        requires_response: true,
+        method: DetectionMethod::Semantic,
+        supersedes: None,
+        detected_at: 0,
+    };
+    let update = t.add_confirmed_question(&q, s.start_time);
+    assert!(update.changed);
+    let open = t.board().open_questions;
+    assert_eq!(open.len(), 1, "{open:?}");
+    assert!(open[0].addressed_to_you && !open[0].answered);
+    // Later replies count as before: a reply from the user answers it.
+    t.observe(
+        &seg(
+            "s2",
+            SpeakerRole::User,
+            103,
+            "Yes, I will walk them through it on Monday.",
+        ),
+        &[],
+        vec![],
+        None,
+    );
+    assert!(t.board().open_questions[0].answered);
+}
+
+#[test]
 fn unrelated_chatter_does_not_answer_a_question() {
     use SpeakerRole::{Remote, User};
     // (lines, answered?)
@@ -612,6 +659,70 @@ fn minutes_without_anything_recorded_say_so() {
     assert!(
         s.overview
             .contains("0 decisions, 0 action items and 0 open questions")
+    );
+}
+
+#[test]
+fn minutes_from_the_board_keep_deferred_and_answered_questions() {
+    let mut r = record();
+    r.claims.clear();
+    r.action_items.clear();
+    r.questions.clear();
+    r.answers.clear();
+    let question = |id: &str, text: &str, answered: bool, deferred: bool| OpenQuestion {
+        id: id.into(),
+        question: text.into(),
+        speaker_role: SpeakerRole::Remote,
+        addressed_to_you: true,
+        asked_at_ms: 1_000,
+        answered,
+        answer: answered.then(|| "Dana".to_string()),
+        deferred,
+    };
+    let board = WorkplaceBoard {
+        decisions: vec![decision("We agreed to freeze the schema.")],
+        action_items: vec![item("Update the runbook.", None, None)],
+        open_questions: vec![
+            question("q1", "Can you send the deck?", false, true),
+            question("q2", "Who owns the cutover?", true, false),
+            question("q3", "Do we have a date for the cutover?", false, false),
+        ],
+        clarifications: vec![],
+    };
+    let s = extractive_minutes_from_board(&r, &board);
+    assert_eq!(s.generated_by, "extractive");
+    assert_eq!(s.decisions, vec!["We agreed to freeze the schema."]);
+    assert_eq!(
+        s.questions_asked,
+        vec![
+            "Can you send the deck?",
+            "Who owns the cutover?",
+            "Do we have a date for the cutover?"
+        ]
+    );
+    assert_eq!(
+        s.open_questions,
+        vec![
+            "Can you send the deck? (deferred)",
+            "Do we have a date for the cutover?"
+        ]
+    );
+    assert_eq!(
+        s.action_items,
+        vec!["Update the runbook — owner to be confirmed"]
+    );
+    assert!(
+        s.overview
+            .contains("1 decision, 1 action item and 2 open questions")
+    );
+    let md = &s.markdown;
+    assert!(md.contains("- Can you send the deck? (deferred)"), "{md}");
+    assert!(!md.contains("Who owns the cutover? (deferred)"), "{md}");
+    // Without the board the recorded meeting is used as before.
+    let from_record = extractive_minutes(&record());
+    assert_eq!(
+        from_record.open_questions,
+        vec!["Do we have a date for the cutover?"]
     );
 }
 

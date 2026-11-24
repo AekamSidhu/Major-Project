@@ -79,7 +79,7 @@ export function GeneralSection() {
       <Section title="Voice commands">
         <ToggleField
           label="Voice commands from your microphone"
-          description="Say “OpenMeet, explain that”, “OpenMeet, give me follow-ups” or “OpenMeet, summarize” during a meeting. Only your own microphone is listened to for commands; nothing extra is recorded."
+          description="Say “OpenMeet, explain that”, “OpenMeet, give me follow-ups” or, in workplace mode, “OpenMeet, catch me up” during a meeting. Only your own microphone is listened to for commands; nothing extra is recorded."
           checked={g.voiceCommands}
           onChange={(v) =>
             void saveSettings((d) => {

@@ -9,7 +9,7 @@ use std::time::Duration;
 use openmeet_core::events::{EventSink, MeetingEvent};
 use openmeet_core::integrity::{IntegrityLevel, IntegrityService};
 use openmeet_core::ipc::{ExportFormat, ExportParts, SimulationAction, StartMeetingRequest};
-use openmeet_core::providers::ProviderSet;
+use openmeet_core::providers::{LlmProvider, ProviderSet};
 use openmeet_core::settings::{RetentionPolicy, Settings};
 use openmeet_core::store::{MeetingStore, MemoryStore};
 use openmeet_core::types::*;
@@ -67,13 +67,37 @@ struct Harness {
     llm: MockLlmProvider,
 }
 
+/// How a harness is wired: with or without an AI provider, whether the LLM
+/// confirms ambiguous questions, the heuristic detection threshold, and
+/// whether spoken commands from the user's microphone are on.
+#[derive(Clone, Copy)]
+struct Setup {
+    model: bool,
+    semantic: bool,
+    threshold: f32,
+    voice: bool,
+}
+
+const WITH_MODEL: Setup = Setup {
+    model: true,
+    semantic: false,
+    threshold: 0.6,
+    voice: false,
+};
+
 fn harness() -> Harness {
+    harness_with(WITH_MODEL)
+}
+
+fn harness_with(setup: Setup) -> Harness {
     let sink = Arc::new(TestSink::default());
     let store = Arc::new(MemoryStore::new());
     let llm = MockLlmProvider::new();
     llm.set_chunk_delay_ms(1);
     let mut settings = Settings::default();
-    settings.assistant.semantic_detection = false;
+    settings.assistant.semantic_detection = setup.semantic;
+    settings.assistant.detection_threshold = setup.threshold;
+    settings.general.voice_commands = setup.voice;
     settings.assistant.turn_end_silence_ms = 400;
     settings.privacy.retention = RetentionPolicy::SevenDays;
     // Integrity is ON with every signal, and a mock service is wired in, so
@@ -93,7 +117,9 @@ fn harness() -> Harness {
             sink: sink.clone(),
             store: store.clone(),
             providers: ProviderSet {
-                llm: Some(Arc::new(llm.clone())),
+                llm: setup
+                    .model
+                    .then(|| Arc::new(llm.clone()) as Arc<dyn LlmProvider>),
                 integrity: Some(Arc::new(integrity) as Arc<dyn IntegrityService>),
                 ..Default::default()
             },
@@ -325,4 +351,292 @@ async fn stopping_a_workplace_meeting_stores_and_exports_minutes() {
     let md = render(&record, ExportFormat::Markdown, &ExportParts::default());
     assert!(md.contains("Workplace mode"), "{md}");
     assert!(md.contains("Sam"), "minutes exported: {md}");
+
+    // Plain text export: the same minutes as plain lists.
+    let text = render(&record, ExportFormat::Text, &ExportParts::default());
+    assert!(text.contains("Workplace mode"), "{text}");
+    assert!(
+        text.contains("freeze the schema"),
+        "decisions exported: {text}"
+    );
+    assert!(
+        text.contains("Sam, by Thursday"),
+        "action items exported: {text}"
+    );
+    assert!(!text.contains("Interview"), "no interview sections: {text}");
+
+    // JSON export: the minutes are part of the summary, with owner and due date.
+    let json = render(&record, ExportFormat::Json, &ExportParts::default());
+    let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON export");
+    assert_eq!(v["format"], "openmeet.meeting.v1");
+    assert_eq!(v["meeting"]["mode"], "workplace");
+    let items = &v["summary"]["workplace"]["actionItems"];
+    assert_eq!(items[0]["owner"], "Sam", "{v}");
+    assert_eq!(items[0]["due"], "by Thursday", "{v}");
+    assert!(
+        v["summary"]["workplace"]["followUpMessage"]
+            .as_str()
+            .is_some_and(|m| m.contains("freeze the schema")),
+        "{v}"
+    );
+    assert!(
+        v["summary"]["decisions"]
+            .to_string()
+            .contains("freeze the schema")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn minutes_without_a_model_keep_the_board_state() {
+    let h = harness_with(Setup {
+        model: false,
+        semantic: false,
+        threshold: 0.6,
+        voice: false,
+    });
+    let meeting = h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(&h, SpeakerRole::Remote, "We decided to freeze the schema.");
+    wait_for_segment(&h, "freeze the schema").await;
+    transcript(
+        &h,
+        SpeakerRole::Remote,
+        "Can you share the rollout plan by Monday?",
+    );
+    wait_for_segment(&h, "rollout plan").await;
+    // The user puts the question off: it stays open, marked as deferred.
+    transcript(&h, SpeakerRole::User, "Let's take that offline.");
+    wait_for_segment(&h, "take that offline").await;
+    h.engine.stop_meeting().await.unwrap();
+
+    let ev = h
+        .sink
+        .wait_for(Duration::from_secs(20), |e| {
+            matches!(e, MeetingEvent::SummaryReady { .. })
+        })
+        .await
+        .expect("minutes generated");
+    let MeetingEvent::SummaryReady { summary } = ev else {
+        unreachable!()
+    };
+    assert_eq!(summary.meeting_id, meeting.id);
+    assert_eq!(summary.generated_by, "extractive", "no model was used");
+    assert_eq!(summary.decisions, vec!["We decided to freeze the schema."]);
+    assert!(
+        summary
+            .open_questions
+            .iter()
+            .any(|q| q.contains("rollout plan") && q.ends_with("(deferred)")),
+        "deferred question kept: {:?}",
+        summary.open_questions
+    );
+    assert_eq!(
+        summary.open_questions,
+        vec!["Can you share the rollout plan by Monday? (deferred)"]
+    );
+    assert!(
+        summary.markdown.contains("(deferred)"),
+        "{}",
+        summary.markdown
+    );
+    assert!(summary.workplace.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn catch_up_without_a_provider_is_extracted_from_the_transcript() {
+    let h = harness_with(Setup {
+        model: false,
+        semantic: false,
+        threshold: 0.6,
+        voice: false,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(
+        &h,
+        SpeakerRole::Remote,
+        "We decided to move billing to Kafka.",
+    );
+    wait_for_segment(&h, "move billing").await;
+    h.engine.catch_up(5).unwrap();
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::AnswerComplete { suggestion, .. }
+                if suggestion.kind == SuggestionKind::CatchUp)
+        })
+        .await
+        .expect("catch-up recap without a model");
+    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else {
+        unreachable!()
+    };
+    assert_eq!(suggestion.provider, "extractive");
+    assert!(
+        suggestion.content.contains("[[ANSWER]]"),
+        "{}",
+        suggestion.content
+    );
+    assert!(
+        suggestion
+            .content
+            .contains("Decided: We decided to move billing to Kafka."),
+        "{}",
+        suggestion.content
+    );
+    assert!(
+        suggestion.content.contains("without an AI model"),
+        "{}",
+        suggestion.content
+    );
+    assert!(
+        !h.sink.events.lock().iter().any(|e| matches!(
+            e,
+            MeetingEvent::AnswerStateChanged {
+                state: AnswerState::Failed,
+                ..
+            }
+        )),
+        "no failure is reported for the recap"
+    );
+    assert!(h.llm.requests().is_empty(), "no provider was called");
+}
+
+/// "Could you walk us through the rollout" is ambiguous to the heuristics
+/// (confidence 0.62): below a 0.7 threshold it is not a question by rule.
+const AMBIGUOUS_REQUEST: &str = "Could you walk us through the rollout";
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn semantic_detection_confirms_an_ambiguous_question_on_the_board() {
+    let h = harness_with(Setup {
+        model: true,
+        semantic: true,
+        threshold: 0.7,
+        voice: false,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(&h, SpeakerRole::Remote, AMBIGUOUS_REQUEST);
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::QuestionDetected { question }
+                if question.method == DetectionMethod::Semantic)
+        })
+        .await
+        .expect("the LLM confirms the question");
+    let MeetingEvent::QuestionDetected { question } = ev else {
+        unreachable!()
+    };
+    assert!(question.question.contains("rollout"), "{question:?}");
+    assert!(question.requires_response);
+    let b = board(&h);
+    assert!(
+        b.open_questions
+            .iter()
+            .any(|q| q.question.contains("rollout") && q.addressed_to_you && !q.answered),
+        "confirmed question on the board: {:?}",
+        b.open_questions
+    );
+    // Put to the user: a colleague-worded suggestion follows.
+    h.sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::AnswerComplete { suggestion, .. }
+                if suggestion.kind == SuggestionKind::Answer)
+        })
+        .await
+        .expect("suggestion for the confirmed question");
+    assert!(
+        h.llm
+            .requests()
+            .iter()
+            .any(|r| r.kind == RequestKind::QuestionClassification),
+        "the semantic check ran"
+    );
+    assert_eq!(h.sink.count("INTEGRITY_CHECKED"), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn semantic_detection_off_leaves_an_ambiguous_question_alone() {
+    let h = harness_with(Setup {
+        model: true,
+        semantic: false,
+        threshold: 0.7,
+        voice: false,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(&h, SpeakerRole::Remote, AMBIGUOUS_REQUEST);
+    wait_for_segment(&h, "walk us through").await;
+    assert_eq!(h.sink.count("QUESTION_DETECTED"), 0);
+    assert!(board(&h).open_questions.is_empty());
+    assert!(
+        !h.llm
+            .requests()
+            .iter()
+            .any(|r| r.kind == RequestKind::QuestionClassification),
+        "no semantic check when the setting is off"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn voice_commands_catch_up_and_follow_up_in_workplace_mode() {
+    let h = harness_with(Setup {
+        model: true,
+        semantic: false,
+        threshold: 0.6,
+        voice: true,
+    });
+    h.engine.start_meeting(start_request()).await.unwrap();
+    transcript(
+        &h,
+        SpeakerRole::Remote,
+        "Someone should look into the alerts.",
+    );
+    wait_for_segment(&h, "alerts").await;
+
+    // "Follow up" asks for the clarifying question of the latest vague item.
+    transcript(&h, SpeakerRole::User, "OpenMeet, give me a follow-up");
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::VoiceCommandRecognized { command }
+                if *command == VoiceCommand::FollowUp)
+        })
+        .await
+        .expect("follow-up command recognized");
+    assert!(matches!(ev, MeetingEvent::VoiceCommandRecognized { .. }));
+    let notice = h
+        .sink
+        .wait_for(WAIT, |e| match e {
+            MeetingEvent::Notice { message, .. } => message.contains("clarifying question"),
+            _ => false,
+        })
+        .await
+        .expect("clarifying question notice");
+    let MeetingEvent::Notice { message, .. } = notice else {
+        unreachable!()
+    };
+    assert!(message.contains("alerts"), "{message}");
+    assert!(
+        !h.llm
+            .requests()
+            .iter()
+            .any(|r| r.kind == RequestKind::InterviewerFollowups),
+        "no interview follow-ups are generated"
+    );
+
+    // "Catch me up on the last ten minutes" starts a recap of that window.
+    transcript(
+        &h,
+        SpeakerRole::User,
+        "OpenMeet, catch me up on the last ten minutes",
+    );
+    let ev = h
+        .sink
+        .wait_for(WAIT, |e| {
+            matches!(e, MeetingEvent::AnswerComplete { suggestion, .. }
+                if suggestion.kind == SuggestionKind::CatchUp)
+        })
+        .await
+        .expect("catch-up from the voice command");
+    let MeetingEvent::AnswerComplete { suggestion, .. } = ev else {
+        unreachable!()
+    };
+    assert_eq!(suggestion.question_text.as_deref(), Some("Last 10 minutes"));
 }

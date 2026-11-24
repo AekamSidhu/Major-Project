@@ -10,7 +10,7 @@ use openmeet_core::ids::{Id, new_id, now_ms};
 use openmeet_core::providers::TranscriptionEvent;
 use openmeet_core::types::*;
 use openmeet_intel::claims::{extract_action_items, extract_claims};
-use openmeet_intel::detect::voice::parse_voice_command;
+use openmeet_intel::detect::voice::parse_voice_command_in;
 use openmeet_intel::detect::{DetectionInput, DetectionResult, addressed_to_listener, detect};
 use openmeet_intel::prompts::TranscriptLine;
 use openmeet_intel::text::{estimate_tokens, word_count};
@@ -387,7 +387,7 @@ impl Engine {
 
             // Optional voice commands from the user's own microphone.
             let voice = (settings.general.voice_commands && role != SpeakerRole::Remote)
-                .then(|| parse_voice_command(&segment.text))
+                .then(|| parse_voice_command_in(&segment.text, mode))
                 .flatten();
             if let Some(cmd) = voice {
                 events.push(MeetingEvent::VoiceCommandRecognized {
@@ -451,6 +451,9 @@ impl Engine {
                     mode,
                     last_question: rt.questions.last(),
                 });
+                // Ambiguous detections are confirmed by the LLM (when enabled)
+                // in candidate and workplace mode.
+                let semantic_mode = matches!(mode, Mode::Candidate | Mode::Workplace);
                 // Final transcript received -> detection decided.
                 detection_ms = Some(received.elapsed().as_secs_f64() * 1000.0);
                 let threshold = settings.assistant.detection_threshold;
@@ -530,7 +533,7 @@ impl Engine {
                             actions.push(Action::Answer(q));
                         }
                     } else if active
-                        && mode == Mode::Candidate
+                        && semantic_mode
                         && result.requires_response
                         && result.ambiguous
                         && settings.assistant.semantic_detection
@@ -543,7 +546,7 @@ impl Engine {
                         });
                     }
                 } else if active
-                    && mode == Mode::Candidate
+                    && semantic_mode
                     && role != SpeakerRole::User
                     && result.ambiguous
                     && settings.assistant.semantic_detection
@@ -775,6 +778,18 @@ impl Engine {
     }
 
     fn execute_voice_command(&self, cmd: VoiceCommand) {
+        // Workplace: "follow up" asks for the clarifying question of the latest
+        // vague decision or action item, when there is one.
+        if cmd == VoiceCommand::FollowUp
+            && let Some(question) = self.latest_clarification()
+        {
+            self.notice(
+                NoticeLevel::Info,
+                format!("Suggested clarifying question: {question}"),
+                None,
+            );
+            return;
+        }
         let latest_primary = {
             let st = self.inner.state.lock();
             st.runtime
@@ -787,6 +802,7 @@ impl Engine {
                     .to_string(),
             ),
             VoiceCommand::FollowUp => self.generate_followups(),
+            VoiceCommand::CatchUp(minutes) => self.catch_up(minutes),
             VoiceCommand::Answer => self.generate_answer(Default::default()),
             VoiceCommand::Concise => match latest_primary {
                 Some(id) => self.refine(&id, Refinement::Shorter),
@@ -807,6 +823,22 @@ impl Engine {
         if let Err(e) = result {
             self.notice(NoticeLevel::Warning, e.to_string(), None);
         }
+    }
+
+    /// Workplace mode: the clarifying question of the most recent vague
+    /// decision or action item on the live board, if there is one.
+    fn latest_clarification(&self) -> Option<String> {
+        let st = self.inner.state.lock();
+        st.runtime
+            .as_ref()
+            .filter(|r| r.meeting.mode == Mode::Workplace && r.state().is_live())
+            .and_then(|r| {
+                r.workplace
+                    .board()
+                    .clarifications
+                    .last()
+                    .map(|c| c.question.clone())
+            })
     }
 
     /// Injects a transcript line (simulation / demo).

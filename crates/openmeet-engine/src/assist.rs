@@ -14,7 +14,9 @@ use openmeet_core::ipc::{ActiveRequestView, GenerateAnswerRequest};
 use openmeet_core::providers::{ChatMessage, LlmChunk, LlmProvider, LlmRequest};
 use openmeet_core::types::*;
 use openmeet_intel::claims::extract_claims;
-use openmeet_intel::detect::{DetectionResult, classify_category, has_deictic_reference};
+use openmeet_intel::detect::{
+    DetectionResult, addressed_to_listener, classify_category, has_deictic_reference,
+};
 use openmeet_intel::export::extractive_summary;
 use openmeet_intel::prompts::interviewer_followup::{FollowupItem, FollowupStreamParser};
 use openmeet_intel::prompts::{
@@ -24,7 +26,10 @@ use openmeet_intel::prompts::{
     workplace_minutes,
 };
 use openmeet_intel::text::{cosine, lexical_similarity, tail_to_tokens, truncate_to_tokens};
-use openmeet_intel::workplace::{decision_lines, extractive_minutes, render_minutes_markdown};
+use openmeet_intel::workplace::{
+    decision_lines, extractive_catch_up, extractive_minutes, extractive_minutes_from_board,
+    render_minutes_markdown,
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::conversation::remember_answer;
@@ -86,6 +91,8 @@ struct CatchUpData {
     decisions: Vec<String>,
     action_items: Vec<ActionItem>,
     questions: Vec<OpenQuestion>,
+    /// The recap extracted from the same data, used when no model is available.
+    fallback: String,
 }
 
 impl Builder {
@@ -438,21 +445,26 @@ pub(crate) fn catch_up(engine: &Engine, minutes: u32) -> Result<Id, CoreError> {
         let since_ms = (rt.now_rel() - window_ms).max(0);
         let since_unix = now_ms() - window_ms;
         let board = rt.workplace.board();
+        let lines = rt.lines_since(since_ms);
+        let fallback = extractive_catch_up(&lines, &board, minutes, since_ms, since_unix);
         CatchUpData {
             minutes,
-            lines: rt.lines_since(since_ms),
+            lines,
             earlier: rt.memory.long_term_summary.clone(),
             decisions: decision_lines(&board.decisions, Some(since_unix)),
             action_items: board
                 .action_items
-                .into_iter()
+                .iter()
                 .filter(|a| a.created_at >= since_unix)
+                .cloned()
                 .collect(),
             questions: board
                 .open_questions
-                .into_iter()
+                .iter()
                 .filter(|q| q.asked_at_ms >= since_ms || !q.answered)
+                .cloned()
                 .collect(),
+            fallback,
         }
     };
     let style = engine.style();
@@ -751,6 +763,12 @@ fn start_primary(engine: &Engine, spec: PrimarySpec) -> Result<Id, CoreError> {
         }
     }
     let Some(llm) = llm else {
+        if let Builder::CatchUp(data) = &spec.builder {
+            // No AI provider: the recap is extracted from the transcript and board.
+            let text = data.fallback.clone();
+            complete_without_model(engine, &ticket, &spec, text);
+            return Ok(ticket.id);
+        }
         let msg = "AI provider unavailable. Check provider settings.".to_string();
         engine
             .inner
@@ -769,6 +787,52 @@ fn start_primary(engine: &Engine, spec: PrimarySpec) -> Result<Id, CoreError> {
         .handle
         .spawn(async move { run_primary(engine2, ticket, llm, spec).await });
     Ok(id)
+}
+
+/// Completes a request with text built locally (no model): stored and shown
+/// as a suggestion from the "extractive" provider.
+fn complete_without_model(
+    engine: &Engine,
+    ticket: &RequestTicket,
+    spec: &PrimarySpec,
+    text: String,
+) {
+    let suggestion = Suggestion {
+        id: ticket.id.clone(),
+        meeting_id: engine.current_meeting_id(),
+        kind: spec.suggestion_kind,
+        question_id: spec.question_id.clone(),
+        question_text: spec.question_text.clone(),
+        category: spec.category,
+        style: spec.style,
+        parent_id: spec.parent_id.clone(),
+        prompt_id: String::new(),
+        prompt_version: 0,
+        content: text.clone(),
+        followups: Vec::new(),
+        provider: "extractive".to_string(),
+        model: String::new(),
+        created_at: now_ms(),
+        completed_at: Some(now_ms()),
+        pinned: false,
+    };
+    store_suggestion(engine, &suggestion);
+    engine.inner.requests.emit_if_current(
+        ticket,
+        MeetingEvent::AnswerComplete {
+            request_id: ticket.id.clone(),
+            suggestion,
+        },
+    );
+    engine
+        .inner
+        .requests
+        .set_state(ticket, AnswerState::Complete, None);
+    update_view(engine, &ticket.id, |v| {
+        v.state = AnswerState::Complete;
+        v.error = None;
+        v.text = text;
+    });
 }
 
 async fn run_primary(
@@ -1260,7 +1324,7 @@ pub(crate) fn spawn_semantic_check(
         let settings = engine.settings();
         let mut persist_ops = Vec::new();
         let mut embed_jobs: Vec<EmbedJob> = Vec::new();
-        let (question, store) = {
+        let (question, store, board) = {
             let mut st = engine.inner.state.lock();
             let Some(rt) = st
                 .runtime
@@ -1313,7 +1377,12 @@ pub(crate) fn spawn_semantic_check(
                 text: format!("{} asked: {}", rt.speaker_label(q.speaker_role), q.question),
                 at_ms: segment.start_time,
             });
-            (q, rt.store.clone())
+            // Workplace mode: the confirmed question joins the live board.
+            let board = (rt.mode() == Mode::Workplace).then(|| {
+                rt.workplace.add_confirmed_question(&q, segment.start_time);
+                rt.workplace.board()
+            });
+            (q, rt.store.clone(), board)
         };
         for op in persist_ops {
             engine.persist(&store, op);
@@ -1324,7 +1393,21 @@ pub(crate) fn spawn_semantic_check(
         engine.emit(MeetingEvent::QuestionDetected {
             question: question.clone(),
         });
-        if settings.assistant.auto_answer && engine.mode() == Mode::Candidate {
+        if let Some(board) = board {
+            engine.emit(MeetingEvent::WorkplaceUpdated { board });
+        }
+        // Suggestions: candidate mode always; workplace mode only for questions
+        // put to the user (never for the user's own questions).
+        let suggest = match engine.mode() {
+            Mode::Candidate => true,
+            Mode::Workplace => {
+                question.requires_response
+                    && question.speaker_role != SpeakerRole::User
+                    && addressed_to_listener(&question.question)
+            }
+            Mode::Interviewer => false,
+        };
+        if settings.assistant.auto_answer && suggest {
             let _ = answer_question(&engine, &question, engine.style());
         }
     });
@@ -1524,15 +1607,18 @@ pub(crate) fn spawn_meeting_summary(engine: Engine, meeting_id: String) {
             .as_ref()
             .filter(|r| r.meeting.id == meeting_id)
             .map(|rt| {
+                // Workplace minutes without a model are built from the live board.
+                let board = (rt.meeting.mode == Mode::Workplace).then(|| rt.workplace.board());
                 (
                     rt.to_record(),
                     rt.memory.long_term_summary.clone(),
                     rt.gaps.clone(),
                     rt.store.clone(),
+                    board,
                 )
             })
     };
-    let Some((record, long_term, gaps, store)) = snapshot else {
+    let Some((record, long_term, gaps, store, board)) = snapshot else {
         return;
     };
     let cancel = CancellationToken::new();
@@ -1547,7 +1633,7 @@ pub(crate) fn spawn_meeting_summary(engine: Engine, meeting_id: String) {
             None
         } else {
             tokio::select! {
-                s = summarize_with(&engine, &record, llm, &long_term, &gaps) => Some(s),
+                s = summarize_with(&engine, &record, llm, &long_term, &gaps, board.as_ref()) => Some(s),
                 _ = cancel.cancelled() => None,
             }
         };
@@ -1592,7 +1678,7 @@ pub(crate) fn spawn_meeting_summary(engine: Engine, meeting_id: String) {
 }
 
 pub(crate) async fn summarize_record(engine: &Engine, record: &MeetingRecord) -> MeetingSummary {
-    summarize_with(engine, record, engine.llm(), "", &[]).await
+    summarize_with(engine, record, engine.llm(), "", &[], None).await
 }
 
 /// Workplace minutes: the minutes prompt when a model is available, otherwise
@@ -1602,9 +1688,10 @@ async fn summarize_minutes(
     record: &MeetingRecord,
     llm: Option<Arc<dyn LlmProvider>>,
     long_term: &str,
+    board: Option<&WorkplaceBoard>,
 ) -> MeetingSummary {
     let Some(llm) = llm else {
-        return extractive_minutes(record);
+        return extractive_without_model(record, board);
     };
     let mode = Mode::Workplace;
     let lines: Vec<TranscriptLine> = record
@@ -1708,8 +1795,19 @@ async fn summarize_minutes(
                 "The AI minutes could not be generated; created basic minutes instead.",
                 Some(Component::Llm),
             );
-            extractive_minutes(record)
+            extractive_without_model(record, board)
         }
+    }
+}
+
+/// Workplace minutes without a model: from the live board when there is one.
+fn extractive_without_model(
+    record: &MeetingRecord,
+    board: Option<&WorkplaceBoard>,
+) -> MeetingSummary {
+    match board {
+        Some(b) => extractive_minutes_from_board(record, b),
+        None => extractive_minutes(record),
     }
 }
 
@@ -1746,10 +1844,11 @@ async fn summarize_with(
     llm: Option<Arc<dyn LlmProvider>>,
     long_term: &str,
     gaps: &[String],
+    board: Option<&WorkplaceBoard>,
 ) -> MeetingSummary {
     let mode = record.meeting.mode;
     if mode == Mode::Workplace {
-        return summarize_minutes(engine, record, llm, long_term).await;
+        return summarize_minutes(engine, record, llm, long_term, board).await;
     }
     let Some(llm) = llm else {
         return fallback_summary(record, gaps);

@@ -1161,6 +1161,8 @@ pub enum VoiceCommand {
     Detailed,
     /// Free-form request ("OpenMeet, what does this code do?").
     Ask(String),
+    /// Workplace: "catch me up" (or "catch me up on the last N minutes").
+    CatchUp(u32),
 }
 
 // ---------------------------------------------------------------------------

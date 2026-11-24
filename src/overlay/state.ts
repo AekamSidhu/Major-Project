@@ -58,6 +58,8 @@ export interface PrimaryRequest {
   pinned: boolean;
   /** Some content has been rendered (used for render-latency reporting). */
   firstContent: boolean;
+  /** Built from the transcript without an AI model (a catch-up recap). */
+  extracted: boolean;
 }
 
 /** The request rendered in the follow-ups slot (interviewer mode). */
@@ -239,6 +241,8 @@ function voiceCommandLabel(c: VoiceCommand): string {
       return "detailed";
     case "ask":
       return `ask “${c.text}”`;
+    case "catch_up":
+      return `catch me up (last ${c.text} minutes)`;
   }
 }
 
@@ -280,6 +284,7 @@ function onAnswerStarted(
         final: false,
         pinned: false,
         firstContent: false,
+        extracted: false,
       },
     };
   }
@@ -366,6 +371,7 @@ export function reduceOverlay(state: OverlayState, ev: OverlayAction): OverlaySt
             category: p.category ?? s.category,
             style: p.style ?? s.style,
             firstContent: true,
+            extracted: s.provider === "extractive",
           },
         };
       }
@@ -678,6 +684,7 @@ export function hydrateFromSnapshot(prev: OverlayState, s: EngineSnapshot): Over
           final: a.state === "complete",
           pinned: s.pinned.some((p) => p.id === a.requestId),
           firstContent: a.text.length > 0,
+          extracted: false,
         }
       : null;
   const followups: FollowupsRequest | null =

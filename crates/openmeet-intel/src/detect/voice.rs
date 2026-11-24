@@ -4,7 +4,12 @@
 //! conversation is never misinterpreted. Common speech-recognition variants of
 //! the name are accepted.
 
-use openmeet_core::types::VoiceCommand;
+use openmeet_core::types::{Mode, VoiceCommand};
+
+/// Minutes recapped by "catch me up" when no window is said.
+const DEFAULT_CATCH_UP_MINUTES: u32 = 5;
+/// Longest window a spoken catch-up can ask for.
+const MAX_CATCH_UP_MINUTES: u32 = 60;
 
 const WAKE_PREFIXES: &[&str] = &["hey ", "ok ", "okay ", "hi "];
 const WAKE_WORDS: &[&str] = &[
@@ -35,8 +40,20 @@ fn normalize(text: &str) -> String {
 }
 
 /// Parses a voice command. Returns `None` when the utterance does not start
-/// with the wake phrase (or contains nothing after it).
+/// with the wake phrase (or contains nothing after it). "Catch me up" is a
+/// [`VoiceCommand::CatchUp`] here; use [`parse_voice_command_in`] for a mode
+/// where it is not a workplace command.
 pub fn parse_voice_command(text: &str) -> Option<VoiceCommand> {
+    parse(text, true)
+}
+
+/// Parses a voice command in `mode`. Outside workplace mode "catch me up" is
+/// not a command: it is a free-form request like any other.
+pub fn parse_voice_command_in(text: &str, mode: Mode) -> Option<VoiceCommand> {
+    parse(text, mode == Mode::Workplace)
+}
+
+fn parse(text: &str, catch_up_enabled: bool) -> Option<VoiceCommand> {
     let norm = normalize(text);
     let mut rest = norm.as_str();
     for p in WAKE_PREFIXES {
@@ -58,6 +75,10 @@ pub fn parse_voice_command(text: &str) -> Option<VoiceCommand> {
         .trim_end_matches(" please");
     let is = |opts: &[&str]| opts.contains(&command);
     let starts = |opts: &[&str]| opts.iter().any(|o| command.starts_with(o));
+
+    if catch_up_enabled && let Some(minutes) = catch_up_window(command) {
+        return Some(VoiceCommand::CatchUp(minutes));
+    }
 
     if is(&[
         "explain",
@@ -155,9 +176,121 @@ pub fn parse_voice_command(text: &str) -> Option<VoiceCommand> {
     }))
 }
 
+/// The window of "catch me up [on the last N minutes]" (`command` is
+/// normalized): `Some(5)` for a bare request, `None` when the phrase is
+/// something else ("catch me up on the standup") or the window is not usable.
+fn catch_up_window(command: &str) -> Option<u32> {
+    let rest = command.strip_prefix("catch me up")?;
+    let words: Vec<&str> = rest.split_whitespace().collect();
+    if words.is_empty() {
+        return Some(DEFAULT_CATCH_UP_MINUTES);
+    }
+    let mut i = 0;
+    while i < words.len() && matches!(words[i], "on" | "for" | "over" | "the" | "last" | "past") {
+        i += 1;
+    }
+    let minutes = match &words[i..] {
+        ["minute"] => 1,
+        [n, "minute" | "minutes" | "min" | "mins"] => number(n)?,
+        _ => return None,
+    };
+    (1..=MAX_CATCH_UP_MINUTES)
+        .contains(&minutes)
+        .then_some(minutes)
+}
+
+/// A spoken or written number up to sixty ("5", "five", "twenty", "sixty").
+fn number(word: &str) -> Option<u32> {
+    if let Ok(n) = word.parse::<u32>() {
+        return Some(n);
+    }
+    Some(match word {
+        "one" => 1,
+        "two" => 2,
+        "three" => 3,
+        "four" => 4,
+        "five" => 5,
+        "six" => 6,
+        "seven" => 7,
+        "eight" => 8,
+        "nine" => 9,
+        "ten" => 10,
+        "eleven" => 11,
+        "twelve" => 12,
+        "fifteen" => 15,
+        "twenty" => 20,
+        "thirty" => 30,
+        "forty" => 40,
+        "fifty" => 50,
+        "sixty" => 60,
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catch_me_up_with_an_optional_window() {
+        assert_eq!(
+            parse_voice_command("OpenMeet, catch me up"),
+            Some(VoiceCommand::CatchUp(5))
+        );
+        assert_eq!(
+            parse_voice_command("Hey OpenMeet, catch me up on the last 10 minutes."),
+            Some(VoiceCommand::CatchUp(10))
+        );
+        assert_eq!(
+            parse_voice_command("OK OpenMeet catch me up for the last five minutes please"),
+            Some(VoiceCommand::CatchUp(5))
+        );
+        assert_eq!(
+            parse_voice_command("OpenMeet, catch me up on the last minute"),
+            Some(VoiceCommand::CatchUp(1))
+        );
+        assert_eq!(
+            parse_voice_command("OpenMeet, catch me up on the past twenty mins"),
+            Some(VoiceCommand::CatchUp(20))
+        );
+        // A window that is not usable, or other wording, is a free-form request.
+        assert_eq!(
+            parse_voice_command("OpenMeet, catch me up on the standup"),
+            Some(VoiceCommand::Ask("catch me up on the standup".into()))
+        );
+        assert_eq!(
+            parse_voice_command("OpenMeet, catch me up on the last 0 minutes"),
+            Some(VoiceCommand::Ask(
+                "catch me up on the last 0 minutes".into()
+            ))
+        );
+        assert_eq!(
+            parse_voice_command("OpenMeet, catch me up on the last 90 minutes"),
+            Some(VoiceCommand::Ask(
+                "catch me up on the last 90 minutes".into()
+            ))
+        );
+    }
+
+    #[test]
+    fn catch_me_up_is_a_workplace_command_only() {
+        assert_eq!(
+            parse_voice_command_in("OpenMeet, catch me up", Mode::Workplace),
+            Some(VoiceCommand::CatchUp(5))
+        );
+        assert_eq!(
+            parse_voice_command_in("OpenMeet, catch me up", Mode::Candidate),
+            Some(VoiceCommand::Ask("catch me up".into()))
+        );
+        assert_eq!(
+            parse_voice_command_in("OpenMeet, catch me up", Mode::Interviewer),
+            Some(VoiceCommand::Ask("catch me up".into()))
+        );
+        assert_eq!(
+            parse_voice_command_in("OpenMeet, give me a follow-up", Mode::Workplace),
+            Some(VoiceCommand::FollowUp)
+        );
+    }
 
     #[test]
     fn wake_phrase_required() {
