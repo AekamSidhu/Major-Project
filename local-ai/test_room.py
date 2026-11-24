@@ -358,6 +358,27 @@ def test_echo_similarity_from_the_rooms_model():
     assert sent[0][0][0] == "system" and sent[0][1] == ("human", "How do you use caching?")
 
 
+def test_references_started_during_the_answer_are_reused_at_close_and_a_changed_question_asks_again():
+    # The host sends the question while the candidate is still answering; the answer's close sends the
+    # same text (reused: no new writes). A late segment changes the question: new references are written.
+    sent: list = []
+    app, _ = make(refs=references("local", answer=REFERENCE, sent=sent))
+    local = TestClient(app, client=LOCAL, headers=LOCAL_HEADERS)
+    room = local.post("/api/rooms").json()["room"]
+    th = signals.thresholds()["echo_similarity"]
+    question = "How do you use caching?"
+    assert local.post(f"/api/rooms/{room}/references", json={"question": question}).json() == {"started": True}
+    local.post(f"/api/rooms/{room}/answers", json={"start": 0, "end": 30, "text": REFERENCE, "question": question})
+    assert local.post(f"/api/rooms/{room}/answers/1/similarity").json()["similarity"]["similarity"] == pytest.approx(1.0)
+    assert len(sent) == th["references"]  # the early request's references, reused by the close
+    late = "How do you use caching in production?"
+    local.post(f"/api/rooms/{room}/answers", json={"start": 40, "end": 70, "text": REFERENCE, "question": late})
+    again = local.post(f"/api/rooms/{room}/answers/2/similarity").json()["similarity"]
+    assert len(sent) == 2 * th["references"]  # a changed question is a new request
+    assert sent[-1][1] == ("human", late)
+    assert again["level"] == "high" and again["references"] == th["references"]
+
+
 @pytest.mark.parametrize("case", ["rules", "unreachable", "no_question"])
 def test_echo_similarity_unavailable(case):
     refs = references("rules") if case == "rules" else references("local", fail=case == "unreachable")
@@ -873,3 +894,48 @@ def test_question_is_what_the_interviewer_began_before_the_candidate(tmp_path): 
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == {"n": 2, "text": "Why Postgres? Is that so?"}
     assert "questionAsked" in HOST_HTML.read_text(encoding="utf-8")
+
+
+def test_references_are_sent_once_the_question_is_back_during_the_answer(tmp_path):  # type: ignore[no-untyped-def]
+    # The host sends the question's text as soon as all its transcripts are back, while the answer is
+    # still open (answer at 3.5 s). Nothing is sent while one transcript is pending or after a close.
+    # A late segment that began before the answer changes the question at close (a new request then).
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    (tmp_path / "room.mjs").write_text(ROOM_JS.read_text(encoding="utf-8"), encoding="utf-8")
+    driver = tmp_path / "driver.mjs"
+    driver.write_text(
+        "import { questionAsked, questionText, referencesWhenAsked } from './room.mjs';\n"
+        "const tick = () => new Promise((r) => setTimeout(r, 0));\n"
+        "const heard = [];\n"
+        "function segment(start, text) {\n"  # returns the function that finishes its transcription
+        "  let finish; const job = new Promise((r) => { finish = r; });\n"
+        "  const rec = { start, text: '', job }; heard.push(rec);\n"
+        "  return () => { rec.text = text; finish(); };\n"
+        "}\n"
+        "const out = {};\n"
+        "const s0 = segment(0.0, 'Why Postgres?'), s1 = segment(3.0, 'Is that so?');\n"
+        "segment(6.0, 'Mm-hm.')();\n"  # a murmur during the answer: not part of the question
+        "let open = true;\n"
+        "const sent = [];\n"
+        "const early = referencesWhenAsked(questionAsked(heard, 3.5), () => open, async (q) => { sent.push(q); });\n"
+        "s0(); await tick(); out.beforeLast = sent.length;\n"  # one transcript still pending
+        "s1(); await early; out.sentBeforeClose = sent.slice();\n"
+        "open = false;\n"
+        "out.sameAtClose = questionText(questionAsked(heard, 3.5)) === sent[0];\n"
+        "segment(3.2, 'And why not MySQL?')();\n"  # began before the answer, transcribed after it was sent
+        "out.atCloseAfterLate = questionText(questionAsked(heard, 3.5));\n"
+        "let finishB; const pendingB = { start: 1.0, text: '', job: new Promise((r) => { finishB = r; }) };\n"
+        "let openB = false; const sentB = [];\n"  # an answer that closed before its question was back
+        "const late = referencesWhenAsked([pendingB], () => openB, async (q) => { sentB.push(q); });\n"
+        "pendingB.text = 'Hi?'; finishB(); await late; out.closedFirst = sentB.length;\n"
+        "console.log(JSON.stringify(out));\n",
+        encoding="utf-8")
+    run = subprocess.run([node, str(driver)], capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "beforeLast": 0, "sentBeforeClose": ["Why Postgres? Is that so?"], "sameAtClose": True,
+        "atCloseAfterLate": "Why Postgres? Is that so? And why not MySQL?", "closedFirst": 0}
+    host = HOST_HTML.read_text(encoding="utf-8")
+    assert "referencesWhenAsked" in host and "/api/rooms/${room.room}/references" in host

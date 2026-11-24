@@ -18,6 +18,11 @@ own rules (local-ai/room/host.html), on a real-time timeline:
   candidate did: read when the answer closes (`--question-at close`, the host
   page after the fix), or only the ones back when the candidate starts
   (`--question-at start`, the host page before the fix);
+- the references (--references settled, the host page after the change): the
+  question's transcripts are sent to /references as soon as they are all back,
+  while the candidate is still answering (--references answer posts nothing
+  early, as the host page before the change); /answers then reuses them when
+  the question at close is the same text, and the row records whether it was;
 - the answer closes when the interviewer starts the next question (or "End
   answer now" after the last): the host waits for the candidate pieces sent
   so far, posts /answers (the card: AI text, delivery, reading and the fused
@@ -38,6 +43,7 @@ import sys
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import wait as wait_futures
 from pathlib import Path
 from typing import Any
 
@@ -114,9 +120,10 @@ def timeline(turns: list[tuple[str, str, float, float]], questions: dict[str, np
 
 
 class Session:
-    def __init__(self, base: str, room: str, t0: float, question_at: str = "close") -> None:
-        self.base, self.room, self.t0, self.question_at = base, room, t0, question_at
+    def __init__(self, base: str, room: str, t0: float, question_at: str = "close", references: str = "settled") -> None:
+        self.base, self.room, self.t0, self.question_at, self.references = base, room, t0, question_at, references
         self.pool = ThreadPoolExecutor(max_workers=8)
+        self.watch = ThreadPoolExecutor(max_workers=8)  # waits for transcripts; kept apart from self.pool (no deadlock)
         self.rows: list[dict[str, Any]] = []
         self.segment_ms: list[float] = []
         self.jobs: list[Future] = []
@@ -133,9 +140,20 @@ class Session:
 
         return self.pool.submit(run)
 
+    def settle_references(self, answer: dict[str, Any], jobs: list[Future]) -> None:
+        """The host page's referencesWhenAsked: the question's transcripts back, the answer still open."""
+        wait_futures(jobs)
+        if answer["closed"].is_set():
+            return
+        question = " ".join(t for t in (f.result(timeout=600)["text"] for f in jobs) if t)
+        if question:
+            answer["refs_question"] = question
+            answer["refs_posted_at"] = time.time()
+            benchlib.post_json(f"{self.base}/api/rooms/{self.room}/references", {"question": question})
+
     def close(self, answer: dict[str, Any]) -> None:
         """The host page's closeAnswer, then (renderAnswer) similarity and follow-ups together."""
-        t_close = time.perf_counter()
+        t_close, t_close_wall = time.perf_counter(), time.time()
         texts = [f.result(timeout=600)["text"] for f in answer["pieces"]]
         if self.question_at == "close":  # the host page: the question is read now, after its transcripts settle
             question = " ".join(t for t in (f.result(timeout=600)["text"] for f in answer["question_jobs"]) if t)
@@ -147,6 +165,10 @@ class Session:
                "close_delay_s": answer["close_delay"], "question_transcribed": bool(question),
                "question_ready_after_s": answer["question_ready_after_s"], "pieces_in_answer": len(answer["pieces"]),
                "pieces_sent_after_close": answer["late"], "wait_for_transcripts_ms": (t_post - t_close) * 1000.0}
+        posted = answer.get("refs_posted_at")  # the references were asked for before the close, for this question
+        row.update({"references_started_before_close": posted is not None and posted < t_close_wall,
+                    "references_lead_ms": round((t_close_wall - posted) * 1000.0) if posted is not None else None,
+                    "references_same_question": answer.get("refs_question") == question})
         self.rows.append(row)
         if not any(texts) and max(end, answer["start"] + 1) - answer["start"] < 5:
             row["dropped_by_host"] = True  # the host page's "a cough or noise" rule
@@ -181,7 +203,7 @@ class Session:
                 job = self.transcribe(ev["speaker"], ev["audio"], self.t0 + ev["start"], self.t0 + ev["end"])
                 if ev["speaker"] == "interviewer":
                     questions.setdefault(turn, []).append(job)
-                elif not answers[turn].get("closed"):
+                elif not answers[turn]["closed"].is_set():
                     answers[turn]["pieces"].append(job)
                     answers[turn]["ends"].append(self.t0 + ev["end"])
                 else:
@@ -192,12 +214,14 @@ class Session:
                 question = " ".join(t for t in arrived if t)
                 answers[turn] = {**ev, "start": self.t0 + ev["start"], "question": question, "pieces": [], "ends": [], "late": 0,
                                  "question_ready_after_s": None, "_ready_jobs": questions.get(turn, []),
-                                 "question_jobs": questions.get(turn, [])}
+                                 "question_jobs": questions.get(turn, []), "closed": threading.Event()}
                 if question and self.question_at == "start":
                     self.pool.submit(benchlib.post_json, f"{self.base}/api/rooms/{self.room}/references", {"question": question})
+                if self.question_at == "close" and self.references == "settled":
+                    self.jobs.append(self.watch.submit(self.settle_references, answers[turn], list(questions.get(turn, []))))
             elif kind == "close":
                 answer = answers[turn]
-                answer["closed"] = True
+                answer["closed"].set()
                 closes.append(self.pool.submit(self.close, answer))
         for job in closes:
             job.result(timeout=900)
@@ -241,6 +265,9 @@ def main() -> None:
     ap.add_argument("--question-at", choices=("start", "close"), default="close",
                     help="close: the question is the interviewer's transcripts read at close (the host page after the fix); "
                          "start: the transcripts back when the candidate starts (the committed run before the fix)")
+    ap.add_argument("--references", choices=("answer", "settled"), default="settled",
+                    help="settled: the reference answers start as soon as the question's transcripts are back, during the "
+                         "answer (the host page after the change); answer: they start only when /answers arrives (before it)")
     a = ap.parse_args()
 
     samples_of_wav = benchlib.wav_samples
@@ -263,7 +290,7 @@ def main() -> None:
         warm_ms = (time.perf_counter() - t) * 1000.0
         room = benchlib.post_json(f"{base}/api/rooms", {})["room"]  # a fresh room (resets the gaze)
         events = timeline(TURNS, questions, replies)
-        session = Session(base, room, time.time(), a.question_at)
+        session = Session(base, room, time.time(), a.question_at, a.references)
         with benchlib.FrameFeed(f"{base}/v1/integrity/gaze/frame", frame) as feed:
             session.run(events)
         report = benchlib.get_json(f"{base}/api/rooms/{room}/report")
@@ -280,7 +307,7 @@ def main() -> None:
         "config": {"whisper_model": a.whisper_model, "device": a.device, "followups": "local (llama3.2)",
                    "turns": [{"id": q, "answer": k, "answer_delay_s": d, "close_delay_s": c} for q, k, d, c in TURNS],
                    "frames_fps": 10, "session_s": round(events[-1][0], 1),
-                   "question_at": a.question_at},
+                   "question_at": a.question_at, "references": a.references},
         "warm_up_ms": round(warm_ms, 1),
         "gaze_feed": {"frames": len(feed.latencies_ms), "face_found": feed.face_found, "errors": feed.errors,
                       "latency_ms": benchlib.summary(feed.latencies_ms)},

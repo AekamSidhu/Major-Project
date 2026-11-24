@@ -98,6 +98,24 @@ export function questionAsked(heard, answerStart) {
   return heard.filter((r) => r.start < answerStart);
 }
 
+/** The question's text from the segments that make it. The early and the closing request both use it, so they match. */
+export function questionText(asked) {
+  return asked.map((r) => r.text).filter(Boolean).join(" ");
+}
+
+/**
+ * Once every transcript of the question is back, send its text so the reference answers start during
+ * the candidate's answer. Nothing is sent if the answer has closed meanwhile (`isOpen()` is false): the
+ * close sends the question itself. A late segment that changes the text is handled at close, which
+ * then asks for new references.
+ */
+export async function referencesWhenAsked(asked, isOpen, send) {
+  await Promise.allSettled(asked.map((r) => r.job));
+  const question = questionText(asked);
+  if (question && isOpen()) await send(question);
+  return question;
+}
+
 export function toggleTrack(stream, kind) {
   const track = stream.getTracks().find((t) => t.kind === kind);
   if (track) track.enabled = !track.enabled;

@@ -158,7 +158,7 @@
   </aside>
 </main>
 <script type="module">
-import { getMedia, connect, makePeer, handleSignal, toggleTrack, showSelf, questionAsked } from "/room.js";
+import { getMedia, connect, makePeer, handleSignal, toggleTrack, showSelf, questionAsked, questionText, referencesWhenAsked } from "/room.js";
 const $ = (id) => document.getElementById(id);
 const pct = (p) => (p == null ? "–" : Math.round(p * 100) + "%");
 const LABEL = { low: "low", possible: "possible", high: "high", too_short: "too short", not_enough_gaze: "no gaze", no_gaze: "no gaze",
@@ -311,12 +311,16 @@ function wav(chunks) {
 
 // ---- turns: an answer is the candidate's speech until the interviewer talks again ----
 // The interviewer's segments since the last answer closed: {start, text, job}. A segment is often
-// still being transcribed when the candidate starts, so the question is only read at close.
+// still being transcribed when the candidate starts, so the question is read once its transcripts are back
+// (to start the reference answers) and again at close (the question the answer is checked against).
 let answer = null, heard = [], firstLine = true, answerCount = 0;
 function onSpeechStart(speaker, t) {
   if (speaker === "candidate" && !answer) {
-    answer = { start: t, end: t, texts: [], pending: [] };
+    const a = answer = { start: t, end: t, texts: [], pending: [] };
     $("btnEndAnswer").disabled = false;
+    // The question is fixed now: start its reference answers as soon as its transcripts are back.
+    referencesWhenAsked(questionAsked(heard, t), () => answer === a,
+      (question) => post(`/api/rooms/${room.room}/references`, { question })).catch((e) => console.warn(e));
   }
   if (speaker === "interviewer" && answer && t > answer.end + 0.5) closeAnswer();
 }
@@ -352,7 +356,7 @@ async function closeAnswer() {
   await Promise.allSettled([...a.pending, ...asked.map((r) => r.job)]);
   const end = Math.max(a.end, a.start + 1);
   if (!a.texts.length && end - a.start < 5) return; // a cough or noise, not an answer
-  const question = asked.map((r) => r.text).filter(Boolean).join(" ");
+  const question = questionText(asked);
   const body = { start: a.start, end, text: a.texts.join(" "), question };
   if (study) body.condition = $("condition").value;
   try { renderAnswer(await post(`/api/rooms/${room.room}/answers`, body)); }
